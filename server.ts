@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import Database from "better-sqlite3";
 import fs from "fs";
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,7 +66,11 @@ if (!hasPhone) {
   db.exec("ALTER TABLE users ADD COLUMN phone TEXT");
 }
 
-// Seed initial data if empty
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  // Seed initial data if empty
 const tenantCount = db.prepare("SELECT count(*) as count FROM tenants").get() as any;
 if (tenantCount.count === 0) {
   const tenantId = "default-tenant";
@@ -75,12 +80,16 @@ if (tenantCount.count === 0) {
     "https://picsum.photos/seed/logo/200/200"
   );
 
+  // When seeding users (one-time setup), hash the password:
+  const hashedPassword = await bcrypt.hash("password", 10);
+
   // Password is 'password' for demo
   db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?, ?)").run(
     "admin-1",
     null,
     "platform@admin.com",
-    "password", // In real app, use bcrypt
+    //"password", // In real app, use bcrypt
+    hashedPassword,
     "platform_admin",
     "Platform Creator"
   );
@@ -89,7 +98,8 @@ if (tenantCount.count === 0) {
     "tenant-admin-1",
     tenantId,
     "admin@equipmentco.com",
-    "password",
+    //"password",
+    hashedPassword,
     "tenant_admin",
     "EquipmentCo Admin"
   );
@@ -98,52 +108,62 @@ if (tenantCount.count === 0) {
     "sales-1",
     tenantId,
     "sales@equipmentco.com",
-    "password",
+    //"password",
+    hashedPassword,
     "sales_rep",
     "John Sales"
   );
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
-
   app.use(express.json());
 
   // API Routes
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
-    const user = db.prepare("SELECT * FROM users WHERE email = ? AND password_hash = ?").get(email, password) as any;
+    //const user = db.prepare("SELECT * FROM users WHERE email = ? AND password_hash = ?").get(email, password) as any;
+    const user = db.prepare("SELECT * FROM users WHERE email = ? ").get(email) as any;
     
-    if (user) {
-      const tenant = user.tenant_id ? db.prepare("SELECT * FROM tenants WHERE id = ?").get(user.tenant_id) : null;
-      res.json({ user, tenant });
-    } else {
-      res.status(401).json({ error: "Invalid credentials" });
-    }
-  });
+  //   if (user) {
+  //     const tenant = user.tenant_id ? db.prepare("SELECT * FROM tenants WHERE id = ?").get(user.tenant_id) : null;
+  //     res.json({ user, tenant });
+  //   } else {
+  //     res.status(401).json({ error: "Invalid credentials" });
+  //   }
+  // });
+
+    if (user && await bcrypt.compare(password, user.password_hash)) {
+    const tenant = user.tenant_id 
+      ? db.prepare("SELECT * FROM tenants WHERE id = ?").get(user.tenant_id) 
+      : null;
+    res.json({ user, tenant });
+  } else {
+    res.status(401).json({ error: "Invalid credentials" });
+  }
+});
 
   app.get("/api/tenant/:id/users", (req, res) => {
     const users = db.prepare("SELECT id, tenant_id, email, role, name, phone FROM users WHERE tenant_id = ?").all(req.params.id);
     res.json(users);
   });
 
-  app.post("/api/tenant/:id/users", (req, res) => {
+  app.post("/api/tenant/:id/users", async (req, res) => { 
     const { id, email, password, role, name, phone } = req.body;
     try {
+      const hashedPassword = await bcrypt.hash(password, 10);
       db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name, phone) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .run(id, req.params.id, email, password, role || 'sales_rep', name, phone);
+        .run(id, req.params.id, email, hashedPassword, role || 'sales_rep', name, phone);
       res.json({ success: true });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  app.put("/api/users/:id", (req, res) => {
+  app.put("/api/users/:id",async (req, res) => {
     const { name, phone, password } = req.body;
     if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
       db.prepare("UPDATE users SET name = ?, phone = ?, password_hash = ? WHERE id = ?")
-        .run(name, phone, password, req.params.id);
+        .run(name, phone, hashedPassword, req.params.id);
     } else {
       db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
         .run(name, phone, req.params.id);
@@ -225,10 +245,11 @@ async function startServer() {
     res.json(users);
   });
 
-  app.post("/api/admin/users", (req, res) => {
+  app.post("/api/admin/users", async (req, res) => {
     const { id, tenant_id, email, password, role, name } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
     db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(id, tenant_id, email, password, role, name);
+      .run(id, tenant_id, email, hashedPassword, role, name);
     res.json({ success: true });
   });
 
