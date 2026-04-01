@@ -1,0 +1,1007 @@
+import React, { useState, useEffect } from 'react';
+import { User, Tenant, EquipmentDef } from '../types';
+import { 
+  LayoutDashboard, 
+  Package, 
+  Users, 
+  Settings, 
+  User as UserIcon,
+  Plus, 
+  Search, 
+  Box, 
+  TrendingUp,
+  LogOut,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  X,
+  Moon,
+  Sun
+} from 'lucide-react';
+import { motion } from 'motion/react';
+import { clsx } from 'clsx';
+import { v4 as uuidv4 } from 'uuid';
+import { useTheme } from '../contexts/ThemeContext';
+
+interface Props {
+  user: User;
+  tenant: Tenant;
+  onLogout: () => void;
+}
+
+export function AdminDashboard({ user, tenant, onLogout }: Props) {
+  const { theme, setTheme } = useTheme();
+  const [activeTab, setActiveTab] = useState<'overview' | 'equipment' | 'users' | 'settings' | 'profile'>('overview');
+  const [equipment, setEquipment] = useState<EquipmentDef[]>([]);
+  const [isAddingEquipment, setIsAddingEquipment] = useState(false);
+  const [editingEquipment, setEditingEquipment] = useState<EquipmentDef | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [newEquipment, setNewEquipment] = useState<Partial<EquipmentDef>>({
+    name: '',
+    category: 'slides',
+    width: 5,
+    depth: 5,
+    height: 5,
+    color: '#14b8a6',
+    animationsEnabled: false
+  });
+
+  const fetchEquipment = async () => {
+    const res = await fetch(`/api/tenant/${tenant.id}/equipment`);
+    if (res.ok) {
+      const data = await res.json();
+      setEquipment(data);
+    }
+  };
+
+  useEffect(() => {
+    fetchEquipment();
+  }, [tenant.id]);
+
+  const handleAddEquipment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = uuidv4();
+    const res = await fetch(`/api/tenant/${tenant.id}/equipment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newEquipment, id })
+    });
+
+    if (res.ok) {
+      setIsAddingEquipment(false);
+      setNewEquipment({
+        name: '',
+        category: 'slides',
+        width: 5,
+        depth: 5,
+        height: 5,
+        color: '#14b8a6',
+        animationsEnabled: false
+      });
+      fetchEquipment();
+    }
+  };
+
+  const handleUpdateEquipment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEquipment) return;
+
+    const res = await fetch(`/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editingEquipment)
+    });
+
+    if (res.ok) {
+      setEditingEquipment(null);
+      fetchEquipment();
+    }
+  };
+
+  const handleDeleteEquipment = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this equipment?')) return;
+
+    const res = await fetch(`/api/tenant/${tenant.id}/equipment/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (res.ok) {
+      fetchEquipment();
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-hidden transition-colors duration-300">
+      {/* Sidebar */}
+      <aside className="w-64 border-r border-theme-border flex flex-col">
+        <div className="p-6 border-b border-theme-border">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <img src={tenant.logo_url} alt="Logo" className="w-8 h-8 rounded-lg object-cover" />
+              <div>
+                <h1 className="text-sm font-bold truncate">{tenant.name}</h1>
+                <p className="text-[10px] opacity-40 uppercase tracking-widest">Admin Portal</p>
+              </div>
+            </div>
+          </div>
+          <button 
+            onClick={() => setActiveTab('profile')}
+            className={clsx(
+              "w-full flex items-center gap-3 p-2 rounded-lg transition-all text-xs font-bold uppercase tracking-widest group",
+              activeTab === 'profile' ? "bg-brand-teal/10 text-brand-teal" : "opacity-40 hover:opacity-100 hover:bg-white/5"
+            )}
+          >
+            <UserIcon className="w-4 h-4" />
+            View Profile
+          </button>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2">
+          <NavButton 
+            active={activeTab === 'overview'} 
+            onClick={() => setActiveTab('overview')}
+            icon={<LayoutDashboard className="w-4 h-4" />}
+            label="Overview"
+          />
+          <NavButton 
+            active={activeTab === 'equipment'} 
+            onClick={() => setActiveTab('equipment')}
+            icon={<Package className="w-4 h-4" />}
+            label="Equipment Repo"
+          />
+          <NavButton 
+            active={activeTab === 'users'} 
+            onClick={() => setActiveTab('users')}
+            icon={<Users className="w-4 h-4" />}
+            label="Sales Team"
+          />
+          <NavButton 
+            active={activeTab === 'settings'} 
+            onClick={() => setActiveTab('settings')}
+            icon={<Settings className="w-4 h-4" />}
+            label="Settings"
+          />
+        </nav>
+
+        <div className="p-4 border-t border-theme-border">
+          <button 
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 p-3 opacity-40 hover:opacity-100 hover:bg-white/5 rounded-xl transition-all text-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <header className="flex justify-between items-center mb-8">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {activeTab === 'overview' && 'Dashboard Overview'}
+              {activeTab === 'equipment' && 'Equipment Repository'}
+              {activeTab === 'users' && 'Sales Team Management'}
+              {activeTab === 'settings' && 'Company Settings'}
+              {activeTab === 'profile' && 'Profile'}
+            </h2>
+            <p className="text-sm opacity-40">Welcome back, {user.name}</p>
+          </div>
+          
+          {(activeTab === 'equipment' || activeTab === 'users') && (
+            <button 
+              onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+            >
+              <Plus className="w-4 h-4" />
+              {activeTab === 'equipment' ? 'Add New Model' : 'Add Person'}
+            </button>
+          )}
+        </header>
+
+        {activeTab === 'overview' && <OverviewTab tenant={tenant} />}
+        {activeTab === 'equipment' && (
+          <EquipmentTab 
+            equipment={equipment} 
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            isAdding={isAddingEquipment}
+            setIsAdding={setIsAddingEquipment}
+            editingItem={editingEquipment}
+            setEditingItem={setEditingEquipment}
+            newEquipment={newEquipment}
+            setNewEquipment={setNewEquipment}
+            onAdd={handleAddEquipment}
+            onUpdate={handleUpdateEquipment}
+            onDelete={handleDeleteEquipment}
+          />
+        )}
+        {activeTab === 'users' && (
+          <UsersTab 
+            tenant={tenant}
+            isAdding={isAddingUser}
+            setIsAdding={setIsAddingUser}
+          />
+        )}
+        {activeTab === 'settings' && (
+          <SettingsTab theme={theme} onThemeChange={setTheme} />
+        )}
+        {activeTab === 'profile' && (
+          <ProfileTab user={user} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+function NavButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={clsx(
+        "w-full flex items-center gap-3 p-3 rounded-xl transition-all text-sm group",
+        active ? "bg-brand-teal text-white shadow-lg shadow-brand-teal/10" : "opacity-60 hover:opacity-100 hover:bg-white/5"
+      )}
+    >
+      <div className={clsx(active ? "text-white" : "opacity-40 group-hover:opacity-100")}>
+        {icon}
+      </div>
+      {label}
+    </button>
+  );
+}
+
+function OverviewTab({ tenant }: { tenant: Tenant }) {
+  return (
+    <div className="space-y-8">
+      <div className="grid grid-cols-3 gap-6">
+        <StatCard label="Active Projects" value="24" trend="+12%" icon={<LayoutDashboard className="w-5 h-5" />} />
+        <StatCard label="Total Equipment" value="156" trend="+5%" icon={<Package className="w-5 h-5" />} />
+        <StatCard label="Sales Activity" value="89%" trend="+2%" icon={<TrendingUp className="w-5 h-5" />} />
+      </div>
+
+      <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
+        <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">Recent Activity</h3>
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-brand-teal/10 rounded-lg flex items-center justify-center">
+                  <Box className="w-5 h-5 text-brand-teal" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">New Project: "Waterfront Resort"</p>
+                  <p className="text-[10px] opacity-40 uppercase tracking-widest">Created by John Sales · 2h ago</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EquipmentTab({ 
+  equipment, 
+  searchQuery, 
+  setSearchQuery,
+  isAdding,
+  setIsAdding,
+  editingItem,
+  setEditingItem,
+  newEquipment,
+  setNewEquipment,
+  onAdd,
+  onUpdate,
+  onDelete
+}: { 
+  equipment: EquipmentDef[],
+  searchQuery: string,
+  setSearchQuery: (q: string) => void,
+  isAdding: boolean,
+  setIsAdding: (b: boolean) => void,
+  editingItem: EquipmentDef | null,
+  setEditingItem: (i: EquipmentDef | null) => void,
+  newEquipment: Partial<EquipmentDef>,
+  setNewEquipment: (e: Partial<EquipmentDef>) => void,
+  onAdd: (e: React.FormEvent) => void,
+  onUpdate: (e: React.FormEvent) => void,
+  onDelete: (id: string) => void
+}) {
+  const filteredEquipment = equipment.filter(item => 
+    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-20" />
+        <input 
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search models by name or category..."
+          className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
+        />
+      </div>
+
+      {/* Add/Edit Form Overlay */}
+      {(isAdding || editingItem) && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl"
+          >
+            <div className="p-6 border-b border-theme-border flex justify-between items-center">
+              <h3 className="text-lg font-bold">
+                {isAdding ? 'Add New Model' : `Edit ${editingItem?.name}`}
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsAdding(false);
+                  setEditingItem(null);
+                }}
+                className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 opacity-40" />
+              </button>
+            </div>
+
+            <form onSubmit={isAdding ? onAdd : onUpdate} className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Model Name</label>
+                  <input 
+                    required
+                    type="text"
+                    value={isAdding ? newEquipment.name : editingItem?.name}
+                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, name: e.target.value }) : setEditingItem({ ...editingItem!, name: e.target.value })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                    placeholder="e.g. Spiral Slide"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Category</label>
+                  <select 
+                    value={isAdding ? newEquipment.category : editingItem?.category}
+                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, category: e.target.value }) : setEditingItem({ ...editingItem!, category: e.target.value })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  >
+                    <option value="slides">Slides</option>
+                    <option value="pools">Pools</option>
+                    <option value="facilities">Facilities</option>
+                    <option value="amenities">Amenities</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Width (m)</label>
+                  <input 
+                    required
+                    type="number"
+                    step="0.1"
+                    value={isAdding ? newEquipment.width : editingItem?.width}
+                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, width: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, width: parseFloat(e.target.value) })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Depth (m)</label>
+                  <input 
+                    required
+                    type="number"
+                    step="0.1"
+                    value={isAdding ? newEquipment.depth : editingItem?.depth}
+                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, depth: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, depth: parseFloat(e.target.value) })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Height (m)</label>
+                  <input 
+                    required
+                    type="number"
+                    step="0.1"
+                    value={isAdding ? newEquipment.height : editingItem?.height}
+                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, height: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, height: parseFloat(e.target.value) })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Color (Hex)</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="color"
+                      value={isAdding ? newEquipment.color : editingItem?.color}
+                      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, color: e.target.value }) : setEditingItem({ ...editingItem!, color: e.target.value })}
+                      className="w-10 h-10 bg-transparent border-none cursor-pointer"
+                    />
+                    <input 
+                      type="text"
+                      value={isAdding ? newEquipment.color : editingItem?.color}
+                      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, color: e.target.value }) : setEditingItem({ ...editingItem!, color: e.target.value })}
+                      className="flex-1 bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Model URL (Optional)</label>
+                  <input 
+                    type="text"
+                    value={isAdding ? newEquipment.modelUrl : editingItem?.modelUrl || ''}
+                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, modelUrl: e.target.value }) : setEditingItem({ ...editingItem!, modelUrl: e.target.value })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                    placeholder="/models/..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox"
+                  id="animations"
+                  checked={isAdding ? newEquipment.animationsEnabled : editingItem?.animationsEnabled}
+                  onChange={e => isAdding ? setNewEquipment({ ...newEquipment, animationsEnabled: e.target.checked }) : setEditingItem({ ...editingItem!, animationsEnabled: e.target.checked })}
+                  className="accent-brand-teal"
+                />
+                <label htmlFor="animations" className="text-xs opacity-60">Enable Animations</label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setIsAdding(false);
+                    setEditingItem(null);
+                  }}
+                  className="px-6 py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+                >
+                  {isAdding ? 'Create Model' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-4 gap-6">
+        {filteredEquipment.map(item => (
+          <div key={item.id} className="bg-theme-card border border-theme-border rounded-2xl overflow-hidden group hover:border-brand-teal/50 transition-all relative">
+            <div className="aspect-square bg-black/40 flex items-center justify-center relative">
+              <Box className="w-12 h-12 opacity-10" />
+              <div className="absolute top-3 right-3 px-2 py-1 bg-brand-teal/20 text-brand-teal text-[8px] font-bold uppercase rounded">
+                {item.category}
+              </div>
+              
+              {/* Actions Overlay */}
+              <div className="absolute inset-0 bg-theme-bg/80 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => setEditingItem(item)}
+                  className="p-3 bg-white/10 hover:bg-brand-teal hover:text-white rounded-xl transition-all"
+                  title="Edit Model"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => onDelete(item.id)}
+                  className="p-3 bg-white/10 hover:bg-red-500 hover:text-white rounded-xl transition-all"
+                  title="Delete Model"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="p-4">
+              <h4 className="text-sm font-bold truncate">{item.name}</h4>
+              <p className="text-[10px] opacity-40 font-mono mt-1">{item.width}x{item.depth}x{item.height}m</p>
+            </div>
+          </div>
+        ))}
+        {filteredEquipment.length === 0 && (
+          <div className="col-span-4 py-20 text-center">
+            <Box className="w-12 h-12 opacity-10 mx-auto mb-4" />
+            <p className="text-sm opacity-40 italic">No models found matching your search.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UsersTab({ 
+  tenant,
+  isAdding,
+  setIsAdding
+}: { 
+  tenant: Tenant,
+  isAdding: boolean,
+  setIsAdding: (b: boolean) => void
+}) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    companyName: tenant.name
+  });
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    phone: '',
+    password: ''
+  });
+
+  const fetchUsers = async () => {
+    const res = await fetch(`/api/tenant/${tenant.id}/users`);
+    if (res.ok) {
+      const data = await res.json();
+      setUsers(data);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, [tenant.id]);
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = uuidv4();
+    const res = await fetch(`/api/tenant/${tenant.id}/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newUser, id, role: 'sales_rep' })
+    });
+
+    if (res.ok) {
+      setIsAdding(false);
+      setNewUser({
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        companyName: tenant.name
+      });
+      fetchUsers();
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to add user');
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    const res = await fetch(`/api/users/${editingUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editFormData.name,
+        phone: editFormData.phone,
+        password: editFormData.password || undefined
+      })
+    });
+
+    if (res.ok) {
+      setEditingUser(null);
+      fetchUsers();
+    } else {
+      alert('Failed to update user');
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this sales person?')) return;
+
+    const res = await fetch(`/api/users/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (res.ok) {
+      fetchUsers();
+    } else {
+      alert('Failed to delete user');
+    }
+  };
+
+  const startEditing = (user: User) => {
+    setEditingUser(user);
+    setEditFormData({
+      name: user.name,
+      phone: user.phone || '',
+      password: ''
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Add User Modal */}
+      {isAdding && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
+            <div className="p-6 border-b border-theme-border flex justify-between items-center">
+              <h3 className="text-lg font-bold">Add Sales Person</h3>
+              <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+                <X className="w-5 h-5 opacity-40" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddUser} className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Full Name</label>
+                <input 
+                  required
+                  type="text"
+                  value={newUser.name}
+                  onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Company Name</label>
+                <input 
+                  disabled
+                  type="text"
+                  value={newUser.companyName}
+                  className="w-full bg-white/10 border border-theme-border rounded-lg px-4 py-2 text-sm opacity-60"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Email Address</label>
+                <input 
+                  required
+                  type="email"
+                  value={newUser.email}
+                  onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  placeholder="john@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Mobile Number</label>
+                <input 
+                  required
+                  type="tel"
+                  value={newUser.phone}
+                  onChange={e => setNewUser({ ...newUser, phone: e.target.value })}
+                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  placeholder="+1 234 567 890"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Password</label>
+                <input 
+                  required
+                  type="password"
+                  value={newUser.password}
+                  onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
+                <button 
+                  type="button" 
+                  onClick={() => setIsAdding(false)}
+                  className="px-6 py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+                >
+                  Create Account
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
+            <div className="p-6 border-b border-theme-border flex justify-between items-center">
+              <h3 className="text-lg font-bold">Edit Sales Person</h3>
+              <button onClick={() => setEditingUser(null)} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+                <X className="w-5 h-5 opacity-40" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Full Name</label>
+                <input 
+                  required
+                  type="text"
+                  value={editFormData.name}
+                  onChange={e => setEditFormData({ ...editFormData, name: e.target.value })}
+                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Email Address</label>
+                <input 
+                  disabled
+                  type="email"
+                  value={editingUser.email}
+                  className="w-full bg-white/10 border border-theme-border rounded-lg px-4 py-2 text-sm opacity-60"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Mobile Number</label>
+                <input 
+                  required
+                  type="tel"
+                  value={editFormData.phone}
+                  onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })}
+                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">New Password (Optional)</label>
+                <input 
+                  type="password"
+                  value={editFormData.password}
+                  onChange={e => setEditFormData({ ...editFormData, password: e.target.value })}
+                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  placeholder="Leave blank to keep current"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingUser(null)}
+                  className="px-6 py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4">
+        {users.map(u => (
+          <div key={u.id} className="p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between group">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal font-bold">
+                {u.name.charAt(0)}
+              </div>
+              <div>
+                <h4 className="font-bold text-sm">{u.name}</h4>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-[10px] opacity-40">{u.email}</span>
+                  <span className="text-[10px] opacity-40">·</span>
+                  <span className="text-[10px] opacity-40">{u.phone || 'No phone'}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded">
+                {u.role}
+              </span>
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => startEditing(u)}
+                  className="p-2 hover:bg-brand-teal/10 text-brand-teal rounded-lg transition-colors"
+                  title="Edit User"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => handleDeleteUser(u.id)}
+                  className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
+                  title="Delete User"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {users.length === 0 && (
+          <div className="py-20 text-center">
+            <Users className="w-12 h-12 opacity-10 mx-auto mb-4" />
+            <p className="text-sm opacity-40 italic">No sales team members added yet.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, trend, icon }: { label: string, value: string, trend: string, icon: React.ReactNode }) {
+  return (
+    <div className="p-6 bg-theme-card border border-theme-border rounded-2xl space-y-4">
+      <div className="flex justify-between items-start">
+        <div className="p-2 bg-brand-teal/10 rounded-lg text-brand-teal">
+          {icon}
+        </div>
+        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded">
+          {trend}
+        </span>
+      </div>
+      <div>
+        <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">{label}</p>
+        <p className="text-3xl font-bold mt-1">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function SettingsTab({ theme, onThemeChange }: { theme: 'dark' | 'light', onThemeChange: (t: 'dark' | 'light') => void }) {
+  return (
+    <div className="max-w-2xl space-y-8">
+      <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
+        <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">Appearance</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => onThemeChange('dark')}
+            className={clsx(
+              "p-4 rounded-xl border transition-all flex flex-col items-center gap-3",
+              theme === 'dark' ? "bg-brand-teal/20 border-brand-teal text-brand-teal" : "bg-white/5 border-theme-border opacity-40 hover:opacity-100 hover:bg-white/10"
+            )}
+          >
+            <Moon className="w-6 h-6" />
+            <span className="text-xs font-bold uppercase tracking-widest">Dark Mode</span>
+          </button>
+          <button 
+            onClick={() => onThemeChange('light')}
+            className={clsx(
+              "p-4 rounded-xl border transition-all flex flex-col items-center gap-3",
+              theme === 'light' ? "bg-brand-teal/20 border-brand-teal text-brand-teal" : "bg-white/5 border-theme-border opacity-40 hover:opacity-100 hover:bg-white/10"
+            )}
+          >
+            <Sun className="w-6 h-6" />
+            <span className="text-xs font-bold uppercase tracking-widest">Light Mode</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
+        <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">Account Notifications</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold">Email Alerts</p>
+              <p className="text-[10px] opacity-40 uppercase tracking-widest">Receive updates on project status</p>
+            </div>
+            <div className="w-10 h-5 bg-brand-teal rounded-full relative">
+              <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileTab({ user }: { user: User }) {
+  const [profileData, setProfileData] = useState({
+    name: user.name,
+    phone: user.phone || '',
+    password: ''
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: profileData.name,
+          phone: profileData.phone,
+          password: profileData.password || undefined
+        })
+      });
+      if (res.ok) {
+        alert('Profile updated successfully! Please refresh to see changes.');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl space-y-8">
+      <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
+        <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">Profile Settings</h3>
+        <form onSubmit={handleSaveProfile} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Full Name</label>
+              <input 
+                type="text"
+                value={profileData.name}
+                onChange={e => setProfileData({ ...profileData, name: e.target.value })}
+                className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Mobile Number</label>
+              <input 
+                type="tel"
+                value={profileData.phone}
+                onChange={e => setProfileData({ ...profileData, phone: e.target.value })}
+                className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">New Password (Optional)</label>
+            <input 
+              type="password"
+              value={profileData.password}
+              onChange={e => setProfileData({ ...profileData, password: e.target.value })}
+              className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+              placeholder="Leave blank to keep current"
+            />
+          </div>
+          <button 
+            type="submit"
+            disabled={isSaving}
+            className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all disabled:opacity-50"
+          >
+            {isSaving ? 'Saving...' : 'Update Profile'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

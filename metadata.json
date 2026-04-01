@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Enterprise Site3D - 3D Site Planning \u0026 Compliance",
+  "description": "A map-based 3D site planning tool with AI-powered compliance checks and risk assessment.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
