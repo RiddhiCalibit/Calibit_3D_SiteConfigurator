@@ -1,3 +1,9 @@
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -117,6 +123,32 @@ if (tenantCount.count === 0) {
 
   app.use(express.json());
 
+  // Middleware 1: verify token
+function authenticate(req: any, res: any, next: any) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // expects "Bearer <token>"
+
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    req.user = decoded; // attach decoded user info to request
+    next();
+  } catch {
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// Middleware 2: check role
+function requireRole(...roles: string[]) {
+  return (req: any, res: any, next: any) => {
+    if (!roles.includes(req.user?.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+}
+
   // API Routes
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
@@ -135,18 +167,36 @@ if (tenantCount.count === 0) {
     const tenant = user.tenant_id 
       ? db.prepare("SELECT * FROM tenants WHERE id = ?").get(user.tenant_id) 
       : null;
-    res.json({ user, tenant });
+
+    // Issue JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        role: user.role, 
+        tenantId: user.tenant_id 
+      },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    // Don't send password_hash to the frontend
+    const { password_hash, ...safeUser } = user;
+
+    // res.json({ user, tenant });
+    res.json({ user: safeUser, tenant, token });
   } else {
     res.status(401).json({ error: "Invalid credentials" });
   }
 });
 
-  app.get("/api/tenant/:id/users", (req, res) => {
+// Tenant admin + platform admin API
+
+  app.get("/api/tenant/:id/users",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     const users = db.prepare("SELECT id, tenant_id, email, role, name, phone FROM users WHERE tenant_id = ?").all(req.params.id);
     res.json(users);
   });
 
-  app.post("/api/tenant/:id/users", async (req, res) => { 
+  app.post("/api/tenant/:id/users",authenticate, requireRole('tenant_admin', 'platform_admin'), async (req, res) => { 
     const { id, email, password, role, name, phone } = req.body;
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -158,7 +208,7 @@ if (tenantCount.count === 0) {
     }
   });
 
-  app.put("/api/users/:id",async (req, res) => {
+  app.put("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'),async (req, res) => {
     const { name, phone, password } = req.body;
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -171,17 +221,17 @@ if (tenantCount.count === 0) {
     res.json({ success: true });
   });
 
-  app.delete("/api/users/:id", (req, res) => {
+  app.delete("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
 
-  app.get("/api/tenant/:id/equipment", (req, res) => {
+  app.get("/api/tenant/:id/equipment",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     const equipment = db.prepare("SELECT * FROM equipment WHERE tenant_id = ?").all(req.params.id);
     res.json(equipment);
   });
 
-  app.post("/api/tenant/:id/equipment", (req, res) => {
+  app.post("/api/tenant/:id/equipment",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     const { id, name, category, width, depth, height, color, model_url, animations_enabled } = req.body;
     db.prepare(`
       INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled)
@@ -190,7 +240,7 @@ if (tenantCount.count === 0) {
     res.json({ success: true });
   });
 
-  app.put("/api/tenant/:tenantId/equipment/:id", (req, res) => {
+  app.put("/api/tenant/:tenantId/equipment/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     const { name, category, width, depth, height, color, model_url, animations_enabled } = req.body;
     db.prepare(`
       UPDATE equipment 
@@ -200,32 +250,32 @@ if (tenantCount.count === 0) {
     res.json({ success: true });
   });
 
-  app.delete("/api/tenant/:tenantId/equipment/:id", (req, res) => {
+  app.delete("/api/tenant/:tenantId/equipment/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     db.prepare("DELETE FROM equipment WHERE id = ? AND tenant_id = ?").run(req.params.id, req.params.tenantId);
     res.json({ success: true });
   });
 
-  // Platform Admin API
-  app.get("/api/admin/tenants", (req, res) => {
+  // Platform Admin API only
+  app.get("/api/admin/tenants",authenticate, requireRole('platform_admin'), (req, res) => {
     const tenants = db.prepare("SELECT * FROM tenants ORDER BY created_at DESC").all();
     res.json(tenants);
   });
 
-  app.post("/api/admin/tenants", (req, res) => {
+  app.post("/api/admin/tenants",authenticate, requireRole('platform_admin'), (req, res) => {
     const { id, name, logo_url, subscription_tier } = req.body;
     db.prepare("INSERT INTO tenants (id, name, logo_url, subscription_tier) VALUES (?, ?, ?, ?)")
       .run(id, name, logo_url, subscription_tier || 'basic');
     res.json({ success: true });
   });
 
-  app.put("/api/admin/tenants/:id", (req, res) => {
+  app.put("/api/admin/tenants/:id",authenticate, requireRole('platform_admin'), (req, res) => {
     const { name, logo_url, subscription_tier } = req.body;
     db.prepare("UPDATE tenants SET name = ?, logo_url = ?, subscription_tier = ? WHERE id = ?")
       .run(name, logo_url, subscription_tier, req.params.id);
     res.json({ success: true });
   });
 
-  app.get("/api/admin/stats", (req, res) => {
+  app.get("/api/admin/stats",authenticate, requireRole('platform_admin'), (req, res) => {
     const tenantCount = db.prepare("SELECT count(*) as count FROM tenants").get() as any;
     const userCount = db.prepare("SELECT count(*) as count FROM users").get() as any;
     const projectCount = db.prepare("SELECT count(*) as count FROM projects").get() as any;
@@ -236,7 +286,7 @@ if (tenantCount.count === 0) {
     });
   });
 
-  app.get("/api/admin/users", (req, res) => {
+  app.get("/api/admin/users",authenticate, requireRole('platform_admin'), (req, res) => {
     const users = db.prepare(`
       SELECT u.id, u.tenant_id, u.email, u.role, u.name, u.phone, t.name as tenant_name 
       FROM users u 
@@ -245,7 +295,7 @@ if (tenantCount.count === 0) {
     res.json(users);
   });
 
-  app.post("/api/admin/users", async (req, res) => {
+  app.post("/api/admin/users",authenticate, requireRole('platform_admin'), async (req, res) => {
     const { id, tenant_id, email, password, role, name } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
     db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?, ?)")
@@ -253,13 +303,14 @@ if (tenantCount.count === 0) {
     res.json({ success: true });
   });
 
-  app.get("/api/projects", (req, res) => {
+  // Any logged in user API (Sales Rep)
+  app.get("/api/projects",authenticate, (req, res) => {
     const tenantId = req.query.tenantId;
     const projects = db.prepare("SELECT * FROM projects WHERE tenant_id = ? ORDER BY created_at DESC").all(tenantId);
     res.json(projects);
   });
 
-  app.post("/api/projects", (req, res) => {
+  app.post("/api/projects",authenticate, (req, res) => {
     const { id, tenant_id, user_id, name, data } = req.body;
     db.prepare("INSERT INTO projects (id, tenant_id, user_id, name, data) VALUES (?, ?, ?, ?, ?)")
       .run(id, tenant_id, user_id, name, JSON.stringify(data));

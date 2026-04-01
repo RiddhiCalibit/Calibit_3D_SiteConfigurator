@@ -1,4 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
+import { authFetch } from '../utils/api';
 import { User, Tenant } from '../types';
 import { 
   LayoutDashboard, 
@@ -50,7 +52,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
   }, []);
 
   const fetchTenants = async () => {
-    const res = await fetch('/api/admin/tenants');
+    const res = await authFetch('/api/admin/tenants');
     if (res.ok) {
       const data = await res.json();
       setTenants(data);
@@ -58,7 +60,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
   };
 
   const fetchUsers = async () => {
-    const res = await fetch('/api/admin/users');
+    const res = await authFetch('/api/admin/users');
     if (res.ok) {
       const data = await res.json();
       setUsers(data);
@@ -66,7 +68,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
   };
 
   const fetchStats = async () => {
-    const res = await fetch('/api/admin/stats');
+    const res = await authFetch('/api/admin/stats');
     if (res.ok) {
       const data = await res.json();
       setStats(data);
@@ -76,7 +78,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
   const handleAddTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     const tenantId = uuidv4();
-    const res = await fetch('/api/admin/tenants', {
+    const res = await authFetch('/api/admin/tenants', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: tenantId, ...newTenant })
@@ -94,7 +96,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
     e.preventDefault();
     if (!editingTenant) return;
 
-    const res = await fetch(`/api/admin/tenants/${editingTenant.id}`, {
+    const res = await authFetch(`/api/admin/tenants/${editingTenant.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(editingTenant)

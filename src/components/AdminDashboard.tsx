@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authFetch } from '../utils/api';
 import { User, Tenant, EquipmentDef } from '../types';
 import { 
   LayoutDashboard, 
@@ -48,7 +49,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   });
 
   const fetchEquipment = async () => {
-    const res = await fetch(`/api/tenant/${tenant.id}/equipment`);
+    const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
     if (res.ok) {
       const data = await res.json();
       setEquipment(data);
@@ -62,7 +63,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   const handleAddEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = uuidv4();
-    const res = await fetch(`/api/tenant/${tenant.id}/equipment`, {
+    const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...newEquipment, id })
@@ -87,7 +88,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
     e.preventDefault();
     if (!editingEquipment) return;
 
-    const res = await fetch(`/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`, {
+    const res = await authFetch(`/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(editingEquipment)
@@ -102,7 +103,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   const handleDeleteEquipment = async (id: string) => {
     if (!confirm('Are you sure you want to delete this equipment?')) return;
 
-    const res = await fetch(`/api/tenant/${tenant.id}/equipment/${id}`, {
+    const res = await authFetch(`/api/tenant/${tenant.id}/equipment/${id}`, {
       method: 'DELETE'
     });
 
@@ -554,7 +555,7 @@ function UsersTab({
   });
 
   const fetchUsers = async () => {
-    const res = await fetch(`/api/tenant/${tenant.id}/users`);
+    const res = await authFetch(`/api/tenant/${tenant.id}/users`);
     if (res.ok) {
       const data = await res.json();
       setUsers(data);
@@ -568,7 +569,7 @@ function UsersTab({
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = uuidv4();
-    const res = await fetch(`/api/tenant/${tenant.id}/users`, {
+    const res = await authFetch(`/api/tenant/${tenant.id}/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...newUser, id, role: 'sales_rep' })
@@ -594,7 +595,7 @@ function UsersTab({
     e.preventDefault();
     if (!editingUser) return;
 
-    const res = await fetch(`/api/users/${editingUser.id}`, {
+    const res = await authFetch(`/api/users/${editingUser.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -615,7 +616,7 @@ function UsersTab({
   const handleDeleteUser = async (id: string) => {
     if (!confirm('Are you sure you want to delete this sales person?')) return;
 
-    const res = await fetch(`/api/users/${id}`, {
+    const res = await authFetch(`/api/users/${id}`, {
       method: 'DELETE'
     });
 
@@ -939,7 +940,7 @@ function ProfileTab({ user }: { user: User }) {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
+      const res = await authFetch(`/api/users/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

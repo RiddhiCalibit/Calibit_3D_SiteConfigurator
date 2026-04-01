@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { authFetch } from './utils/api';
 import { Sidebar } from './components/Sidebar';
 import { MapPanel } from './components/MapPanel';
 import { LocationSearch } from './components/LocationSearch';
@@ -14,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { lngLatToMetres, isPointInBoundary } from './utils/geo';
 import { clsx } from 'clsx';
 import { AlertTriangle, Download, Trash2 } from 'lucide-react';
+
 
 export default function App() {
   const {
@@ -54,11 +56,20 @@ export default function App() {
     
     if (res.ok) {
       const data = await res.json();
+      localStorage.setItem('authToken', data.token); // save token
       setUser(data.user);
       setTenant(data.tenant);
       
+    // Pass token directly here — don't rely on authFetch reading
+    // localStorage immediately since it may not have updated yet
+
       if (data.tenant) {
-        const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`);
+        const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`,{
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.token}` // use token directly
+          }
+        });
         if (eqRes.ok) {
           const eqData = await eqRes.json();
           setCustomLibrary(eqData);
@@ -70,6 +81,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('authToken'); // clear token
     setUser(null);
     setTenant(null);
   };
@@ -158,7 +170,7 @@ export default function App() {
       objects: state.objects,
     };
 
-    const res = await fetch('/api/projects', {
+    const res = await authFetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -216,7 +228,7 @@ export default function App() {
           if (obj) {
             updateObject(state.selectedId, { rotationY: obj.rotationY + (5 * Math.PI / 180) });
           }
-        }
+        }    
       }
       if (e.key === 'm' || e.key === 'M') {
         setIsMeasuring(prev => !prev);
