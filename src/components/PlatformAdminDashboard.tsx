@@ -17,7 +17,8 @@ import {
   CreditCard,
   Pencil,
   Moon,
-  Sun
+  Sun,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -43,7 +44,15 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
   const [stats, setStats] = useState<PlatformStats>({ tenants: 0, users: 0, projects: 0 });
   const [isAddingTenant, setIsAddingTenant] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
-  const [newTenant, setNewTenant] = useState({ name: '', logo_url: '', subscription_tier: 'basic' as 'basic' | 'pro' });
+  const [newTenant, setNewTenant] = useState({ 
+    name: '', 
+    logo_url: '', 
+    subscription_tier: 'basic' as 'basic' | 'pro',
+    email: '',
+    password: ''
+  });
+  const [createdTenant, setCreatedTenant] = useState<{name: string, email: string, password: string} | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     fetchTenants();
@@ -85,8 +94,15 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
     });
 
     if (res.ok) {
+      // Store created tenant credentials for display
+      setCreatedTenant({
+        name: newTenant.name,
+        email: newTenant.email,
+        password: newTenant.password
+      });
+      setShowSuccess(true);
       setIsAddingTenant(false);
-      setNewTenant({ name: '', logo_url: '', subscription_tier: 'basic' });
+      setNewTenant({ name: '', logo_url: '', subscription_tier: 'basic', email: '', password: '' });
       fetchTenants();
       fetchStats();
     }
@@ -198,6 +214,9 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
             editingTenant={editingTenant}
             setEditingTenant={setEditingTenant}
             onUpdate={handleUpdateTenant}
+            showSuccess={showSuccess}
+            setShowSuccess={setShowSuccess}
+            createdTenant={createdTenant}
           />
         )}
         {activeTab === 'users' && (
@@ -295,7 +314,10 @@ function TenantsTab({
   setNewTenant,
   editingTenant,
   setEditingTenant,
-  onUpdate
+  onUpdate,
+  showSuccess,
+  setShowSuccess,
+  createdTenant
 }: { 
   tenants: Tenant[], 
   isAdding: boolean, 
@@ -305,10 +327,73 @@ function TenantsTab({
   setNewTenant: any,
   editingTenant: Tenant | null,
   setEditingTenant: (t: Tenant | null) => void,
-  onUpdate: (e: React.FormEvent) => void
+  onUpdate: (e: React.FormEvent) => void,
+  showSuccess: boolean,
+  setShowSuccess: (show: boolean) => void,
+  createdTenant: {name: string, email: string, password: string} | null
 }) {
   return (
     <div className="space-y-6">
+      {showSuccess && createdTenant && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-6 bg-green-500/10 border border-green-500/30 rounded-2xl mb-6"
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-green-500">Tenant Created Successfully!</h3>
+              <p className="text-xs opacity-60 mt-1">Tenant admin credentials have been generated</p>
+            </div>
+            <button 
+              onClick={() => setShowSuccess(false)}
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4 opacity-40" />
+            </button>
+          </div>
+          
+          <div className="bg-white/5 border border-green-500/20 rounded-xl p-4 mb-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Company Name</p>
+                <p className="text-sm font-bold">{createdTenant.name}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Admin Email</p>
+                <p className="text-sm font-bold text-green-400">{createdTenant.email}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Password</p>
+                <p className="text-sm font-bold text-green-400">{createdTenant.password}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                const credentials = `Company: ${createdTenant.name}\nAdmin Email: ${createdTenant.email}\nPassword: ${createdTenant.password}`;
+                navigator.clipboard.writeText(credentials);
+                alert('Credentials copied to clipboard!');
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-all"
+            >
+              Copy Credentials
+            </button>
+            <button
+              onClick={() => {
+                setShowSuccess(false);
+                window.location.href = '/login';
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-teal hover:bg-brand-teal/90 text-white text-xs font-bold rounded-lg transition-all"
+            >
+              Login as Tenant Admin
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       {isAdding && (
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
@@ -319,29 +404,62 @@ function TenantsTab({
             <h3 className="text-sm font-bold uppercase tracking-widest text-brand-teal">Onboard New Tenant</h3>
           </div>
           <form onSubmit={onAdd} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Company Name</label>
-                <input 
-                  required
-                  type="text" 
-                  value={newTenant.name}
-                  onChange={e => setNewTenant({ ...newTenant, name: e.target.value })}
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  placeholder="e.g. Acme Corp"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Logo URL</label>
-                <input 
-                  type="text" 
-                  value={newTenant.logo_url}
-                  onChange={e => setNewTenant({ ...newTenant, logo_url: e.target.value })}
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  placeholder="https://..."
-                />
+            <div className="space-y-4">
+              <div className="text-sm font-bold text-brand-teal mb-3">Company Details</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Company Name</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={newTenant.name}
+                    onChange={e => setNewTenant({ ...newTenant, name: e.target.value })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                    placeholder="e.g. Acme Corp"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Logo URL</label>
+                  <input 
+                    type="text" 
+                    value={newTenant.logo_url}
+                    onChange={e => setNewTenant({ ...newTenant, logo_url: e.target.value })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                    placeholder="https://..."
+                  />
+                </div>
               </div>
             </div>
+
+            <div className="space-y-4 pt-2">
+              <div className="text-sm font-bold text-brand-teal mb-3">Tenant Admin Credentials</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Admin Email</label>
+                  <input 
+                    required
+                    type="email" 
+                    value={newTenant.email}
+                    onChange={e => setNewTenant({ ...newTenant, email: e.target.value })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                    placeholder="admin@company.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Password</label>
+                  <input 
+                    required
+                    type="password" 
+                    value={newTenant.password}
+                    onChange={e => setNewTenant({ ...newTenant, password: e.target.value })}
+                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                    placeholder="Min 6 characters"
+                    minLength={6}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-between items-center pt-2">
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">

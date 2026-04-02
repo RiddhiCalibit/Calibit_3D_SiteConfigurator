@@ -261,11 +261,31 @@ function requireRole(...roles: string[]) {
     res.json(tenants);
   });
 
-  app.post("/api/admin/tenants",authenticate, requireRole('platform_admin'), (req, res) => {
-    const { id, name, logo_url, subscription_tier } = req.body;
-    db.prepare("INSERT INTO tenants (id, name, logo_url, subscription_tier) VALUES (?, ?, ?, ?)")
-      .run(id, name, logo_url, subscription_tier || 'basic');
-    res.json({ success: true });
+  app.post("/api/admin/tenants",authenticate, requireRole('platform_admin'), async (req, res) => {
+    const { id, name, logo_url, subscription_tier, email, password } = req.body;
+    
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required for tenant admin' });
+    }
+
+    try {
+      // Insert tenant
+      db.prepare("INSERT INTO tenants (id, name, logo_url, subscription_tier) VALUES (?, ?, ?, ?)")
+        .run(id, name, logo_url, subscription_tier || 'basic');
+
+      // Create tenant admin user
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const userId = `tenant-admin-${id}`;
+      db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(userId, id, email, hashedPassword, 'tenant_admin', `${name} Admin`);
+
+      res.json({ success: true });
+    } catch (error: any) {
+      // Rollback tenant creation if user creation fails
+      db.prepare("DELETE FROM tenants WHERE id = ?").run(id);
+      res.status(400).json({ error: error.message });
+    }
   });
 
   app.put("/api/admin/tenants/:id",authenticate, requireRole('platform_admin'), (req, res) => {
