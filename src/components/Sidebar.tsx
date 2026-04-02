@@ -1,4 +1,5 @@
 import React from 'react';
+import { authFetch } from '../utils/api';
 import { EquipmentDef, DEFAULT_LIBRARY, AppState, User, Tenant } from '../types';
 import { 
   Map as MapIcon, 
@@ -55,6 +56,7 @@ interface SidebarProps {
   onOpenCompliance: () => void;
   onSetUnitSystem: (unit: 'metric' | 'imperial') => void;
   onLogout: () => void;
+  onLoadProject: (boundary: [number,number][], objects: any[]) => void;
   user: User | null;
   tenant: Tenant | null;
 }
@@ -78,6 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCompliance,
   onSetUnitSystem,
   onLogout,
+  onLoadProject,
   user,
   tenant,
 }) => {
@@ -167,6 +170,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const url = URL.createObjectURL(file);
     const name = file.name.replace('.glb', '');
+
+    const handleAddCustomEquipment = async (def: EquipmentDef) => {
+  // Save to DB if user belongs to a tenant
+  if (tenant) {
+    const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
+      method: 'POST',
+      body: JSON.stringify({
+        id: def.id,
+        name: def.name,
+        category: def.category,
+        width: def.width,
+        depth: def.depth,
+        height: def.height,
+        color: def.color,
+        model_url: def.modelUrl || null,
+        animations_enabled: def.animationsEnabled || false
+      })
+    });
+
+    if (res.ok) {
+      onAddCustomEquipment(def); // also update React state
+    } else {
+      alert('Failed to save equipment to database');
+    }
+  } else {
+    // No tenant (platform admin) — just update state
+    onAddCustomEquipment(def);
+  }
+};
     
     onAddCustomEquipment({
       id: `custom_${Date.now()}`,
@@ -179,6 +211,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
       modelUrl: url
     });
   };
+
+  const handleLoadProject = (project: any) => {
+  const data = typeof project.data === 'string' 
+    ? JSON.parse(project.data)  // DB stores it as JSON string
+    : project.data;
+    
+  // if (data.siteBoundary) onSetBoundary(data.siteBoundary);
+  // if (data.objects) onSetObjects(data.objects);
+
+  // if (data.siteBoundary) onDeleteBoundary();  // clear first
+  // // Note: to properly load, we need to pass data up to App.tsx
+  // // For now alert the user — full load needs App.tsx wiring
+  // alert(`Project "${project.name}" loaded. Boundary and objects restored.`);
+
+  if (data.siteBoundary) onLoadProject(data.siteBoundary, data.objects || []);
+};
 
   return (
     <aside className="w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">

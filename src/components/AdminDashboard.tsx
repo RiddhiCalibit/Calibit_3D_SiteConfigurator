@@ -566,30 +566,57 @@ function UsersTab({
     fetchUsers();
   }, [tenant.id]);
 
-  const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = uuidv4();
-    const res = await authFetch(`/api/tenant/${tenant.id}/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newUser, id, role: 'sales_rep' })
-    });
+  // const handleAddUser = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   const id = uuidv4();
 
-    if (res.ok) {
-      setIsAdding(false);
-      setNewUser({
-        name: '',
-        email: '',
-        phone: '',
-        password: '',
-        companyName: tenant.name
-      });
-      fetchUsers();
-    } else {
-      const err = await res.json();
-      alert(err.error || 'Failed to add user');
-    }
-  };
+  //   const res = await authFetch(`/api/tenant/${tenant.id}/users`, {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({ ...newUser, id, role: 'sales_rep' })
+  //   });
+
+  //   if (res.ok) {
+  //     setIsAdding(false);
+  //     setNewUser({
+  //       name: '',
+  //       email: '',
+  //       phone: '',
+  //       password: '',
+  //       companyName: tenant.name
+  //     });
+  //     fetchUsers();
+  //   } else {
+  //     const err = await res.json();
+  //     alert(err.error || 'Failed to add user');
+  //   }
+  // };
+
+  const handleAddUser = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const userId = uuidv4();
+  
+  const res = await authFetch(`/api/tenant/${tenant.id}/users`, {
+    method: 'POST',
+    body: JSON.stringify({
+      id: userId,
+      email: newUser.email,
+      password: newUser.password, // server will hash this
+      role: 'sales_rep',
+      name: newUser.name,
+      phone: newUser.phone
+    })
+  });
+
+  if (res.ok) {
+    setIsAdding(false);
+    setNewUser({ name: '', email: '', password: '', phone: '', companyName: tenant.name });
+    fetchUsers(); // refresh from DB
+  } else {
+    const err = await res.json();
+    alert(err.error || 'Failed to add user');
+  }
+};
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();

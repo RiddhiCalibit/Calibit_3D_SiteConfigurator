@@ -46,6 +46,7 @@ export default function App() {
 
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [projects, setProjects] = useState<any[]>([]);
 
   const handleLogin = async (email: string, password: string) => {
     const res = await fetch('/api/auth/login', {
@@ -59,22 +60,57 @@ export default function App() {
       localStorage.setItem('authToken', data.token); // save token
       setUser(data.user);
       setTenant(data.tenant);
+      fetchProjects();
       
     // Pass token directly here — don't rely on authFetch reading
     // localStorage immediately since it may not have updated yet
 
-      if (data.tenant) {
-        const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`,{
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.token}` // use token directly
-          }
-        });
-        if (eqRes.ok) {
-          const eqData = await eqRes.json();
-          setCustomLibrary(eqData);
-        }
-      }
+  //     if (data.tenant) {
+  //       const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`,{
+  //         headers: {
+  //           'Content-Type': 'application/json',
+  //           'Authorization': `Bearer ${data.token}` // use token directly
+  //         }
+  //       });
+  //       if (eqRes.ok) {
+  //         const eqData = await eqRes.json();
+  //         setCustomLibrary(eqData);
+  //       }
+  //     }
+  //   } else {
+  //     throw new Error('Login failed');
+  //   }
+  // };
+
+  if (data.tenant) {
+  const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${data.token}`
+    }
+  });
+  if (eqRes.ok) {
+    const eqData = await eqRes.json();
+    
+    //  Map DB snake_case fields to frontend camelCase
+    const mapped = eqData.map((eq: any) => ({
+      id: eq.id,
+      name: eq.name,
+      category: eq.category,
+      width: eq.width,
+      depth: eq.depth,
+      height: eq.height,
+      color: eq.color,
+      modelUrl: eq.model_url,           //  snake_case → camelCase
+      animationsEnabled: !!eq.animations_enabled  //  0/1 → boolean
+    }));
+    
+    setCustomLibrary(mapped);
+  }
+} else {
+  setCustomLibrary(DEFAULT_LIBRARY);
+}
+
     } else {
       throw new Error('Login failed');
     }
@@ -209,6 +245,15 @@ export default function App() {
       applyImport(pendingImportData);
     }
   };
+
+  const fetchProjects = async () => {
+  if (!tenant) return;
+  const res = await authFetch(`/api/projects?tenantId=${tenant.id}`);
+  if (res.ok) {
+    const data = await res.json();
+    setProjects(data);
+  }
+};
 
   // Keyboard shortcuts
   useEffect(() => {

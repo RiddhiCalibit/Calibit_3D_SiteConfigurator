@@ -226,7 +226,7 @@ function requireRole(...roles: string[]) {
     res.json({ success: true });
   });
 
-  app.get("/api/tenant/:id/equipment",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  app.get("/api/tenant/:id/equipment",authenticate, (req, res) => {
     const equipment = db.prepare("SELECT * FROM equipment WHERE tenant_id = ?").all(req.params.id);
     res.json(equipment);
   });
