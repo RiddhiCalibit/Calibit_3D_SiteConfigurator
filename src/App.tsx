@@ -48,73 +48,133 @@ export default function App() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
 
-  const handleLogin = async (email: string, password: string) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
+//   const handleLogin = async (email: string, password: string) => {
+//     const res = await fetch('/api/auth/login', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify({ email, password })
+//     });
     
-    if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem('authToken', data.token); // save token
-      setUser(data.user);
-      setTenant(data.tenant);
-      fetchProjects();
+//     if (res.ok) {
+//       const data = await res.json();
+//       localStorage.setItem('authToken', data.token); // save token
+//       setUser(data.user);
+//       setTenant(data.tenant);
+
+//     //pass tenant directly instead of relying on state
+//     const fetchProjects = async (tenantData: Tenant | null) => {
+//     if (!tenantData) return;
+//     const res = await authFetch(`/api/projects?tenantId=${tenantData.id}`);
+//     if (res.ok) {
+//       const data = await res.json();
+//       setProjects(data);
+//     }
+//   };
+
+// // Then call it in handleLogin:
+// setTenant(data.tenant);
+// fetchProjects(data.tenant); // pass directly, don't rely on state
       
-    // Pass token directly here — don't rely on authFetch reading
-    // localStorage immediately since it may not have updated yet
+//     // Pass token directly here — don't rely on authFetch reading
+//     // localStorage immediately since it may not have updated yet
 
-  //     if (data.tenant) {
-  //       const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`,{
-  //         headers: {
-  //           'Content-Type': 'application/json',
-  //           'Authorization': `Bearer ${data.token}` // use token directly
-  //         }
-  //       });
-  //       if (eqRes.ok) {
-  //         const eqData = await eqRes.json();
-  //         setCustomLibrary(eqData);
-  //       }
-  //     }
-  //   } else {
-  //     throw new Error('Login failed');
-  //   }
-  // };
+//   //     if (data.tenant) {
+//   //       const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`,{
+//   //         headers: {
+//   //           'Content-Type': 'application/json',
+//   //           'Authorization': `Bearer ${data.token}` // use token directly
+//   //         }
+//   //       });
+//   //       if (eqRes.ok) {
+//   //         const eqData = await eqRes.json();
+//   //         setCustomLibrary(eqData);
+//   //       }
+//   //     }
+//   //   } else {
+//   //     throw new Error('Login failed');
+//   //   }
+//   // };
 
-  if (data.tenant) {
-  const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${data.token}`
-    }
+//   if (data.tenant) {
+//   const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`, {
+//     headers: {
+//       'Content-Type': 'application/json',
+//       'Authorization': `Bearer ${data.token}`
+//     }
+//   });
+//   if (eqRes.ok) {
+//     const eqData = await eqRes.json();
+    
+//     //  Map DB snake_case fields to frontend camelCase
+//     const mapped = eqData.map((eq: any) => ({
+//       id: eq.id,
+//       name: eq.name,
+//       category: eq.category,
+//       width: eq.width,
+//       depth: eq.depth,
+//       height: eq.height,
+//       color: eq.color,
+//       modelUrl: eq.model_url,           //  snake_case → camelCase
+//       animationsEnabled: !!eq.animations_enabled  //  0/1 → boolean
+//     }));
+    
+//     setCustomLibrary(mapped);
+//   }
+// } else {
+//   setCustomLibrary(DEFAULT_LIBRARY);
+// }
+
+//     } else {
+//       throw new Error('Login failed');
+//     }
+//   };
+
+const handleLogin = async (email: string, password: string) => {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
   });
-  if (eqRes.ok) {
-    const eqData = await eqRes.json();
-    
-    //  Map DB snake_case fields to frontend camelCase
-    const mapped = eqData.map((eq: any) => ({
-      id: eq.id,
-      name: eq.name,
-      category: eq.category,
-      width: eq.width,
-      depth: eq.depth,
-      height: eq.height,
-      color: eq.color,
-      modelUrl: eq.model_url,           //  snake_case → camelCase
-      animationsEnabled: !!eq.animations_enabled  //  0/1 → boolean
-    }));
-    
-    setCustomLibrary(mapped);
-  }
-} else {
-  setCustomLibrary(DEFAULT_LIBRARY);
-}
 
+  if (res.ok) {
+    const data = await res.json();
+    localStorage.setItem('authToken', data.token);
+    setUser(data.user);
+    setTenant(data.tenant);
+
+    //  Pass tenant directly — don't rely on state being updated yet
+    fetchProjects(data.tenant);
+
+    if (data.tenant) {
+      const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.token}`
+        }
+      });
+      if (eqRes.ok) {
+        const eqData = await eqRes.json();
+        const mapped = eqData.map((eq: any) => ({
+          id: eq.id,
+          name: eq.name,
+          category: eq.category,
+          width: eq.width,
+          depth: eq.depth,
+          height: eq.height,
+          color: eq.color,
+          modelUrl: eq.model_url,
+          animationsEnabled: !!eq.animations_enabled
+        }));
+        setCustomLibrary(mapped);
+      }
     } else {
-      throw new Error('Login failed');
+      setCustomLibrary([]);
     }
-  };
+  } else {
+    throw new Error('Login failed');
+  }
+};
+
 
   const handleLogout = () => {
     localStorage.removeItem('authToken'); // clear token
@@ -246,14 +306,14 @@ export default function App() {
     }
   };
 
-  const fetchProjects = async () => {
-  if (!tenant) return;
-  const res = await authFetch(`/api/projects?tenantId=${tenant.id}`);
-  if (res.ok) {
-    const data = await res.json();
-    setProjects(data);
-  }
-};
+  const fetchProjects = async (tenantData: Tenant | null) => {
+    if (!tenantData) return;
+    const res = await authFetch(`/api/projects?tenantId=${tenantData.id}`);
+    if (res.ok) {
+      const data = await res.json();
+      setProjects(data);
+    }
+  };
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -317,6 +377,10 @@ export default function App() {
         onSetUnitSystem={setUnitSystem}
         onOpenCompliance={() => setComplianceOpen(true)}
         onLogout={handleLogout}
+        onLoadProject={(boundary, objects) => {
+        setBoundary(boundary);
+        setObjects(objects);
+           }}
         user={user}
         tenant={tenant}
       />

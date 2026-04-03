@@ -109,7 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     
     setIsSavingProfile(true);
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
+      const res = await authFetch(`/api/users/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -164,14 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return `${w}x${d}x${h}m`;
   };
 
-  const handleModelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const url = URL.createObjectURL(file);
-    const name = file.name.replace('.glb', '');
-
-    const handleAddCustomEquipment = async (def: EquipmentDef) => {
+  const handleAddCustomEquipment = async (def: EquipmentDef) => {
   // Save to DB if user belongs to a tenant
   if (tenant) {
     const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
@@ -190,26 +183,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
 
     if (res.ok) {
-      onAddCustomEquipment(def); // also update React state
+      onAddCustomEquipment(def); // update React state after DB save
     } else {
       alert('Failed to save equipment to database');
     }
   } else {
-    // No tenant (platform admin) — just update state
+    // Platform admin has no tenant — just update state
     onAddCustomEquipment(def);
   }
 };
-    
-    onAddCustomEquipment({
-      id: `custom_${Date.now()}`,
-      name: `${name} (Custom)`,
-      width: 2,
-      depth: 2,
-      height: 2,
-      color: '#9B59B6',
-      category: 'custom',
-      modelUrl: url
-    });
+
+  const handleModelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    const name = file.name.replace('.glb', '');
+
+    // Now calls the DB-saving version above
+    handleAddCustomEquipment({
+    id: `custom_${Date.now()}`,
+    name: `${name} (Custom)`,
+    width: 2,
+    depth: 2,
+    height: 2,
+    color: '#9B59B6',
+    category: 'custom',
+    modelUrl: url
+  });
   };
 
   const handleLoadProject = (project: any) => {

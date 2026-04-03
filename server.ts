@@ -2,6 +2,18 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
 
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        userId: string;
+        role: 'platform_admin' | 'tenant_admin' | 'sales_rep';
+        tenantId?: string;
+      };
+    }
+  }
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
 import express from "express";
@@ -11,6 +23,7 @@ import { fileURLToPath } from "url";
 import Database from "better-sqlite3";
 import fs from "fs";
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -123,7 +136,7 @@ if (tenantCount.count === 0) {
 
   app.use(express.json());
 
-  // Middleware 1: verify token
+// Middleware 1: verify token
 function authenticate(req: any, res: any, next: any) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // expects "Bearer <token>"
@@ -131,7 +144,7 @@ function authenticate(req: any, res: any, next: any) {
   if (!token) return res.status(401).json({ error: 'No token provided' });
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string; tenantId?: string };
     req.user = decoded; // attach decoded user info to request
     next();
   } catch {
@@ -149,19 +162,36 @@ function requireRole(...roles: string[]) {
   };
 }
 
+// Checks user belongs to the tenant they're requesting
+function requireTenantAccess(req: any, res: any, next: any) {
+  const requestedTenantId = req.params.id || req.params.tenantId;
+  
+  // Platform admins can access any tenant
+  if (req.user.role === 'platform_admin') return next();
+  
+  // Everyone else can only access their own tenant
+  if (req.user.tenantId !== requestedTenantId) {
+    return res.status(403).json({ error: 'Access denied to this tenant' });
+  }
+  
+  next();
+}
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // max 10 attempts per IP
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' }
+});
+
   // API Routes
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
+    
+    if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
     //const user = db.prepare("SELECT * FROM users WHERE email = ? AND password_hash = ?").get(email, password) as any;
     const user = db.prepare("SELECT * FROM users WHERE email = ? ").get(email) as any;
-    
-  //   if (user) {
-  //     const tenant = user.tenant_id ? db.prepare("SELECT * FROM tenants WHERE id = ?").get(user.tenant_id) : null;
-  //     res.json({ user, tenant });
-  //   } else {
-  //     res.status(401).json({ error: "Invalid credentials" });
-  //   }
-  // });
 
     if (user && await bcrypt.compare(password, user.password_hash)) {
     const tenant = user.tenant_id 
@@ -178,11 +208,8 @@ function requireRole(...roles: string[]) {
       JWT_SECRET,
       { expiresIn: '8h' }
     );
-
-    // Don't send password_hash to the frontend
+  
     const { password_hash, ...safeUser } = user;
-
-    // res.json({ user, tenant });
     res.json({ user: safeUser, tenant, token });
   } else {
     res.status(401).json({ error: "Invalid credentials" });
@@ -191,12 +218,12 @@ function requireRole(...roles: string[]) {
 
 // Tenant admin + platform admin API
 
-  app.get("/api/tenant/:id/users",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  app.get("/api/tenant/:id/users",authenticate, requireRole('tenant_admin', 'platform_admin'),requireTenantAccess, (req, res) => {
     const users = db.prepare("SELECT id, tenant_id, email, role, name, phone FROM users WHERE tenant_id = ?").all(req.params.id);
     res.json(users);
   });
 
-  app.post("/api/tenant/:id/users",authenticate, requireRole('tenant_admin', 'platform_admin'), async (req, res) => { 
+  app.post("/api/tenant/:id/users",authenticate, requireRole('tenant_admin', 'platform_admin'),requireTenantAccess, async (req, res) => { 
     const { id, email, password, role, name, phone } = req.body;
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -226,13 +253,28 @@ function requireRole(...roles: string[]) {
     res.json({ success: true });
   });
 
-  app.get("/api/tenant/:id/equipment",authenticate, (req, res) => {
+  app.get("/api/tenant/:id/equipment",authenticate, requireTenantAccess, (req, res) => {
+
+      // user can only access their own tenant
+  if (req.user.tenantId !== req.params.id && req.user.role !== 'platform_admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
     const equipment = db.prepare("SELECT * FROM equipment WHERE tenant_id = ?").all(req.params.id);
     res.json(equipment);
   });
 
-  app.post("/api/tenant/:id/equipment",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  app.post("/api/tenant/:id/equipment",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     const { id, name, category, width, depth, height, color, model_url, animations_enabled } = req.body;
+
+      // Validate before touching the DB
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+  if (isNaN(width) || isNaN(depth) || isNaN(height) || width <= 0 || depth <= 0 || height <= 0) {
+    return res.status(400).json({ error: 'Invalid dimensions' });
+  }
+
     db.prepare(`
       INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -240,7 +282,7 @@ function requireRole(...roles: string[]) {
     res.json({ success: true });
   });
 
-  app.put("/api/tenant/:tenantId/equipment/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  app.put("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     const { name, category, width, depth, height, color, model_url, animations_enabled } = req.body;
     db.prepare(`
       UPDATE equipment 
@@ -250,7 +292,7 @@ function requireRole(...roles: string[]) {
     res.json({ success: true });
   });
 
-  app.delete("/api/tenant/:tenantId/equipment/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  app.delete("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     db.prepare("DELETE FROM equipment WHERE id = ? AND tenant_id = ?").run(req.params.id, req.params.tenantId);
     res.json({ success: true });
   });
@@ -325,6 +367,12 @@ function requireRole(...roles: string[]) {
 
   // Any logged in user API (Sales Rep)
   app.get("/api/projects",authenticate, (req, res) => {
+
+      //user can only access their own tenant
+  if (!req.user || (req.user.tenantId !== req.query.tenantId && req.user.role !== 'platform_admin')) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
     const tenantId = req.query.tenantId;
     const projects = db.prepare("SELECT * FROM projects WHERE tenant_id = ? ORDER BY created_at DESC").all(tenantId);
     res.json(projects);
