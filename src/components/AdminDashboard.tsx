@@ -17,7 +17,8 @@ import {
   Trash2,
   X,
   Moon,
-  Sun
+  Sun,
+  KeyRound
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -32,7 +33,7 @@ interface Props {
 
 export function AdminDashboard({ user, tenant, onLogout }: Props) {
   const { theme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'overview' | 'equipment' | 'users' | 'settings' | 'profile'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'equipment' | 'users' | 'settings' | 'profile' | 'resets'>('overview');
   const [equipment, setEquipment] = useState<EquipmentDef[]>([]);
   const [isAddingEquipment, setIsAddingEquipment] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<EquipmentDef | null>(null);
@@ -48,6 +49,17 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
     animationsEnabled: false
   });
 
+  const [resetRequests, setResetRequests] = useState<any[]>([]);
+  const [tempPasswords, setTempPasswords] = useState<Record<string, string>>({});
+
+  const fetchResetRequests = async () => {
+  const res = await authFetch(`/api/admin/reset-requests`);
+  if (res.ok) {
+    const data = await res.json();
+    setResetRequests(data);
+  }
+};
+
   const fetchEquipment = async () => {
     const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
     if (res.ok) {
@@ -58,7 +70,26 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
 
   useEffect(() => {
     fetchEquipment();
+    fetchResetRequests();
   }, [tenant.id]);
+
+  // Add resolve handler
+const handleResolveReset = async (requestId: string) => {
+  const tempPwd = tempPasswords[requestId];
+  if (!tempPwd || tempPwd.length < 8) {
+    return alert('Temp password must be at least 8 characters');
+  }
+
+  const res = await authFetch(`/api/admin/reset-requests/${requestId}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ temp_password: tempPwd })
+  });
+
+  if (res.ok) {
+    alert('Temporary password set. Share it with the user.');
+    fetchResetRequests();
+  }
+};
 
   const handleAddEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +143,49 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
     }
   };
 
+  // Add the tab content
+{activeTab === 'resets' && (
+  <div className="space-y-4">
+    {resetRequests.length === 0 ? (
+      <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
+        <p className="text-sm opacity-40 italic">No pending password reset requests.</p>
+      </div>
+    ) : (
+      resetRequests.map(req => (
+        <div key={req.id} className="p-6 bg-theme-card border border-theme-border rounded-2xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm">{req.user_name}</p>
+              <p className="text-xs opacity-40">{req.email}</p>
+              <p className="text-[10px] opacity-30 mt-1">
+                Requested: {new Date(req.created_at).toLocaleString()}
+              </p>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-amber-500/20 text-amber-400 rounded">
+              Pending
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              placeholder="Set temporary password (min 8 chars)"
+              value={tempPasswords[req.id] || ''}
+              onChange={e => setTempPasswords({ ...tempPasswords, [req.id]: e.target.value })}
+              className="flex-1 bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+            />
+            <button
+              onClick={() => handleResolveReset(req.id)}
+              className="px-4 py-2 bg-brand-teal text-white text-xs font-bold rounded-lg hover:bg-brand-teal/90 transition-all"
+            >
+              Set & Resolve
+            </button>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+)}
+
   return (
     <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
@@ -145,6 +219,12 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
             icon={<LayoutDashboard className="w-4 h-4" />}
             label="Overview"
           />
+          <NavButton
+  active={activeTab === 'resets'}
+  onClick={() => setActiveTab('resets')}
+  icon={<KeyRound className="w-4 h-4" />}
+  label="Password Resets"
+/>
           <NavButton 
             active={activeTab === 'equipment'} 
             onClick={() => setActiveTab('equipment')}
@@ -186,6 +266,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
               {activeTab === 'users' && 'Sales Team Management'}
               {activeTab === 'settings' && 'Company Settings'}
               {activeTab === 'profile' && 'Profile'}
+              {activeTab === 'resets' && 'Password Reset Requests'}
             </h2>
             <p className="text-sm opacity-40">Welcome back, {user.name}</p>
           </div>
@@ -231,6 +312,48 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
         {activeTab === 'profile' && (
           <ProfileTab user={user} />
         )}
+
+        {activeTab === 'resets' && (
+  <div className="space-y-4">
+    {resetRequests.length === 0 ? (
+      <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
+        <p className="text-sm opacity-40 italic">No pending password reset requests.</p>
+      </div>
+    ) : (
+      resetRequests.map(req => (
+        <div key={req.id} className="p-6 bg-theme-card border border-theme-border rounded-2xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm">{req.user_name}</p>
+              <p className="text-xs opacity-40">{req.email}</p>
+              <p className="text-[10px] opacity-30 mt-1">
+                Requested: {new Date(req.created_at).toLocaleString()}
+              </p>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-amber-500/20 text-amber-400 rounded">
+              Pending
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              placeholder="Set temporary password (min 8 chars)"
+              value={tempPasswords[req.id] || ''}
+              onChange={e => setTempPasswords({ ...tempPasswords, [req.id]: e.target.value })}
+              className="flex-1 bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+            />
+            <button
+              onClick={() => handleResolveReset(req.id)}
+              className="px-4 py-2 bg-brand-teal text-white text-xs font-bold rounded-lg hover:bg-brand-teal/90 transition-all"
+            >
+              Set & Resolve
+            </button>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+)}
       </main>
     </div>
   );

@@ -24,6 +24,7 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
+import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +77,15 @@ db.exec(`
     FOREIGN KEY(tenant_id) REFERENCES tenants(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS password_reset_requests (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',  -- pending | resolved
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
 `);
 
 // Migration: Add phone column to users if it doesn't exist
@@ -83,6 +93,12 @@ const tableInfo = db.prepare("PRAGMA table_info(users)").all() as any[];
 const hasPhone = tableInfo.some(col => col.name === 'phone');
 if (!hasPhone) {
   db.exec("ALTER TABLE users ADD COLUMN phone TEXT");
+}
+// Migration: Add force_password_change column to users if it doesn't exist
+const userInfo = db.prepare("PRAGMA table_info(users)").all() as any[];
+const hasForceChange = userInfo.some(col => col.name === 'force_password_change');
+if (!hasForceChange) {
+  db.exec("ALTER TABLE users ADD COLUMN force_password_change INTEGER DEFAULT 0");
 }
 
 async function startServer() {
@@ -102,7 +118,6 @@ if (tenantCount.count === 0) {
   // When seeding users (one-time setup), hash the password:
   const hashedPassword = await bcrypt.hash("password", 10);
 
-  // Password is 'password' for demo
   db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?, ?)").run(
     "admin-1",
     null,
@@ -177,6 +192,13 @@ function requireTenantAccess(req: any, res: any, next: any) {
   next();
 }
 
+function validatePassword(password: string) {
+  if (typeof password !== 'string' || password.length < 8) {
+    return 'Password must be at least 8 characters';
+  }
+  return null;
+}
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // max 10 attempts per IP
@@ -186,7 +208,7 @@ const loginLimiter = rateLimit({
   // API Routes
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
@@ -235,18 +257,70 @@ const loginLimiter = rateLimit({
     }
   });
 
-  app.put("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'),async (req, res) => {
-    const { name, phone, password } = req.body;
-    if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      db.prepare("UPDATE users SET name = ?, phone = ?, password_hash = ? WHERE id = ?")
-        .run(name, phone, hashedPassword, req.params.id);
-    } else {
-      db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
-        .run(name, phone, req.params.id);
-    }
-    res.json({ success: true });
-  });
+  // app.put("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'),async (req, res) => {
+  //   const { name, phone, password } = req.body;
+  //   if (password) {
+  //     const hashedPassword = await bcrypt.hash(password, 10);
+  //     db.prepare("UPDATE users SET name = ?, phone = ?, password_hash = ? WHERE id = ?")
+  //       .run(name, phone, hashedPassword, req.params.id);
+  //   } else {
+  //     db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
+  //       .run(name, phone, req.params.id);
+  //   }
+  //   res.json({ success: true });
+  // });
+
+//   app.put("/api/users/:id", authenticate, async (req, res) => {
+//   const { name, phone, password } = req.body;
+
+//   // Users can only update their own profile
+//   // Admins can update anyone in their tenant
+//   if (req.user.userId !== req.params.id && req.user.role === 'sales_rep') {
+//     return res.status(403).json({ error: 'You can only update your own profile' });
+//   }
+
+//   if (password) {
+//     const pwError = validatePassword(password);
+//     if (pwError) return res.status(400).json({ error: pwError });
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     db.prepare("UPDATE users SET name = ?, phone = ?, password_hash = ?, force_password_change = 0 WHERE id = ?")
+//       .run(name, phone, hashedPassword, req.params.id);
+//   } else {
+//     db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
+//       .run(name, phone, req.params.id);
+//   }
+//   res.json({ success: true });
+// });
+
+app.put("/api/users/:id", authenticate, async (req, res) => {
+  const { name, phone, password } = req.body;
+
+  // Allow if updating own profile OR if admin
+  const isSelf = req.user.userId === req.params.id;
+  console.log('DEBUG:', req.user.userId, '===', req.params.id, '| isSelf:', isSelf);
+  const isAdmin = req.user.role === 'tenant_admin' || req.user.role === 'platform_admin';
+
+  // ✅ Add this debug line temporarily
+  console.log('PUT users - isSelf:', isSelf, 'isAdmin:', isAdmin, 'tokenUserId:', req.user.userId, 'paramId:', req.params.id);
+  
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  if (password) {
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    // Also clear force_password_change flag when password is updated
+    db.prepare("UPDATE users SET name = ?, phone = ?, password_hash = ?, force_password_change = 0 WHERE id = ?")
+      .run(name, phone, hashedPassword, req.params.id);
+  } else {
+    db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
+      .run(name, phone, req.params.id);
+  }
+
+  res.json({ success: true });
+});
 
   app.delete("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
     db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
@@ -384,6 +458,62 @@ const loginLimiter = rateLimit({
       .run(id, tenant_id, user_id, name, JSON.stringify(data));
     res.json({ success: true });
   });
+
+  // User submits forgot password request
+  app.post("/api/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+  if (!user) {
+    // Don't reveal if email exists or not — security best practice
+    return res.json({ message: 'If this email exists, a request has been submitted.' });
+  }
+
+  const { v4: uuidv4 } = await import('uuid');
+  db.prepare(`
+    INSERT INTO password_reset_requests (id, user_id, email, status)
+    VALUES (?, ?, ?, 'pending')
+  `).run(uuidv4(), user.id, email);
+ // Always return same message — don't reveal if email exists
+  res.json({ message: 'If this email exists, a request has been submitted.' });
+});
+
+// Admin fetches all pending reset requests
+app.get("/api/admin/reset-requests", authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  const requests = db.prepare(`
+    SELECT r.*, u.name as user_name 
+    FROM password_reset_requests r
+    JOIN users u ON r.user_id = u.id
+    WHERE r.status = 'pending'
+    ORDER BY r.created_at DESC
+  `).all();
+  res.json(requests);
+});
+
+// Admin sets temp password and marks request resolved
+app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
+  const { temp_password } = req.body;
+
+  if (!temp_password || temp_password.length < 8) {
+    return res.status(400).json({ error: 'Temp password must be at least 8 characters' });
+  }
+
+  const request = db.prepare("SELECT * FROM password_reset_requests WHERE id = ?").get(req.params.id) as any;
+  if (!request) return res.status(404).json({ error: 'Request not found' });
+
+  const hashedPassword = await bcrypt.hash(temp_password, 10);
+
+  // Update user password and flag them to change it on next login
+  db.prepare("UPDATE users SET password_hash = ?, force_password_change = 1 WHERE id = ?")
+    .run(hashedPassword, request.user_id);
+
+  // Mark request as resolved
+  db.prepare("UPDATE password_reset_requests SET status = 'resolved' WHERE id = ?")
+    .run(req.params.id);
+
+  res.json({ success: true });
+});
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

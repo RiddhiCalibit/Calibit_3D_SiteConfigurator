@@ -4,9 +4,10 @@ import { motion } from 'motion/react';
 
 interface Props {
   onLogin: (email: string, password: string) => Promise<void>;
+  onForgotPassword: () => void;
 }
 
-export function Login({ onLogin }: Props) {
+export function Login({ onLogin, onForgotPassword }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -98,9 +99,18 @@ export function Login({ onLogin }: Props) {
             )}
           </button>
 
+          <div className="text-center">
+           <button
+            type="button"
+            onClick={onForgotPassword}
+            className="text-xs text-brand-teal hover:underline">
+            Forgot your password?
+           </button>
+          </div>
+
           <div className="pt-4 text-center">
             <p className="text-[10px] opacity-20 uppercase tracking-widest">
-              Secured by Site3D Auth
+              Secured by 3D_Site_Configurator Auth
             </p>
           </div>
         </form>
@@ -112,5 +122,7 @@ export function Login({ onLogin }: Props) {
         </div>
       </motion.div>
     </div>
+
+    
   );
 }

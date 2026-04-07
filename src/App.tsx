@@ -15,7 +15,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { lngLatToMetres, isPointInBoundary } from './utils/geo';
 import { clsx } from 'clsx';
 import { AlertTriangle, Download, Trash2 } from 'lucide-react';
-
+import { ForgotPassword } from './components/ForgotPassword';
+import { ForcePasswordChange } from './components/ForcePasswordChange';
 
 export default function App() {
   const {
@@ -47,6 +48,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
 //   const handleLogin = async (email: string, password: string) => {
 //     const res = await fetch('/api/auth/login', {
@@ -173,7 +175,9 @@ const handleLogin = async (email: string, password: string) => {
   } else {
     throw new Error('Login failed');
   }
+
 };
+
 
 
   const handleLogout = () => {
@@ -344,9 +348,31 @@ const handleLogin = async (email: string, password: string) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state.selectedId, state.objects, removeObject, selectObject, setPendingPlacement, updateObject, setMeasurePoints]);
 
+  // if (!user) {
+  //   return <Login onLogin={handleLogin} />;
+  // }
+
   if (!user) {
-    return <Login onLogin={handleLogin} />;
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
   }
+  return (
+    <Login
+      onLogin={handleLogin}
+      onForgotPassword={() => setShowForgotPassword(true)}
+    />
+  );
+}
+
+// Force password change if user logged in with temp password
+if (user.force_password_change) {
+  return (
+    <ForcePasswordChange
+      user={user}
+      onPasswordChanged={() => setUser({ ...user, force_password_change: 0 })}
+    />
+  );
+}
 
   if (user.role === 'platform_admin') {
     return <PlatformAdminDashboard user={user} onLogout={handleLogout} />;
