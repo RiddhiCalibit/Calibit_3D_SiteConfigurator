@@ -187,9 +187,10 @@ const handleResolveReset = async (requestId: string) => {
 )}
 
   return (
-    <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-hidden transition-colors duration-300">
+    <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-auto transition-colors duration-300">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-theme-border flex flex-col">
+      {/* <aside className="w-64 border-r border-theme-border flex flex-col"> */}
+      <aside className="w-48 lg:w-64 shrink-0 border-r border-theme-border flex flex-col overflow-y-auto">
         <div className="p-6 border-b border-theme-border">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -257,10 +258,13 @@ const handleResolveReset = async (requestId: string) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+      {/* <main className="flex-1 overflow-y-auto p-8 custom-scrollbar"> */}
+      <main className="flex-1 overflow-auto p-4 lg:p-8 custom-scrollbar min-w-0">
         <header className="flex justify-between items-center mb-8">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
+          {/* <div>
+            <h2 className="text-2xl font-bold tracking-tight"> */}
+            <div className="min-w-0 flex-1 mr-4">
+              <h2 className="text-lg lg:text-2xl font-bold tracking-tight truncate">
               {activeTab === 'overview' && 'Dashboard Overview'}
               {activeTab === 'equipment' && 'Equipment Repository'}
               {activeTab === 'users' && 'Sales Team Management'}
@@ -272,14 +276,22 @@ const handleResolveReset = async (requestId: string) => {
           </div>
           
           {(activeTab === 'equipment' || activeTab === 'users') && (
+            // <button 
+            //   onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
+            //   className="flex items-center gap-2 px-4 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+            // >
+            //   <Plus className="w-4 h-4" />
+            //   {activeTab === 'equipment' ? 'Add New Model' : 'Add Person'}
+            // </button>
             <button 
-              onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+            onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
+            className="flex items-center gap-1 lg:gap-2 px-2 lg:px-4 py-2 bg-brand-teal text-white text-[10px] lg:text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20 shrink-0"
             >
-              <Plus className="w-4 h-4" />
-              {activeTab === 'equipment' ? 'Add New Model' : 'Add Person'}
+            <Plus className="w-3 h-3 lg:w-4 lg:h-4" />
+            <span className="hidden sm:inline">{activeTab === 'equipment' ? 'Add New Model' : 'Add Person'}</span>
+            <span className="sm:hidden"><Plus className="w-3 h-3" /></span>
             </button>
-          )}
+           )}
         </header>
 
         {activeTab === 'overview' && <OverviewTab tenant={tenant} />}
@@ -379,7 +391,9 @@ function NavButton({ active, onClick, icon, label }: { active: boolean, onClick:
 function OverviewTab({ tenant }: { tenant: Tenant }) {
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-3 gap-6">
+      {/* <div className="grid grid-cols-3 gap-6"> */}
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6"> */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
         <StatCard label="Active Projects" value="24" trend="+12%" icon={<LayoutDashboard className="w-5 h-5" />} />
         <StatCard label="Total Equipment" value="156" trend="+5%" icon={<Package className="w-5 h-5" />} />
         <StatCard label="Sales Activity" value="89%" trend="+2%" icon={<TrendingUp className="w-5 h-5" />} />
@@ -482,7 +496,8 @@ function EquipmentTab({
             </div>
 
             <form onSubmit={isAdding ? onAdd : onUpdate} className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-6">
+              {/* <div className="grid grid-cols-2 gap-6"> */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Model Name</label>
                   <input 
@@ -509,7 +524,8 @@ function EquipmentTab({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              {/* <div className="grid grid-cols-3 gap-4"> */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Width (m)</label>
                   <input 
@@ -545,7 +561,8 @@ function EquipmentTab({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              {/* <div className="grid grid-cols-2 gap-6"> */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Color (Hex)</label>
                   <div className="flex gap-2">
@@ -609,7 +626,8 @@ function EquipmentTab({
         </motion.div>
       )}
 
-      <div className="grid grid-cols-4 gap-6">
+      {/* <div className="grid grid-cols-4 gap-6"> */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
         {filteredEquipment.map(item => (
           <div key={item.id} className="bg-theme-card border border-theme-border rounded-2xl overflow-hidden group hover:border-brand-teal/50 transition-all relative">
             <div className="aspect-square bg-black/40 flex items-center justify-center relative">
@@ -964,24 +982,45 @@ function UsersTab({
 
       <div className="grid grid-cols-1 gap-4">
         {users.map(u => (
-          <div key={u.id} className="p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between group">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal font-bold">
-                {u.name.charAt(0)}
-              </div>
-              <div>
-                <h4 className="font-bold text-sm">{u.name}</h4>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-[10px] opacity-40">{u.email}</span>
-                  <span className="text-[10px] opacity-40">·</span>
-                  <span className="text-[10px] opacity-40">{u.phone || 'No phone'}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded">
-                {u.role}
-              </span>
+          // <div key={u.id} className="p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between group">
+          //   <div className="flex items-center gap-4">
+          //     <div className="w-10 h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal font-bold">
+          //       {u.name.charAt(0)}
+          //     </div>
+          //     <div>
+          //       <h4 className="font-bold text-sm">{u.name}</h4>
+          //       <div className="flex items-center gap-3 mt-1">
+          //         <span className="text-[10px] opacity-40">{u.email}</span>
+          //         <span className="text-[10px] opacity-40">·</span>
+          //         <span className="text-[10px] opacity-40">{u.phone || 'No phone'}</span>
+          //       </div>
+          //     </div>
+          //   </div>
+          //   <div className="flex items-center gap-3">
+          //     <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded">
+          //       {u.role}
+          //     </span>
+
+          //  Replace — truncate email, wrap role badge properly
+<div key={u.id} className="p-3 lg:p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between gap-2 group">
+  <div className="flex items-center gap-3 min-w-0 flex-1">
+    <div className="w-8 h-8 lg:w-10 lg:h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal font-bold shrink-0">
+      {u.name.charAt(0)}
+    </div>
+    <div className="min-w-0 flex-1">
+      <h4 className="font-bold text-sm truncate">{u.name}</h4>
+      <div className="flex items-center gap-1 lg:gap-3 mt-1 flex-wrap">
+        <span className="text-[10px] opacity-40 truncate max-w-[120px] lg:max-w-none">{u.email}</span>
+        <span className="text-[10px] opacity-40 hidden lg:inline">·</span>
+        <span className="text-[10px] opacity-40 hidden lg:inline">{u.phone || 'No phone'}</span>
+      </div>
+    </div>
+  </div>
+  <div className="flex items-center gap-2 shrink-0">
+    <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded whitespace-nowrap">
+      {u.role}
+    </span>
+
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 
                   onClick={() => startEditing(u)}
@@ -1033,10 +1072,11 @@ function StatCard({ label, value, trend, icon }: { label: string, value: string,
 
 function SettingsTab({ theme, onThemeChange }: { theme: 'dark' | 'light', onThemeChange: (t: 'dark' | 'light') => void }) {
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-2xl space-y-8 overflow-y-auto">
       <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
         <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">Appearance</h3>
-        <div className="grid grid-cols-2 gap-4">
+        {/* <div className="grid grid-cols-2 gap-4"> */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <button 
             onClick={() => onThemeChange('dark')}
             className={clsx(
@@ -1110,11 +1150,12 @@ function ProfileTab({ user }: { user: User }) {
   };
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-2xl space-y-8 overflow-y-auto">
       <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
         <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">Profile Settings</h3>
         <form onSubmit={handleSaveProfile} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          {/* <div className="grid grid-cols-2 gap-4"> */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Full Name</label>
               <input 

@@ -178,6 +178,27 @@ const handleLogin = async (email: string, password: string) => {
 
 };
 
+// if (!user) {
+//   if (showForgotPassword) {
+//     return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+//   }
+//   return (
+//     <Login
+//       onLogin={handleLogin}
+//       onForgotPassword={() => setShowForgotPassword(true)}
+//     />
+//   );
+// }
+
+// // Force password change screen if user logged in with temp password
+// if (user.force_password_change) {
+//   return (
+//     <ForcePasswordChange
+//       user={user}
+//       onPasswordChanged={() => setUser({ ...user, force_password_change: 0 })}
+//     />
+//   );
+// }
 
 
   const handleLogout = () => {
@@ -383,7 +404,8 @@ if (user.force_password_change) {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-brand-navy overflow-hidden select-none">
+    // <div className="flex h-screen w-screen bg-brand-navy overflow-hidden select-none">
+    <div className="flex h-screen w-screen bg-brand-navy overflow-auto select-none">
       <Sidebar 
         state={state}
         onSetStyle={setMapStyle}

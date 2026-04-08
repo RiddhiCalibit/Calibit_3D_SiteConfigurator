@@ -252,13 +252,15 @@ function OverviewTab({ stats, tenants }: { stats: PlatformStats, tenants: Tenant
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-3 gap-6">
+      {/* <div className="grid grid-cols-3 gap-6"> */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
         <StatCard label="Total Organizations" value={stats.tenants.toString()} trend="+2 this month" icon={<Building2 className="w-5 h-5" />} />
         <StatCard label="Active Users" value={stats.users.toString()} trend="+14% vs LY" icon={<Users className="w-5 h-5" />} />
         <StatCard label="Global Projects" value={stats.projects.toString()} trend="+45 new" icon={<Activity className="w-5 h-5" />} />
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      {/* <div className="grid grid-cols-2 gap-6"> */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
           <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">System Status</h3>
           <div className="space-y-4">
