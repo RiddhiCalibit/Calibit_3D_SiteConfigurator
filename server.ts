@@ -100,6 +100,12 @@ const hasForceChange = userInfo.some(col => col.name === 'force_password_change'
 if (!hasForceChange) {
   db.exec("ALTER TABLE users ADD COLUMN force_password_change INTEGER DEFAULT 0");
 }
+// Add imageUrl column to DB if it doesn't exist
+const equipmentInfo = db.prepare("PRAGMA table_info(equipment)").all() as any[];
+const hasImageUrl = equipmentInfo.some((col: any) => col.name === 'image_url');
+if (!hasImageUrl) {
+  db.exec("ALTER TABLE equipment ADD COLUMN image_url TEXT");
+}
 
 async function startServer() {
   const app = express();
@@ -149,7 +155,11 @@ if (tenantCount.count === 0) {
   );
 }
 
-  app.use(express.json());
+  // app.use(express.json());
+
+  //  Allow up to 5MB for base64 images
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // Middleware 1: verify token
 function authenticate(req: any, res: any, next: any) {
@@ -179,7 +189,7 @@ function requireRole(...roles: string[]) {
 
 // Checks user belongs to the tenant they're requesting
 function requireTenantAccess(req: any, res: any, next: any) {
-  const requestedTenantId = req.params.id || req.params.tenantId;
+  const requestedTenantId = req.params.tenantId || req.params.id || req.query.tenantId;
   
   // Platform admins can access any tenant
   if (req.user.role === 'platform_admin') return next();
@@ -338,8 +348,8 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
     res.json(equipment);
   });
 
-  app.post("/api/tenant/:id/equipment",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
-    const { id, name, category, width, depth, height, color, model_url, animations_enabled } = req.body;
+  app.post("/api/tenant/:id/equipment",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), async(req, res) => {
+    const { id, name, category, width, depth, height, color, model_url, animations_enabled, image_url } = req.body;
 
       // Validate before touching the DB
   if (!name || typeof name !== 'string' || name.trim() === '') {
@@ -350,19 +360,19 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   }
 
     db.prepare(`
-      INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0);
+      INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null);
     res.json({ success: true });
   });
 
   app.put("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
-    const { name, category, width, depth, height, color, model_url, animations_enabled } = req.body;
+    const { name, category, width, depth, height, color, model_url, animations_enabled, image_url } = req.body;
     db.prepare(`
       UPDATE equipment 
-      SET name = ?, category = ?, width = ?, depth = ?, height = ?, color = ?, model_url = ?, animations_enabled = ?
+      SET name = ?, category = ?, width = ?, depth = ?, height = ?, color = ?, model_url = ?, animations_enabled = ?, image_url = ?
       WHERE id = ? AND tenant_id = ?
-    `).run(name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, req.params.id, req.params.tenantId);
+    `).run(name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, req.params.id, req.params.tenantId);
     res.json({ success: true });
   });
 

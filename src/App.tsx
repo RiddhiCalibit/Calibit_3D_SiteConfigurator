@@ -165,7 +165,8 @@ const handleLogin = async (email: string, password: string) => {
           height: eq.height,
           color: eq.color,
           modelUrl: eq.model_url,
-          animationsEnabled: !!eq.animations_enabled
+          animationsEnabled: !!eq.animations_enabled,
+          imageUrl: eq.image_url || null,
         }));
         setCustomLibrary(mapped);
       }
@@ -177,29 +178,6 @@ const handleLogin = async (email: string, password: string) => {
   }
 
 };
-
-// if (!user) {
-//   if (showForgotPassword) {
-//     return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
-//   }
-//   return (
-//     <Login
-//       onLogin={handleLogin}
-//       onForgotPassword={() => setShowForgotPassword(true)}
-//     />
-//   );
-// }
-
-// // Force password change screen if user logged in with temp password
-// if (user.force_password_change) {
-//   return (
-//     <ForcePasswordChange
-//       user={user}
-//       onPasswordChanged={() => setUser({ ...user, force_password_change: 0 })}
-//     />
-//   );
-// }
-
 
   const handleLogout = () => {
     localStorage.removeItem('authToken'); // clear token

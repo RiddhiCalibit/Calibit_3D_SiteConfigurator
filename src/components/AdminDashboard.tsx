@@ -18,7 +18,8 @@ import {
   X,
   Moon,
   Sun,
-  KeyRound
+  KeyRound,
+  Upload
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -60,13 +61,33 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   }
 };
 
-  const fetchEquipment = async () => {
-    const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
-    if (res.ok) {
-      const data = await res.json();
-      setEquipment(data);
-    }
-  };
+  // const fetchEquipment = async () => {
+  //   const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
+  //   if (res.ok) {
+  //     const data = await res.json();
+  //     setEquipment(data);
+  //   }
+  // };
+
+const fetchEquipment = async () => {
+  const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
+  if (res.ok) {
+    const data = await res.json();
+    const mapped = data.map((eq: any) => ({
+      id: eq.id,
+      name: eq.name,
+      category: eq.category,
+      width: eq.width,
+      depth: eq.depth,
+      height: eq.height,
+      color: eq.color,
+      modelUrl: eq.model_url,
+      animationsEnabled: !!eq.animations_enabled,
+      imageUrl: eq.image_url || null, // ✅ this is the key fix
+    }));
+    setEquipment(mapped);
+  }
+};
 
   useEffect(() => {
     fetchEquipment();
@@ -97,7 +118,7 @@ const handleResolveReset = async (requestId: string) => {
     const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newEquipment, id })
+      body: JSON.stringify({ ...newEquipment, id, image_url: newEquipment.imageUrl || null })
     });
 
     if (res.ok) {
@@ -109,7 +130,8 @@ const handleResolveReset = async (requestId: string) => {
         depth: 5,
         height: 5,
         color: '#14b8a6',
-        animationsEnabled: false
+        animationsEnabled: false,
+        imageUrl: ''
       });
       fetchEquipment();
     }
@@ -122,7 +144,7 @@ const handleResolveReset = async (requestId: string) => {
     const res = await authFetch(`/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editingEquipment)
+      body: JSON.stringify({...editingEquipment, image_url: editingEquipment.imageUrl || null})
     });
 
     if (res.ok) {
@@ -281,14 +303,32 @@ const handleResolveReset = async (requestId: string) => {
             //   className="flex items-center gap-2 px-4 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
             // >
             //   <Plus className="w-4 h-4" />
-            //   {activeTab === 'equipment' ? 'Add New Model' : 'Add Person'}
+            //   {activeTab === 'equipment' ? 'Add New Equipment' : 'Add Person'}
             // </button>
             <button 
-            onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
+            // onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
+            onClick={() => {
+  if (activeTab === 'equipment') {
+    setEditingEquipment(null); // ✅ clear edit mode
+    setNewEquipment({
+      name: '',
+      category: 'slides',
+      width: 5,
+      depth: 5,
+      height: 5,
+      color: '#14b8a6',
+      animationsEnabled: false,
+      imageUrl: '' // ✅ IMPORTANT
+    });
+    setIsAddingEquipment(true);
+  } else {
+    setIsAddingUser(true);
+  }
+}}
             className="flex items-center gap-1 lg:gap-2 px-2 lg:px-4 py-2 bg-brand-teal text-white text-[10px] lg:text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20 shrink-0"
             >
             <Plus className="w-3 h-3 lg:w-4 lg:h-4" />
-            <span className="hidden sm:inline">{activeTab === 'equipment' ? 'Add New Model' : 'Add Person'}</span>
+            <span className="hidden sm:inline">{activeTab === 'equipment' ? 'Add New Equipment' : 'Add Person'}</span>
             <span className="sm:hidden"><Plus className="w-3 h-3" /></span>
             </button>
            )}
@@ -463,7 +503,7 @@ function EquipmentTab({
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search models by name or category..."
+          placeholder="Search equipments by name or category..."
           className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
         />
       </div>
@@ -478,16 +518,28 @@ function EquipmentTab({
           <motion.div 
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl"
-          >
+            //className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl"
+            // Add max-height and overflow scroll
+            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]"
+            >
             <div className="p-6 border-b border-theme-border flex justify-between items-center">
               <h3 className="text-lg font-bold">
-                {isAdding ? 'Add New Model' : `Edit ${editingItem?.name}`}
+                {isAdding ? 'Add New Equipment' : `Edit ${editingItem?.name}`}
               </h3>
               <button 
                 onClick={() => {
                   setIsAdding(false);
                   setEditingItem(null);
+                    setNewEquipment({
+    name: '',
+    category: 'slides',
+    width: 5,
+    depth: 5,
+    height: 5,
+    color: '#14b8a6',
+    animationsEnabled: false,
+    imageUrl: ''
+  });
                 }}
                 className="p-2 hover:bg-white/5 rounded-lg transition-colors"
               >
@@ -495,133 +547,255 @@ function EquipmentTab({
               </button>
             </div>
 
-            <form onSubmit={isAdding ? onAdd : onUpdate} className="p-6 space-y-6">
+            {/* <form onSubmit={isAdding ? onAdd : onUpdate} className="p-6 space-y-6"> */}
+             {/* Make form scrollable */}
+            <form onSubmit={isAdding ? onAdd : onUpdate} className="p-4 lg:p-6 space-y-4 lg:space-y-6 overflow-y-auto flex-1">
               {/* <div className="grid grid-cols-2 gap-6"> */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Model Name</label>
-                  <input 
-                    required
-                    type="text"
-                    value={isAdding ? newEquipment.name : editingItem?.name}
-                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, name: e.target.value }) : setEditingItem({ ...editingItem!, name: e.target.value })}
-                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                    placeholder="e.g. Spiral Slide"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Category</label>
-                  <select 
-                    value={isAdding ? newEquipment.category : editingItem?.category}
-                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, category: e.target.value }) : setEditingItem({ ...editingItem!, category: e.target.value })}
-                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  >
-                    <option value="slides">Slides</option>
-                    <option value="pools">Pools</option>
-                    <option value="facilities">Facilities</option>
-                    <option value="amenities">Amenities</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* <div className="grid grid-cols-3 gap-4"> */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Width (m)</label>
-                  <input 
-                    required
-                    type="number"
-                    step="0.1"
-                    value={isAdding ? newEquipment.width : editingItem?.width}
-                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, width: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, width: parseFloat(e.target.value) })}
-                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Depth (m)</label>
-                  <input 
-                    required
-                    type="number"
-                    step="0.1"
-                    value={isAdding ? newEquipment.depth : editingItem?.depth}
-                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, depth: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, depth: parseFloat(e.target.value) })}
-                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Height (m)</label>
-                  <input 
-                    required
-                    type="number"
-                    step="0.1"
-                    value={isAdding ? newEquipment.height : editingItem?.height}
-                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, height: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, height: parseFloat(e.target.value) })}
-                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  />
-                </div>
-              </div>
+  {/* Image upload — square aspect ratio */}
+  <div className="space-y-2">
+    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Equipment Image</label>
+    <div className="relative">
+      <div className="aspect-square w-full bg-white/5 border-2 border-dashed border-theme-border rounded-xl overflow-hidden flex items-center justify-center cursor-pointer hover:border-brand-teal/50 transition-colors group"
+       onClick={() => document.getElementById('equipment-image-upload')?.click()}
+      >
+        {(isAdding ? newEquipment.imageUrl : editingItem?.imageUrl) ? (
+          <img
+            src={isAdding ? newEquipment.imageUrl : editingItem?.imageUrl}
+            alt="Equipment"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-2 opacity-30 group-hover:opacity-60 transition-opacity">
+            <Upload className="w-8 h-8" />
+            <span className="text-[10px] uppercase tracking-widest">Upload Image</span>
+            <p className="text-[10px] opacity-30 text-center mt-1">
+  Max 1MB · Auto-compressed · Square crop
+</p>
+          </div>
+          
+        )}
+      </div>
+      <input
+        id="equipment-image-upload"
+        type="file"
+        accept="image/*"
+        className="hidden"
 
-              {/* <div className="grid grid-cols-2 gap-6"> */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Color (Hex)</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="color"
-                      value={isAdding ? newEquipment.color : editingItem?.color}
-                      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, color: e.target.value }) : setEditingItem({ ...editingItem!, color: e.target.value })}
-                      className="w-10 h-10 bg-transparent border-none cursor-pointer"
-                    />
-                    <input 
-                      type="text"
-                      value={isAdding ? newEquipment.color : editingItem?.color}
-                      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, color: e.target.value }) : setEditingItem({ ...editingItem!, color: e.target.value })}
-                      className="flex-1 bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Model URL (Optional)</label>
-                  <input 
-                    type="text"
-                    value={isAdding ? newEquipment.modelUrl : editingItem?.modelUrl || ''}
-                    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, modelUrl: e.target.value }) : setEditingItem({ ...editingItem!, modelUrl: e.target.value })}
-                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                    placeholder="/models/..."
-                  />
-                </div>
-              </div>
+        onChange={async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-              <div className="flex items-center gap-2">
-                <input 
-                  type="checkbox"
-                  id="animations"
-                  checked={isAdding ? newEquipment.animationsEnabled : editingItem?.animationsEnabled}
-                  onChange={e => isAdding ? setNewEquipment({ ...newEquipment, animationsEnabled: e.target.checked }) : setEditingItem({ ...editingItem!, animationsEnabled: e.target.checked })}
-                  className="accent-brand-teal"
-                />
-                <label htmlFor="animations" className="text-xs opacity-60">Enable Animations</label>
-              </div>
+  const MAX_SIZE = 1 * 1024 * 1024; // 1MB
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setIsAdding(false);
-                    setEditingItem(null);
-                  }}
-                  className="px-6 py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
-                >
-                  {isAdding ? 'Create Model' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
+  const compressImage = (file: File, quality: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (re) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          
+          // ✅ Maintain square aspect ratio — use the smaller dimension
+          const size = Math.min(img.width, img.height);
+          canvas.width = size;
+          canvas.height = size;
+          
+          const ctx = canvas.getContext('2d')!;
+          // Center crop to square
+          const offsetX = (img.width - size) / 2;
+          const offsetY = (img.height - size) / 2;
+          ctx.drawImage(img, offsetX, offsetY, size, size, 0, 0, size, size);
+          
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = re.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Check original size
+  if (file.size > MAX_SIZE) {
+    // ✅ Auto compress to fit under 1MB
+    const compressed = await compressImage(file, 0.7);
+    
+    // Check if compression was enough
+    const compressedSize = Math.round((compressed.length * 3) / 4); // base64 to bytes
+    
+    if (compressedSize > MAX_SIZE) {
+      // Try harder compression
+      const moreCompressed = await compressImage(file, 0.4);
+      const moreCompressedSize = Math.round((moreCompressed.length * 3) / 4);
+      
+      if (moreCompressedSize > MAX_SIZE) {
+        alert('Image is too large to compress under 1MB. Please use a smaller image.');
+        e.target.value = ''; // reset input
+        return;
+      }
+      
+      alert('Image was automatically compressed to fit under 1MB.');
+      if (isAdding) {
+        setNewEquipment({ ...newEquipment, imageUrl: moreCompressed });
+      } else {
+        setEditingItem({ ...editingItem!, imageUrl: moreCompressed });
+      }
+      return;
+    }
+
+    alert('Image was automatically compressed to fit under 1MB.');
+    if (isAdding) {
+      setNewEquipment({ ...newEquipment, imageUrl: compressed });
+    } else {
+      setEditingItem({ ...editingItem!, imageUrl: compressed });
+    }
+    return;
+  }
+
+  // ✅ Image is within 1MB — still crop to square for consistency
+  const base64 = await compressImage(file, 0.9);
+  if (isAdding) {
+    setNewEquipment({ ...newEquipment, imageUrl: base64 });
+  } else {
+    setEditingItem({ ...editingItem!, imageUrl: base64 });
+  }
+}}
+      />
+      {(isAdding ? newEquipment.imageUrl : editingItem?.imageUrl) && (
+        <button
+          type="button"
+          onClick={() => isAdding
+            ? setNewEquipment({ ...newEquipment, imageUrl: '' })
+            : setEditingItem({ ...editingItem!, imageUrl: '' })
+          }
+          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  </div>
+
+  {/* Name + Category stacked */}
+  <div className="md:col-span-2 space-y-4">
+    <div className="space-y-2">
+      <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Equipment Name</label>
+      <input
+        required
+        type="text"
+        value={isAdding ? newEquipment.name : editingItem?.name}
+        onChange={e => isAdding ? setNewEquipment({ ...newEquipment, name: e.target.value }) : setEditingItem({ ...editingItem!, name: e.target.value })}
+        className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+        placeholder="e.g. Spiral Slide"
+      />
+    </div>
+    <div className="space-y-2">
+      <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Category</label>
+      <select
+        value={isAdding ? newEquipment.category : editingItem?.category}
+        onChange={e => isAdding ? setNewEquipment({ ...newEquipment, category: e.target.value }) : setEditingItem({ ...editingItem!, category: e.target.value })}
+        className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+      >
+        <option value="slides">Slides</option>
+        <option value="pools">Pools</option>
+        <option value="facilities">Facilities</option>
+        <option value="amenities">Amenities</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+{/* Row 2 — Dimensions */}
+<div className="grid grid-cols-3 gap-4">
+  <div className="space-y-2">
+    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Width (m)</label>
+    <input required type="number" step="0.1"
+      value={isAdding ? newEquipment.width : editingItem?.width}
+      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, width: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, width: parseFloat(e.target.value) })}
+      className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+    />
+  </div>
+  <div className="space-y-2">
+    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Depth (m)</label>
+    <input required type="number" step="0.1"
+      value={isAdding ? newEquipment.depth : editingItem?.depth}
+      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, depth: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, depth: parseFloat(e.target.value) })}
+      className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+    />
+  </div>
+  <div className="space-y-2">
+    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Height (m)</label>
+    <input required type="number" step="0.1"
+      value={isAdding ? newEquipment.height : editingItem?.height}
+      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, height: parseFloat(e.target.value) }) : setEditingItem({ ...editingItem!, height: parseFloat(e.target.value) })}
+      className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+    />
+  </div>
+</div>
+
+{/* Row 3 — Color + Model URL */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div className="space-y-2">
+    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Color (Hex)</label>
+    <div className="flex gap-2">
+      <input type="color"
+        value={isAdding ? newEquipment.color : editingItem?.color}
+        onChange={e => isAdding ? setNewEquipment({ ...newEquipment, color: e.target.value }) : setEditingItem({ ...editingItem!, color: e.target.value })}
+        className="w-10 h-10 bg-transparent border-none cursor-pointer shrink-0"
+      />
+      <input type="text"
+        value={isAdding ? newEquipment.color : editingItem?.color}
+        onChange={e => isAdding ? setNewEquipment({ ...newEquipment, color: e.target.value }) : setEditingItem({ ...editingItem!, color: e.target.value })}
+        className="flex-1 bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+      />
+    </div>
+  </div>
+  <div className="space-y-2">
+    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Equipment URL (Optional)</label>
+    <input type="text"
+      value={isAdding ? newEquipment.modelUrl : editingItem?.modelUrl || ''}
+      onChange={e => isAdding ? setNewEquipment({ ...newEquipment, modelUrl: e.target.value }) : setEditingItem({ ...editingItem!, modelUrl: e.target.value })}
+      className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+      placeholder="/models/..."
+    />
+  </div>
+</div>
+
+{/* Row 4 — Animations checkbox */}
+<div className="flex items-center gap-2">
+  <input type="checkbox" id="animations"
+    checked={isAdding ? newEquipment.animationsEnabled : editingItem?.animationsEnabled}
+    onChange={e => isAdding ? setNewEquipment({ ...newEquipment, animationsEnabled: e.target.checked }) : setEditingItem({ ...editingItem!, animationsEnabled: e.target.checked })}
+    className="accent-brand-teal"
+  />
+  <label htmlFor="animations" className="text-xs opacity-60">Enable Animations</label>
+</div>
+
+{/* Row 5 — Action buttons */}
+<div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
+  <button type="button"
+    onClick={() => { setIsAdding(false); setEditingItem(null);   setNewEquipment({
+    name: '',
+    category: 'slides',
+    width: 5,
+    depth: 5,
+    height: 5,
+    color: '#14b8a6',
+    animationsEnabled: false,
+    imageUrl: ''
+  });}}
+    className="px-6 py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-colors"
+  >
+    Cancel
+  </button>
+  <button type="submit"
+    className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+  >
+    {isAdding ? 'Add Equipment' : 'Save Changes'}
+  </button>
+</div>
+</form>
           </motion.div>
         </motion.div>
       )}
@@ -630,8 +804,16 @@ function EquipmentTab({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
         {filteredEquipment.map(item => (
           <div key={item.id} className="bg-theme-card border border-theme-border rounded-2xl overflow-hidden group hover:border-brand-teal/50 transition-all relative">
-            <div className="aspect-square bg-black/40 flex items-center justify-center relative">
+            {/* <div className="aspect-square bg-black/40 flex items-center justify-center relative">
+              <Box className="w-12 h-12 opacity-10" /> */}
+
+              <div className="aspect-square bg-black/40 flex items-center justify-center relative overflow-hidden">
+              {item.imageUrl ? (
+              <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+              ) : (
               <Box className="w-12 h-12 opacity-10" />
+              )}
+
               <div className="absolute top-3 right-3 px-2 py-1 bg-brand-teal/20 text-brand-teal text-[8px] font-bold uppercase rounded">
                 {item.category}
               </div>
@@ -641,14 +823,14 @@ function EquipmentTab({
                 <button 
                   onClick={() => setEditingItem(item)}
                   className="p-3 bg-white/10 hover:bg-brand-teal hover:text-white rounded-xl transition-all"
-                  title="Edit Model"
+                  title="Edit Equipment"
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => onDelete(item.id)}
                   className="p-3 bg-white/10 hover:bg-red-500 hover:text-white rounded-xl transition-all"
-                  title="Delete Model"
+                  title="Delete Equipment"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -663,7 +845,7 @@ function EquipmentTab({
         {filteredEquipment.length === 0 && (
           <div className="col-span-4 py-20 text-center">
             <Box className="w-12 h-12 opacity-10 mx-auto mb-4" />
-            <p className="text-sm opacity-40 italic">No models found matching your search.</p>
+            <p className="text-sm opacity-40 italic">No equipment found matching your search.</p>
           </div>
         )}
       </div>

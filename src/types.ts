@@ -16,6 +16,7 @@ export interface User {
   role: 'platform_admin' | 'tenant_admin' | 'sales_rep';
   name: string;
   phone?: string;
+  force_password_change?: number;
 }
 
 export interface EquipmentDef {
@@ -28,6 +29,7 @@ export interface EquipmentDef {
   category: string;
   modelUrl?: string;
   animationsEnabled?: boolean;
+  imageUrl?: string;
 }
 
 export interface EquipmentObject {
