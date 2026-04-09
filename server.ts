@@ -257,6 +257,21 @@ const loginLimiter = rateLimit({
 
   app.post("/api/tenant/:id/users",authenticate, requireRole('tenant_admin', 'platform_admin'),requireTenantAccess, async (req, res) => { 
     const { id, email, password, role, name, phone } = req.body;
+
+      // Check sales rep limit — max 10 per tenant
+  const salesRepCount = db.prepare(
+    "SELECT count(*) as count FROM users WHERE tenant_id = ? AND role = 'sales_rep'"
+  ).get(req.params.id) as any;
+
+  if (salesRepCount.count >= 10) {
+    return res.status(403).json({ 
+      error: 'User creation limit reached. This tenant has reached the maximum of 10 sales representatives. Please contact your platform admin for more info.' 
+    });
+  }
+
+  const pwError = validatePassword(password);
+  if (pwError) return res.status(400).json({ error: pwError });
+
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
       db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name, phone) VALUES (?, ?, ?, ?, ?, ?, ?)")

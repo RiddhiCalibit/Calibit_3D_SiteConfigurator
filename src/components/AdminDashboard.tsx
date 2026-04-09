@@ -40,6 +40,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   const [editingEquipment, setEditingEquipment] = useState<EquipmentDef | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [salesRepCount, setSalesRepCount] = useState(0);
   const [newEquipment, setNewEquipment] = useState<Partial<EquipmentDef>>({
     name: '',
     category: 'slides',
@@ -58,6 +59,15 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   if (res.ok) {
     const data = await res.json();
     setResetRequests(data);
+  }
+};
+
+const fetchSalesRepCount = async () => {
+  const res = await authFetch(`/api/tenant/${tenant.id}/users`);
+  if (res.ok) {
+    const data = await res.json();
+    const count = data.filter((u: any) => u.role === 'sales_rep').length;
+    setSalesRepCount(count);
   }
 };
 
@@ -83,7 +93,7 @@ const fetchEquipment = async () => {
       color: eq.color,
       modelUrl: eq.model_url,
       animationsEnabled: !!eq.animations_enabled,
-      imageUrl: eq.image_url || null, // ✅ this is the key fix
+      imageUrl: eq.image_url || null, 
     }));
     setEquipment(mapped);
   }
@@ -92,6 +102,7 @@ const fetchEquipment = async () => {
   useEffect(() => {
     fetchEquipment();
     fetchResetRequests();
+    fetchSalesRepCount();
   }, [tenant.id]);
 
   // Add resolve handler
@@ -297,7 +308,7 @@ const handleResolveReset = async (requestId: string) => {
             <p className="text-sm opacity-40">Welcome back, {user.name}</p>
           </div>
           
-          {(activeTab === 'equipment' || activeTab === 'users') && (
+          {/* {(activeTab === 'equipment' || activeTab === 'users') && (
             // <button 
             //   onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
             //   className="flex items-center gap-2 px-4 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
@@ -309,7 +320,7 @@ const handleResolveReset = async (requestId: string) => {
             // onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
             onClick={() => {
   if (activeTab === 'equipment') {
-    setEditingEquipment(null); // ✅ clear edit mode
+    setEditingEquipment(null); // clear edit mode
     setNewEquipment({
       name: '',
       category: 'slides',
@@ -318,7 +329,7 @@ const handleResolveReset = async (requestId: string) => {
       height: 5,
       color: '#14b8a6',
       animationsEnabled: false,
-      imageUrl: '' // ✅ IMPORTANT
+      imageUrl: '' 
     });
     setIsAddingEquipment(true);
   } else {
@@ -326,11 +337,32 @@ const handleResolveReset = async (requestId: string) => {
   }
 }}
             className="flex items-center gap-1 lg:gap-2 px-2 lg:px-4 py-2 bg-brand-teal text-white text-[10px] lg:text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20 shrink-0"
-            >
+            > */}
+
+        {(activeTab === 'equipment' || activeTab === 'users') && (
+          <div className="flex items-center gap-3 shrink-0">
+      {/*  Show user count badge only on users tab */}
+      {activeTab === 'users' && (
+        <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-white/5 border border-theme-border rounded-lg">
+          {/* We need to pass the count down — see below */}
+          Sales Reps: {salesRepCount} / 10
+        </span>
+      )}
+  <button
+    onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
+    disabled={activeTab === 'users' && salesRepCount >= 10} // disable at limit
+      className={clsx(
+    "flex items-center gap-1 lg:gap-2 px-2 lg:px-4 py-2 text-[10px] lg:text-xs font-bold uppercase tracking-widest rounded-lg transition-all shadow-lg shrink-0",
+    activeTab === 'users' && salesRepCount >= 10
+      ? "bg-white/10 text-white/30 cursor-not-allowed shadow-none" // greyed out
+      : "bg-brand-teal text-white hover:bg-brand-teal/90 shadow-brand-teal/20"
+  )}
+>
             <Plus className="w-3 h-3 lg:w-4 lg:h-4" />
             <span className="hidden sm:inline">{activeTab === 'equipment' ? 'Add New Equipment' : 'Add Person'}</span>
             <span className="sm:hidden"><Plus className="w-3 h-3" /></span>
             </button>
+            </div>
            )}
         </header>
 
@@ -356,6 +388,8 @@ const handleResolveReset = async (requestId: string) => {
             tenant={tenant}
             isAdding={isAddingUser}
             setIsAdding={setIsAddingUser}
+            salesRepCount={salesRepCount}
+            setSalesRepCount={setSalesRepCount}
           />
         )}
         {activeTab === 'settings' && (
@@ -856,11 +890,15 @@ function EquipmentTab({
 function UsersTab({ 
   tenant,
   isAdding,
-  setIsAdding
+  setIsAdding,
+  salesRepCount,
+  setSalesRepCount
 }: { 
   tenant: Tenant,
   isAdding: boolean,
-  setIsAdding: (b: boolean) => void
+  setIsAdding: (b: boolean) => void,
+  salesRepCount: number,
+  setSalesRepCount: (count: number) => void
 }) {
   const [users, setUsers] = useState<User[]>([]);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -876,6 +914,16 @@ function UsersTab({
     phone: '',
     password: ''
   });
+
+  // Add to fetchUsers equivalent — create a new function
+const fetchSalesRepCount = async () => {
+  const res = await authFetch(`/api/tenant/${tenant.id}/users`);
+  if (res.ok) {
+    const data = await res.json();
+    const count = data.filter((u: any) => u.role === 'sales_rep').length;
+    setSalesRepCount(count);
+  }
+};
 
   const fetchUsers = async () => {
     const res = await authFetch(`/api/tenant/${tenant.id}/users`);
@@ -935,6 +983,7 @@ function UsersTab({
     setIsAdding(false);
     setNewUser({ name: '', email: '', password: '', phone: '', companyName: tenant.name });
     fetchUsers(); // refresh from DB
+    fetchSalesRepCount(); 
   } else {
     const err = await res.json();
     alert(err.error || 'Failed to add user');
@@ -972,6 +1021,7 @@ function UsersTab({
 
     if (res.ok) {
       fetchUsers();
+      fetchSalesRepCount(); 
     } else {
       alert('Failed to delete user');
     }
@@ -1379,3 +1429,4 @@ function ProfileTab({ user }: { user: User }) {
     </div>
   );
 }
+
