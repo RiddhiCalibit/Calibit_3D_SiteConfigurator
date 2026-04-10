@@ -9,6 +9,7 @@ declare global {
         userId: string;
         role: 'platform_admin' | 'tenant_admin' | 'sales_rep';
         tenantId?: string;
+        userName: string;
       };
     }
   }
@@ -86,6 +87,19 @@ db.exec(`
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS activity_logs (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_name TEXT,
+  details TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 `);
 
 // Migration: Add phone column to users if it doesn't exist
@@ -169,7 +183,7 @@ function authenticate(req: any, res: any, next: any) {
   if (!token) return res.status(401).json({ error: 'No token provided' });
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string; tenantId?: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string; tenantId?: string; userName: string };
     req.user = decoded; // attach decoded user info to request
     next();
   } catch {
@@ -209,6 +223,25 @@ function validatePassword(password: string) {
   return null;
 }
 
+function logActivity(
+  userId: string,
+  userName: string,
+  tenantId: string | null,
+  action: string,
+  entityType: string,
+  entityName?: string,
+  details?: string
+) {
+  try {
+    db.prepare(`
+      INSERT INTO activity_logs (id, tenant_id, user_id, user_name, action, entity_type, entity_name, details)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), tenantId, userId, userName, action, entityType, entityName || null, details || null);
+  } catch (err) {
+    console.error('Failed to log activity:', err);
+  }
+}
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // max 10 attempts per IP
@@ -232,10 +265,11 @@ const loginLimiter = rateLimit({
 
     // Issue JWT token
     const token = jwt.sign(
-      { 
-        userId: user.id, 
-        role: user.role, 
-        tenantId: user.tenant_id 
+      {
+        userId: user.id,
+        role: user.role,
+        tenantId: user.tenant_id,
+        userName: user.name
       },
       JWT_SECRET,
       { expiresIn: '8h' }
@@ -243,10 +277,16 @@ const loginLimiter = rateLimit({
   
     const { password_hash, ...safeUser } = user;
     res.json({ user: safeUser, tenant, token });
+    logActivity(user.id, user.name, user.tenant_id, 'LOGIN', 'auth', user.name, `Logged in as ${user.role}`);
   } else {
     res.status(401).json({ error: "Invalid credentials" });
   }
+
+  // After successful login
+logActivity(user.id, user.name, user.tenant_id, 'LOGIN', 'auth', 'Session', `Logged in as ${user.role}`);
+
 });
+
 
 // Tenant admin + platform admin API
 
@@ -267,11 +307,11 @@ const loginLimiter = rateLimit({
     return res.status(403).json({ 
       error: 'User creation limit reached. This tenant has reached the maximum of 10 sales representatives. Please contact your platform admin for more info.' 
     });
+   
   }
 
   const pwError = validatePassword(password);
   if (pwError) return res.status(400).json({ error: pwError });
-
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
       db.prepare("INSERT INTO users (id, tenant_id, email, password_hash, role, name, phone) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -280,6 +320,7 @@ const loginLimiter = rateLimit({
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
+     logActivity(req.user.userId, req.user.userName, req.params.id, 'CREATE', 'sales_rep', name, `Created sales rep: ${email}`);
   });
 
   // app.put("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'),async (req, res) => {
@@ -342,15 +383,23 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   } else {
     db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
       .run(name, phone, req.params.id);
+    logActivity(req.user.userId, req.user.userName || 'User', req.user.tenantId, 'UPDATE', 'profile', name, 'Profile updated');
   }
 
   res.json({ success: true });
 });
 
-  app.delete("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
-    db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
-  });
+  // app.delete("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  //   db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+  //   res.json({ success: true });
+  // });
+
+  app.delete("/api/users/:id", authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  const userToDelete = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as any;
+  db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+  logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId, 'DELETE', 'sales_rep', userToDelete?.name, `Deleted: ${userToDelete?.email}`);
+  res.json({ success: true });
+});
 
   app.get("/api/tenant/:id/equipment",authenticate, requireTenantAccess, (req, res) => {
 
@@ -379,6 +428,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null);
     res.json({ success: true });
+    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'CREATE', 'equipment', name, `Category: ${category}`);
   });
 
   app.put("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
@@ -389,12 +439,19 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
       WHERE id = ? AND tenant_id = ?
     `).run(name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, req.params.id, req.params.tenantId);
     res.json({ success: true });
+    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', name, 'Equipment updated');
   });
 
-  app.delete("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
-    db.prepare("DELETE FROM equipment WHERE id = ? AND tenant_id = ?").run(req.params.id, req.params.tenantId);
-    res.json({ success: true });
-  });
+  // app.delete("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  //   db.prepare("DELETE FROM equipment WHERE id = ? AND tenant_id = ?").run(req.params.id, req.params.tenantId);
+  //   res.json({ success: true });
+  // });
+  app.delete("/api/tenant/:tenantId/equipment/:id", authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  const eqToDelete = db.prepare("SELECT * FROM equipment WHERE id = ?").get(req.params.id) as any;
+  db.prepare("DELETE FROM equipment WHERE id = ? AND tenant_id = ?").run(req.params.id, req.params.tenantId);
+  logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'DELETE', 'equipment', eqToDelete?.name, 'Equipment deleted');
+  res.json({ success: true });
+});
 
   // Platform Admin API only
   app.get("/api/admin/tenants",authenticate, requireRole('platform_admin'), (req, res) => {
@@ -427,6 +484,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
       db.prepare("DELETE FROM tenants WHERE id = ?").run(id);
       res.status(400).json({ error: error.message });
     }
+    logActivity(req.user.userId, req.user.userName || 'Platform Admin', null, 'CREATE', 'tenant', name, `Tier: ${subscription_tier || 'basic'}`);
   });
 
   app.put("/api/admin/tenants/:id",authenticate, requireRole('platform_admin'), (req, res) => {
@@ -434,6 +492,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
     db.prepare("UPDATE tenants SET name = ?, logo_url = ?, subscription_tier = ? WHERE id = ?")
       .run(name, logo_url, subscription_tier, req.params.id);
     res.json({ success: true });
+    logActivity(req.user.userId, req.user.userName || 'Platform Admin', null, 'UPDATE', 'tenant', name, 'Tenant updated');
   });
 
   app.get("/api/admin/stats",authenticate, requireRole('platform_admin'), (req, res) => {
@@ -482,6 +541,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
     db.prepare("INSERT INTO projects (id, tenant_id, user_id, name, data) VALUES (?, ?, ?, ?, ?)")
       .run(id, tenant_id, user_id, name, JSON.stringify(data));
     res.json({ success: true });
+    logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'SAVE', 'project', name, 'Project saved');
   });
 
   // User submits forgot password request
@@ -502,6 +562,9 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   `).run(uuidv4(), user.id, email);
  // Always return same message — don't reveal if email exists
   res.json({ message: 'If this email exists, a request has been submitted.' });
+  if (user) {
+  logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email, 'Password reset requested');
+}
 });
 
 // Admin fetches all pending reset requests
@@ -513,7 +576,35 @@ app.get("/api/admin/reset-requests", authenticate, requireRole('tenant_admin', '
     WHERE r.status = 'pending'
     ORDER BY r.created_at DESC
   `).all();
+  const resetUser = db.prepare("SELECT * FROM users WHERE id = ?").get(requests.user_id) as any;
+logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
   res.json(requests);
+});
+
+// Tenant admin logs
+app.get("/api/tenant/:id/logs", authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, (req, res) => {
+  const limit = Number(req.query.limit) || 50;
+  const offset = Number(req.query.offset) || 0;
+  const logs = db.prepare(`
+    SELECT * FROM activity_logs 
+    WHERE tenant_id = ? 
+    ORDER BY created_at DESC 
+    LIMIT ? OFFSET ?
+  `).all(req.params.id, limit, offset);
+  res.json(logs);
+});
+
+// Platform admin logs
+app.get("/api/admin/logs", authenticate, requireRole('platform_admin'), (req, res) => {
+  const limit = Number(req.query.limit) || 50;
+  const offset = Number(req.query.offset) || 0;
+  const logs = db.prepare(`
+    SELECT * FROM activity_logs 
+    WHERE tenant_id IS NULL 
+    ORDER BY created_at DESC 
+    LIMIT ? OFFSET ?
+  `).all(limit, offset);
+  res.json(logs);
 });
 
 // Admin sets temp password and marks request resolved
