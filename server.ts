@@ -233,7 +233,13 @@ function logActivity(
   details?: string
 ) {
   try {
-    db.prepare(`
+
+    // const now = new Date();
+    // const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    // const istTime = new Date(now.getTime() + istOffset);
+    // const istString = istTime.toISOString().replace('T', ' ').substring(0, 19);
+
+    db.prepare(`  
       INSERT INTO activity_logs (id, tenant_id, user_id, user_name, action, entity_type, entity_name, details)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(uuidv4(), tenantId, userId, userName, action, entityType, entityName || null, details || null);
@@ -281,9 +287,6 @@ const loginLimiter = rateLimit({
   } else {
     res.status(401).json({ error: "Invalid credentials" });
   }
-
-  // After successful login
-logActivity(user.id, user.name, user.tenant_id, 'LOGIN', 'auth', 'Session', `Logged in as ${user.role}`);
 
 });
 
@@ -576,8 +579,7 @@ app.get("/api/admin/reset-requests", authenticate, requireRole('tenant_admin', '
     WHERE r.status = 'pending'
     ORDER BY r.created_at DESC
   `).all();
-  const resetUser = db.prepare("SELECT * FROM users WHERE id = ?").get(requests.user_id) as any;
-logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
+  
   res.json(requests);
 });
 
@@ -627,6 +629,9 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
   // Mark request as resolved
   db.prepare("UPDATE password_reset_requests SET status = 'resolved' WHERE id = ?")
     .run(req.params.id);
+  
+  const resetUser = db.prepare("SELECT * FROM users WHERE id = ?").get(request.user_id) as any;
+  logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
 
   res.json({ success: true });
 });

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { authFetch } from '../utils/api';
 import { User, Tenant, EquipmentDef } from '../types';
-import {
-  LayoutDashboard,
-  Package,
-  Users,
-  Settings,
+import { 
+  LayoutDashboard, 
+  Package, 
+  Users, 
+  Settings, 
   User as UserIcon,
-  Plus,
-  Search,
-  Box,
+  Plus, 
+  Search, 
+  Box, 
   TrendingUp,
   LogOut,
   ChevronRight,
@@ -58,7 +58,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   const [tempPasswords, setTempPasswords] = useState<Record<string, string>>({});
 
   const [logs, setLogs] = useState<any[]>([]);
-const [logFilter, setLogFilter] = useState('all');
+  const [logFilter, setLogFilter] = useState('all');
 
 const fetchLogs = async () => {
   const res = await authFetch(`/api/tenant/${tenant.id}/logs?limit=100`);
@@ -190,142 +190,6 @@ const handleResolveReset = async (requestId: string) => {
       fetchEquipment();
     }
   };
-
-  // Add the tab content
-{activeTab === 'resets' && (
-  <div className="space-y-4">
-    {resetRequests.length === 0 ? (
-      <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
-        <p className="text-sm opacity-40 italic">No pending password reset requests.</p>
-      </div>
-    ) : (
-      resetRequests.map(req => (
-        <div key={req.id} className="p-6 bg-theme-card border border-theme-border rounded-2xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-bold text-sm">{req.user_name}</p>
-              <p className="text-xs opacity-40">{req.email}</p>
-              <p className="text-[10px] opacity-30 mt-1">
-                Requested: {new Date(req.created_at).toLocaleString()}
-              </p>
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-amber-500/20 text-amber-400 rounded">
-              Pending
-            </span>
-          </div>
-
-          {activeTab === 'logs' && (() => {
-  const filteredLogs = logFilter === 'all'
-    ? logs
-    : logs.filter(l => l.entity_type === logFilter);
-
-  return (
-    <div className="space-y-4">
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {['all', 'auth', 'sales_rep', 'equipment', 'project', 'password_reset', 'profile'].map(filter => (
-          <button
-            key={filter}
-            onClick={() => setLogFilter(filter)}
-            className={clsx(
-              "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all border",
-              logFilter === filter
-                ? "bg-brand-teal text-white border-brand-teal"
-                : "bg-white/5 border-theme-border opacity-60 hover:opacity-100"
-            )}
-          >
-            {filter === 'all' ? 'All Activity' : filter.replace('_', ' ')}
-          </button>
-        ))}
-      </div>
-
-      {/* Log entries */}
-      <div className="space-y-2">
-        {filteredLogs.length === 0 ? (
-          <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
-            <Activity className="w-12 h-12 opacity-10 mx-auto mb-4" />
-            <p className="text-sm opacity-40 italic">No activity logs found.</p>
-          </div>
-        ) : (
-          filteredLogs.map(log => (
-            <div key={log.id} className="flex items-start gap-4 p-4 bg-theme-card border border-theme-border rounded-xl hover:bg-white/5 transition-colors">
-              <div className={clsx(
-                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
-                log.action === 'CREATE' && "bg-emerald-500/20 text-emerald-400",
-                log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
-                log.action === 'DELETE' && "bg-red-500/20 text-red-400",
-                log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
-                log.action === 'SAVE' && "bg-purple-500/20 text-purple-400",
-                log.action === 'REQUEST' && "bg-amber-500/20 text-amber-400",
-                log.action === 'RESOLVE' && "bg-emerald-500/20 text-emerald-400",
-              )}>
-                {log.action === 'CREATE' && <Plus className="w-4 h-4" />}
-                {log.action === 'UPDATE' && <Pencil className="w-4 h-4" />}
-                {log.action === 'DELETE' && <Trash2 className="w-4 h-4" />}
-                {log.action === 'LOGIN' && <UserIcon className="w-4 h-4" />}
-                {log.action === 'SAVE' && <ShieldCheck className="w-4 h-4" />}
-                {log.action === 'REQUEST' && <KeyRound className="w-4 h-4" />}
-                {log.action === 'RESOLVE' && <ShieldCheck className="w-4 h-4" />}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={clsx(
-                      "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded",
-                      log.action === 'CREATE' && "bg-emerald-500/20 text-emerald-400",
-                      log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
-                      log.action === 'DELETE' && "bg-red-500/20 text-red-400",
-                      log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
-                      log.action === 'SAVE' && "bg-purple-500/20 text-purple-400",
-                      log.action === 'REQUEST' && "bg-amber-500/20 text-amber-400",
-                      log.action === 'RESOLVE' && "bg-emerald-500/20 text-emerald-400",
-                    )}>
-                      {log.action}
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/5 text-white/40">
-                      {log.entity_type.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px] opacity-30 shrink-0">
-                    <Clock className="w-3 h-3" />
-                    {new Date(log.created_at).toLocaleString()}
-                  </div>
-                </div>
-                <p className="text-sm font-medium mt-1 truncate">{log.entity_name || '—'}</p>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <span className="text-[10px] opacity-40">by {log.user_name}</span>
-                  {log.details && <span className="text-[10px] opacity-30 truncate">{log.details}</span>}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-})()}
-
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="Set temporary password (min 8 chars)"
-              value={tempPasswords[req.id] || ''}
-              onChange={e => setTempPasswords({ ...tempPasswords, [req.id]: e.target.value })}
-              className="flex-1 bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-            />
-            <button
-              onClick={() => handleResolveReset(req.id)}
-              className="px-4 py-2 bg-brand-teal text-white text-xs font-bold rounded-lg hover:bg-brand-teal/90 transition-all"
-            >
-              Set & Resolve
-            </button>
-          </div>
-        </div>
-      ))
-    )}
-  </div>
-)}
 
   return (
     <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-auto transition-colors duration-300">
@@ -512,11 +376,103 @@ const handleResolveReset = async (requestId: string) => {
         {activeTab === 'settings' && (
           <SettingsTab theme={theme} onThemeChange={setTheme} />
         )}
-        {activeTab === 'profile' && (
-          <ProfileTab user={user} />
-        )}
-
-        {activeTab === 'resets' && (
+                {activeTab === 'profile' && (
+                  <ProfileTab user={user} />
+                )}
+        
+                {activeTab === 'logs' && (() => {
+          const filteredLogs = logFilter === 'all'
+            ? logs
+            : logs.filter(l => l.entity_type === logFilter);
+        
+          return (
+            <div className="space-y-4">
+              {/* Filter bar */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {['all', 'auth', 'sales_rep', 'equipment', 'project', 'password_reset', 'profile'].map(filter => (
+                  <button
+                    key={filter}
+                    onClick={() => setLogFilter(filter)}
+                    className={clsx(
+                      "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all border",
+                      logFilter === filter
+                        ? "bg-brand-teal text-white border-brand-teal"
+                        : "bg-white/5 border-theme-border opacity-60 hover:opacity-100"
+                    )}
+                  >
+                    {filter === 'all' ? 'All Activity' : filter.replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+        
+              {/* Log entries */}
+              <div className="space-y-2">
+                {filteredLogs.length === 0 ? (
+                  <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
+                    <Activity className="w-12 h-12 opacity-10 mx-auto mb-4" />
+                    <p className="text-sm opacity-40 italic">No activity logs found.</p>
+                  </div>
+                ) : (
+                  filteredLogs.map(log => (
+                    <div key={log.id} className="flex items-start gap-4 p-4 bg-theme-card border border-theme-border rounded-xl hover:bg-white/5 transition-colors">
+                      <div className={clsx(
+                        "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
+                        log.action === 'CREATE' && "bg-emerald-500/20 text-emerald-400",
+                        log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
+                        log.action === 'DELETE' && "bg-red-500/20 text-red-400",
+                        log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
+                        log.action === 'SAVE' && "bg-purple-500/20 text-purple-400",
+                        log.action === 'REQUEST' && "bg-amber-500/20 text-amber-400",
+                        log.action === 'RESOLVE' && "bg-emerald-500/20 text-emerald-400",
+                      )}>
+                        {log.action === 'CREATE' && <Plus className="w-4 h-4" />}
+                        {log.action === 'UPDATE' && <Pencil className="w-4 h-4" />}
+                        {log.action === 'DELETE' && <Trash2 className="w-4 h-4" />}
+                        {log.action === 'LOGIN' && <UserIcon className="w-4 h-4" />}
+                        {log.action === 'SAVE' && <ShieldCheck className="w-4 h-4" />}
+                        {log.action === 'REQUEST' && <KeyRound className="w-4 h-4" />}
+                        {log.action === 'RESOLVE' && <ShieldCheck className="w-4 h-4" />}
+                      </div>
+        
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={clsx(
+                              "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded",
+                              log.action === 'CREATE' && "bg-emerald-500/20 text-emerald-400",
+                              log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
+                              log.action === 'DELETE' && "bg-red-500/20 text-red-400",
+                              log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
+                              log.action === 'SAVE' && "bg-purple-500/20 text-purple-400",
+                              log.action === 'REQUEST' && "bg-amber-500/20 text-amber-400",
+                              log.action === 'RESOLVE' && "bg-emerald-500/20 text-emerald-400",
+                            )}>
+                              {log.action}
+                            </span>
+                            <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/5 text-white/40">
+                              {log.entity_type.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] opacity-30 shrink-0">
+                            <Clock className="w-3 h-3" />
+                            {new Date(log.created_at + 'Z').toLocaleString()}
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium mt-1 truncate">{log.entity_name || '—'}</p>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <span className="text-[10px] opacity-40">by {log.user_name}</span>
+                          {log.details && <span className="text-[10px] opacity-30 truncate">{log.details}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })()}
+        
+      {activeTab === 'resets' && (
   <div className="space-y-4">
     {resetRequests.length === 0 ? (
       <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">

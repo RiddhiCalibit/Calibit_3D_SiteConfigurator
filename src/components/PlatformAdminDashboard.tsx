@@ -18,7 +18,9 @@ import {
   Pencil,
   Moon,
   Sun,
-  X
+  X,
+  Clock,
+  Trash2,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -38,7 +40,7 @@ interface PlatformStats {
 
 export function PlatformAdminDashboard({ user, onLogout }: Props) {
   const { theme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'users' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'users' | 'settings' | 'logs'>('overview');
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<PlatformStats>({ tenants: 0, users: 0, projects: 0 });
@@ -54,10 +56,22 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
   const [createdTenant, setCreatedTenant] = useState<{name: string, email: string, password: string} | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const [platformLogs, setPlatformLogs] = useState<any[]>([]);
+const [platformLogFilter, setPlatformLogFilter] = useState('all');
+
+const fetchPlatformLogs = async () => {
+  const res = await authFetch('/api/admin/logs?limit=100');
+  if (res.ok) {
+    const data = await res.json();
+    setPlatformLogs(data);
+  }
+};
+
   useEffect(() => {
     fetchTenants();
     fetchUsers();
     fetchStats();
+    fetchPlatformLogs();
   }, []);
 
   const fetchTenants = async () => {
@@ -165,7 +179,14 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
             icon={<Settings className="w-4 h-4" />}
             label="Settings"
           />
+          <NavButton
+            active={activeTab === 'logs'}
+            onClick={() => setActiveTab('logs')}
+            icon={<Activity className="w-4 h-4" />}
+            label="Activity Logs"
+          />
         </nav>
+
 
         <div className="p-4 border-t border-theme-border">
           <button 
@@ -185,8 +206,9 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
             <h2 className="text-2xl font-bold tracking-tight">
               {activeTab === 'overview' && 'Platform Health'}
               {activeTab === 'tenants' && 'Tenant Management'}
-              {activeTab === 'users' && 'Global User Directory'}
+              {activeTab === 'users' && 'Global User Directory'}  
               {activeTab === 'settings' && 'Platform Settings'}
+              {activeTab === 'logs' && 'Platform Activity Logs'}
             </h2>
             <p className="text-sm opacity-40">Super Admin: {user.name}</p>
           </div>
@@ -225,6 +247,78 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
         {activeTab === 'settings' && (
           <SettingsTab theme={theme} onThemeChange={setTheme} />
         )}
+        {activeTab === 'logs' && (
+  <div className="space-y-4">
+    <div className="flex items-center gap-2 flex-wrap">
+      {['all', 'tenant', 'auth'].map(filter => (
+        <button
+          key={filter}
+          onClick={() => setPlatformLogFilter(filter)}
+          className={clsx(
+            "px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all border",
+            platformLogFilter === filter
+              ? "bg-brand-teal text-white border-brand-teal"
+              : "bg-white/5 border-theme-border opacity-60 hover:opacity-100"
+          )}
+        >
+          {filter === 'all' ? 'All Activity' : filter}
+        </button>
+      ))}
+    </div>
+    <div className="space-y-2">
+      {(platformLogFilter === 'all' ? platformLogs : platformLogs.filter(l => l.entity_type === platformLogFilter)).length === 0 ? (
+        <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
+          <Activity className="w-12 h-12 opacity-10 mx-auto mb-4" />
+          <p className="text-sm opacity-40 italic">No platform activity yet.</p>
+        </div>
+      ) : (
+        (platformLogFilter === 'all' ? platformLogs : platformLogs.filter(l => l.entity_type === platformLogFilter)).map(log => (
+          <div key={log.id} className="flex items-start gap-4 p-4 bg-theme-card border border-theme-border rounded-xl hover:bg-white/5 transition-colors">
+            <div className={clsx(
+              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
+              log.action === 'CREATE' && "bg-emerald-500/20 text-emerald-400",
+              log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
+              log.action === 'DELETE' && "bg-red-500/20 text-red-400",
+              log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
+            )}>
+              {log.action === 'CREATE' && <Plus className="w-4 h-4" />}
+              {log.action === 'UPDATE' && <Pencil className="w-4 h-4" />}
+              {log.action === 'DELETE' && <Trash2 className="w-4 h-4" />}
+              {log.action === 'LOGIN' && <ShieldCheck className="w-4 h-4" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className={clsx(
+                    "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded",
+                    log.action === 'CREATE' && "bg-emerald-500/20 text-emerald-400",
+                    log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
+                    log.action === 'DELETE' && "bg-red-500/20 text-red-400",
+                    log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
+                  )}>
+                    {log.action}
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/5 text-white/40">
+                    {log.entity_type}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px] opacity-30 shrink-0">
+                  <Clock className="w-3 h-3" />
+                  {new Date(log.created_at + 'Z').toLocaleString()}
+                </div>
+              </div>
+              <p className="text-sm font-medium mt-1">{log.entity_name || '—'}</p>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-[10px] opacity-40">by {log.user_name}</span>
+                {log.details && <span className="text-[10px] opacity-30">{log.details}</span>}
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
       </main>
     </div>
   );
