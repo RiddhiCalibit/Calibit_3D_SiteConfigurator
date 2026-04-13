@@ -304,7 +304,8 @@ const fetchPlatformLogs = async () => {
                 </div>
                 <div className="flex items-center gap-1 text-[10px] opacity-30 shrink-0">
                   <Clock className="w-3 h-3" />
-                  {new Date(log.created_at + 'Z').toLocaleString()}
+                  {/* {new Date(log.created_at + 'Z').toLocaleString()} */}
+                  {new Date(log.created_at).toLocaleString()}
                 </div>
               </div>
               <p className="text-sm font-medium mt-1">{log.entity_name || '—'}</p>

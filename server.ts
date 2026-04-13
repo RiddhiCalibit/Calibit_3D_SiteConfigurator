@@ -234,15 +234,15 @@ function logActivity(
 ) {
   try {
 
-    // const now = new Date();
-    // const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-    // const istTime = new Date(now.getTime() + istOffset);
-    // const istString = istTime.toISOString().replace('T', ' ').substring(0, 19);
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+    const istTime = new Date(now.getTime() + istOffset);
+    const istString = istTime.toISOString().replace('T', ' ').substring(0, 19);
 
     db.prepare(`  
-      INSERT INTO activity_logs (id, tenant_id, user_id, user_name, action, entity_type, entity_name, details)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(uuidv4(), tenantId, userId, userName, action, entityType, entityName || null, details || null);
+      INSERT INTO activity_logs (id, tenant_id, user_id, user_name, action, entity_type, entity_name, details,created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), tenantId, userId, userName, action, entityType, entityName || null, details || null, istString);
   } catch (err) {
     console.error('Failed to log activity:', err);
   }
@@ -547,27 +547,51 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
     logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'SAVE', 'project', name, 'Project saved');
   });
 
-  // User submits forgot password request
-  app.post("/api/auth/forgot-password", async (req, res) => {
+//   // User submits forgot password request
+//   app.post("/api/auth/forgot-password", async (req, res) => {
+//   const { email } = req.body;
+//   if (!email) return res.status(400).json({ error: 'Email is required' });
+
+//   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+//   if (!user) {
+//     // Don't reveal if email exists or not — security best practice
+//     return res.json({ message: 'If this email exists, a request has been submitted.' });
+//   }
+
+//   const { v4: uuidv4 } = await import('uuid');
+//   db.prepare(`
+//     INSERT INTO password_reset_requests (id, user_id, email, status)
+//     VALUES (?, ?, ?, 'pending')
+//   `).run(uuidv4(), user.id, email);
+//  // Always return same message — don't reveal if email exists
+//   res.json({ message: 'If this email exists, a request has been submitted.' });
+//   if (user) {
+//   logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email, 'Password reset requested');
+// }
+// });
+app.post("/api/auth/forgot-password", (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
-  if (!user) {
-    // Don't reveal if email exists or not — security best practice
-    return res.json({ message: 'If this email exists, a request has been submitted.' });
+
+  if (user) {
+    const id = uuidv4();
+    // ✅ Pass IST time explicitly
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+    const istString = istTime.toISOString().replace('T', ' ').substring(0, 19);
+
+    db.prepare(`
+      INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
+      VALUES (?, ?, ?, 'pending', ?)
+    `).run(id, user.id, email, istString);
+
+    logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email, 'Password reset requested');
   }
 
-  const { v4: uuidv4 } = await import('uuid');
-  db.prepare(`
-    INSERT INTO password_reset_requests (id, user_id, email, status)
-    VALUES (?, ?, ?, 'pending')
-  `).run(uuidv4(), user.id, email);
- // Always return same message — don't reveal if email exists
   res.json({ message: 'If this email exists, a request has been submitted.' });
-  if (user) {
-  logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email, 'Password reset requested');
-}
 });
 
 // Admin fetches all pending reset requests
