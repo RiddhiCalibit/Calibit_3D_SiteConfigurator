@@ -30,6 +30,7 @@ export interface EquipmentDef {
   modelUrl?: string;
   animationsEnabled?: boolean;
   imageUrl?: string;
+  isActive?: boolean; 
 }
 
 export interface EquipmentObject {
@@ -57,16 +58,16 @@ export interface AppState {
 }
 
 export const DEFAULT_LIBRARY: EquipmentDef[] = [
-  { id: "slide_small", name: "Small Slide", width: 4, depth: 2, height: 3, color: "#FF5733", category: "slides" },
-  { id: "slide_large", name: "Large Slide", width: 8, depth: 3, height: 6, color: "#C70039", category: "slides" },
-  { id: "tower_3d", name: "Tower", width: 5, depth: 5, height: 10, color: "#34495E", category: "facilities", modelUrl: "/models/tower.glb", animationsEnabled: true },
-  { id: "duck_3d", name: "Duck", width: 2, depth: 2, height: 2, color: "#F1C40F", category: "amenities", modelUrl: "/models/duck.glb", animationsEnabled: true },
-  { id: "wave_pool", name: "Wave Pool", width: 20, depth: 15, height: 2, color: "#3498DB", category: "pools" },
-  { id: "lazy_river", name: "Lazy River", width: 30, depth: 5, height: 1.5, color: "#2980B9", category: "pools" },
-  { id: "splash_pad", name: "Splash Pad", width: 10, depth: 10, height: 0.5, color: "#1ABC9C", category: "pools" },
-  { id: "pump_station", name: "Pump Station", width: 5, depth: 5, height: 4, color: "#7F8C8D", category: "facilities" },
-  { id: "ticket_booth", name: "Ticket Booth", width: 3, depth: 3, height: 3, color: "#F1C40F", category: "facilities" },
-  { id: "locker_block", name: "Locker Block", width: 10, depth: 4, height: 3, color: "#9B59B6", category: "facilities" },
-  { id: "food_kiosk", name: "Food Kiosk", width: 4, depth: 4, height: 3, color: "#E67E22", category: "facilities" },
-  { id: "seating_area", name: "Seating Area", width: 6, depth: 6, height: 1, color: "#2ECC71", category: "amenities" },
+  { id: "slide_small", name: "Small Slide", width: 4, depth: 2, height: 3, color: "#FF5733", category: "slides", isActive: true },
+  { id: "slide_large", name: "Large Slide", width: 8, depth: 3, height: 6, color: "#C70039", category: "slides", isActive: true },
+  { id: "tower_3d", name: "Tower", width: 5, depth: 5, height: 10, color: "#34495E", category: "facilities", modelUrl: "/models/tower.glb", animationsEnabled: true, isActive: true },
+  { id: "duck_3d", name: "Duck", width: 2, depth: 2, height: 2, color: "#F1C40F", category: "amenities", modelUrl: "/models/duck.glb", animationsEnabled: true, isActive: true },
+  { id: "wave_pool", name: "Wave Pool", width: 20, depth: 15, height: 2, color: "#3498DB", category: "pools", isActive: true },
+  { id: "lazy_river", name: "Lazy River", width: 30, depth: 5, height: 1.5, color: "#2980B9", category: "pools", isActive: true },
+  { id: "splash_pad", name: "Splash Pad", width: 10, depth: 10, height: 0.5, color: "#1ABC9C", category: "pools", isActive: true },
+  { id: "pump_station", name: "Pump Station", width: 5, depth: 5, height: 4, color: "#7F8C8D", category: "facilities", isActive: true },
+  { id: "ticket_booth", name: "Ticket Booth", width: 3, depth: 3, height: 3, color: "#F1C40F", category: "facilities", isActive: true },
+  { id: "locker_block", name: "Locker Block", width: 10, depth: 4, height: 3, color: "#9B59B6", category: "facilities", isActive: true },
+  { id: "food_kiosk", name: "Food Kiosk", width: 4, depth: 4, height: 3, color: "#E67E22", category: "facilities", isActive: true },
+  { id: "seating_area", name: "Seating Area", width: 6, depth: 6, height: 1, color: "#2ECC71", category: "amenities", isActive: true },
 ];

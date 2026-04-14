@@ -120,6 +120,12 @@ const hasImageUrl = equipmentInfo.some((col: any) => col.name === 'image_url');
 if (!hasImageUrl) {
   db.exec("ALTER TABLE equipment ADD COLUMN image_url TEXT");
 }
+// IsActive column for soft deletes
+const equipmentCols = db.prepare("PRAGMA table_info(equipment)").all() as any[];
+const hasIsActive = equipmentCols.some((col: any) => col.name === 'is_active');
+if (!hasIsActive) {
+  db.exec("ALTER TABLE equipment ADD COLUMN is_active INTEGER DEFAULT 1");
+}
 
 async function startServer() {
   const app = express();
@@ -416,7 +422,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   });
 
   app.post("/api/tenant/:id/equipment",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), async(req, res) => {
-    const { id, name, category, width, depth, height, color, model_url, animations_enabled, image_url } = req.body;
+    const { id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active } = req.body;
 
       // Validate before touching the DB
   if (!name || typeof name !== 'string' || name.trim() === '') {
@@ -427,22 +433,22 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   }
 
     db.prepare(`
-      INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url)
+      INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null);
-    res.json({ success: true });
+    `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, is_active !== false ? 1 : 0);
     logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'CREATE', 'equipment', name, `Category: ${category}`);
+    res.json({ success: true });
   });
 
   app.put("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
-    const { name, category, width, depth, height, color, model_url, animations_enabled, image_url } = req.body;
+    const { name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active  } = req.body;
     db.prepare(`
       UPDATE equipment 
-      SET name = ?, category = ?, width = ?, depth = ?, height = ?, color = ?, model_url = ?, animations_enabled = ?, image_url = ?
+      SET name = ?, category = ?, width = ?, depth = ?, height = ?, color = ?, model_url = ?, animations_enabled = ?, image_url = ?, is_active = ?
       WHERE id = ? AND tenant_id = ?
-    `).run(name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, req.params.id, req.params.tenantId);
-    res.json({ success: true });
+    `).run(name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, is_active !== false ? 1 : 0, req.params.id, req.params.tenantId);
     logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', name, 'Equipment updated');
+    res.json({ success: true });
   });
 
   // app.delete("/api/tenant/:tenantId/equipment/:id",authenticate,requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
@@ -454,6 +460,21 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   db.prepare("DELETE FROM equipment WHERE id = ? AND tenant_id = ?").run(req.params.id, req.params.tenantId);
   logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'DELETE', 'equipment', eqToDelete?.name, 'Equipment deleted');
   res.json({ success: true });
+});
+// dedicated toggle route for quick active/inactive switching:
+app.patch("/api/tenant/:tenantId/equipment/:id/toggle", authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+  const { is_active } = req.body;
+  db.prepare("UPDATE equipment SET is_active = ? WHERE id = ? AND tenant_id = ?")
+    .run(is_active ? 1 : 0, req.params.id, req.params.tenantId);
+  logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', req.params.id, is_active ? 'Equipment activated' : 'Equipment deactivated');
+  res.json({ success: true });
+});
+// equipment stats route for overview counts:
+app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (req, res) => {
+  const total = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ?").get(req.params.id) as any;
+  const active = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 1").get(req.params.id) as any;
+  const inactive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 0").get(req.params.id) as any;
+  res.json({ total: total.count, active: active.count, inactive: inactive.count });
 });
 
   // Platform Admin API only

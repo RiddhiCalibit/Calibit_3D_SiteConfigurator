@@ -130,7 +130,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
   const selectedObject = state.objects.find(o => o.id === state.selectedId);
-  const fullLibrary = [...DEFAULT_LIBRARY, ...state.customLibrary];
+  const fullLibrary = [...DEFAULT_LIBRARY, ...state.customLibrary] 
+   .filter(item => item.isActive !== false);
   const selectedDef = selectedObject ? fullLibrary.find(d => d.id === selectedObject.type) : null;
 
   const handleManualMove = (dx: number, dz: number) => {
@@ -230,7 +231,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 };
 
   return (
-    <aside className="w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">
+    // <aside className="w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">
+    <aside className="w-[200px] lg:w-[280px] h-full bg-theme-bg ... shrink-0">
       {/* Header */}
       <div className="p-6 border-b border-theme-border">
         <div className="flex items-center gap-2 mb-1">

@@ -23,6 +23,8 @@ import {
   Activity,
   Clock,
   ShieldCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -108,20 +110,33 @@ const fetchEquipment = async () => {
       modelUrl: eq.model_url,
       animationsEnabled: !!eq.animations_enabled,
       imageUrl: eq.image_url || null, 
+      isActive: eq.is_active !== 0,
     }));
     setEquipment(mapped);
   }
 };
 
+// Add equipment stats state and fetch:
+const [equipmentStats, setEquipmentStats] = useState({ total: 0, active: 0, inactive: 0 });
+
+const fetchEquipmentStats = async () => {
+  const res = await authFetch(`/api/tenant/${tenant.id}/equipment/stats`);
+  if (res.ok) {
+    const data = await res.json();
+    setEquipmentStats(data);
+  }
+};
+
   useEffect(() => {
     fetchEquipment();
+    fetchEquipmentStats();
     fetchResetRequests();
     fetchSalesRepCount();
     fetchLogs();
   }, [tenant.id]);
 
   // Add resolve handler
-const handleResolveReset = async (requestId: string) => {
+  const handleResolveReset = async (requestId: string) => {
   const tempPwd = tempPasswords[requestId];
   if (!tempPwd || tempPwd.length < 8) {
     return alert('Temp password must be at least 8 characters');
@@ -144,7 +159,7 @@ const handleResolveReset = async (requestId: string) => {
     const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newEquipment, id, image_url: newEquipment.imageUrl || null })
+      body: JSON.stringify({ ...newEquipment, id, image_url: newEquipment.imageUrl || null, is_active: newEquipment.isActive !== false ? 1 : 0 })
     });
 
     if (res.ok) {
@@ -170,7 +185,7 @@ const handleResolveReset = async (requestId: string) => {
     const res = await authFetch(`/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({...editingEquipment, image_url: editingEquipment.imageUrl || null})
+      body: JSON.stringify({...editingEquipment, image_url: editingEquipment.imageUrl || null, is_active: editingEquipment.isActive !== false ? 1 : 0})
     });
 
     if (res.ok) {
@@ -188,6 +203,19 @@ const handleResolveReset = async (requestId: string) => {
 
     if (res.ok) {
       fetchEquipment();
+    }
+  };
+
+  const handleToggleActive = async (id: string, currentlyActive: boolean) => {
+    const res = await authFetch(`/api/tenant/${tenant.id}/equipment/${id}/toggle`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: currentlyActive ? 0 : 1 })
+    });
+
+    if (res.ok) {
+      fetchEquipment();
+      fetchEquipmentStats();
     }
   };
 
@@ -347,7 +375,21 @@ const handleResolveReset = async (requestId: string) => {
            )}
         </header>
 
-        {activeTab === 'overview' && <OverviewTab tenant={tenant} />}
+        {activeTab === 'overview' && <OverviewTab tenant={tenant} equipmentStats={equipmentStats} />}
+        {activeTab === 'equipment' && (
+
+            <div className="flex items-center gap-3 mb-6 flex-wrap">
+    <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg">
+      Active: {equipmentStats.active}
+    </span>
+    <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg">
+      Inactive: {equipmentStats.inactive}
+    </span>
+    <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-white/5 border border-theme-border rounded-lg">
+      Total: {equipmentStats.total}
+    </span>
+  </div>
+)}
         {activeTab === 'equipment' && (
           <EquipmentTab 
             equipment={equipment} 
@@ -362,6 +404,7 @@ const handleResolveReset = async (requestId: string) => {
             onAdd={handleAddEquipment}
             onUpdate={handleUpdateEquipment}
             onDelete={handleDeleteEquipment}
+            onToggleActive={handleToggleActive}
           />
         )}
         {activeTab === 'users' && (
@@ -536,14 +579,14 @@ function NavButton({ active, onClick, icon, label }: { active: boolean, onClick:
   );
 }
 
-function OverviewTab({ tenant }: { tenant: Tenant }) {
+function OverviewTab({ tenant, equipmentStats }: { tenant: Tenant, equipmentStats: { total: number, active: number, inactive: number } }) {
   return (
     <div className="space-y-8">
       {/* <div className="grid grid-cols-3 gap-6"> */}
       {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6"> */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
         <StatCard label="Active Projects" value="24" trend="+12%" icon={<LayoutDashboard className="w-5 h-5" />} />
-        <StatCard label="Total Equipment" value="156" trend="+5%" icon={<Package className="w-5 h-5" />} />
+        <StatCard label="Total Equipment" value={equipmentStats.total.toString()} trend={`${equipmentStats.active} active`} icon={<Package className="w-5 h-5" />} />
         <StatCard label="Sales Activity" value="89%" trend="+2%" icon={<TrendingUp className="w-5 h-5" />} />
       </div>
 
@@ -582,7 +625,8 @@ function EquipmentTab({
   setNewEquipment,
   onAdd,
   onUpdate,
-  onDelete
+  onDelete,
+  onToggleActive
 }: { 
   equipment: EquipmentDef[],
   searchQuery: string,
@@ -595,16 +639,18 @@ function EquipmentTab({
   setNewEquipment: (e: Partial<EquipmentDef>) => void,
   onAdd: (e: React.FormEvent) => void,
   onUpdate: (e: React.FormEvent) => void,
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void,
+  onToggleActive: (id: string, currentlyActive: boolean) => void;
 }) {
   const filteredEquipment = equipment.filter(item => 
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  return (
-    <div className="space-y-6">
-      {/* Search Bar */}
+return (
+  
+  <div className="space-y-6">
+    {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-20" />
         <input 
@@ -880,6 +926,33 @@ function EquipmentTab({
   <label htmlFor="animations" className="text-xs opacity-60">Enable Animations</label>
 </div>
 
+{/* ✅ Active/Inactive toggle in edit form */}
+<div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-theme-border">
+  <div>
+    <p className="text-xs font-bold">Equipment Status</p>
+    <p className="text-[10px] opacity-40 mt-0.5">Inactive equipment won't be visible to sales reps</p>
+  </div>
+  <button
+    type="button"
+    onClick={() => isAdding
+      ? setNewEquipment({ ...newEquipment, isActive: !newEquipment.isActive })
+      : setEditingItem({ ...editingItem!, isActive: !editingItem?.isActive })
+    }
+    className={clsx(
+      "w-12 h-6 rounded-full transition-colors relative shrink-0",
+      (isAdding ? newEquipment.isActive !== false : editingItem?.isActive !== false)
+        ? "bg-emerald-500"
+        : "bg-white/20"
+    )}
+  >
+    <div className={clsx(
+      "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+      (isAdding ? newEquipment.isActive !== false : editingItem?.isActive !== false)
+        ? "left-7" : "left-1"
+    )} />
+  </button>
+</div>
+
 {/* Row 5 — Action buttons */}
 <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
   <button type="button"
@@ -908,48 +981,108 @@ function EquipmentTab({
         </motion.div>
       )}
 
-      {/* <div className="grid grid-cols-4 gap-6"> */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
-        {filteredEquipment.map(item => (
-          <div key={item.id} className="bg-theme-card border border-theme-border rounded-2xl overflow-hidden group hover:border-brand-teal/50 transition-all relative">
-            {/* <div className="aspect-square bg-black/40 flex items-center justify-center relative">
-              <Box className="w-12 h-12 opacity-10" /> */}
+  {filteredEquipment.map(item => (
+    <div
+      key={item.id}
+      className="bg-theme-card border border-theme-border rounded-2xl overflow-hidden group hover:border-brand-teal/50 transition-all relative"
+    >
+      {/* Status Badge */}
+      <div
+        className={clsx(
+          "absolute top-3 left-3 z-10 text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
+          item.isActive !== false
+            ? "bg-emerald-500/20 text-emerald-400"
+            : "bg-red-500/20 text-red-400"
+        )}
+      >
+        {item.isActive !== false ? "Active" : "Inactive"}
+      </div>
 
-              <div className="aspect-square bg-black/40 flex items-center justify-center relative overflow-hidden">
-              {item.imageUrl ? (
-              <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-              ) : (
-              <Box className="w-12 h-12 opacity-10" />
-              )}
+      {/* Image */}
+      <div
+        className={clsx(
+          "aspect-square bg-black/40 flex items-center justify-center relative overflow-hidden",
+          item.isActive === false && "opacity-40"
+        )}
+      >
+        {item.imageUrl ? (
+          <img
+            src={item.imageUrl}
+            alt={item.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <Box className="w-12 h-12 opacity-10" />
+        )}
 
-              <div className="absolute top-3 right-3 px-2 py-1 bg-brand-teal/20 text-brand-teal text-[8px] font-bold uppercase rounded">
-                {item.category}
-              </div>
-              
-              {/* Actions Overlay */}
-              <div className="absolute inset-0 bg-theme-bg/80 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => setEditingItem(item)}
-                  className="p-3 bg-white/10 hover:bg-brand-teal hover:text-white rounded-xl transition-all"
-                  title="Edit Equipment"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => onDelete(item.id)}
-                  className="p-3 bg-white/10 hover:bg-red-500 hover:text-white rounded-xl transition-all"
-                  title="Delete Equipment"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className="p-4">
-              <h4 className="text-sm font-bold truncate">{item.name}</h4>
-              <p className="text-[10px] opacity-40 font-mono mt-1">{item.width}x{item.depth}x{item.height}m</p>
-            </div>
-          </div>
-        ))}
+        {/* Category */}
+        <div className="absolute top-3 right-3 px-2 py-1 bg-brand-teal/20 text-brand-teal text-[8px] font-bold uppercase rounded">
+          {item.category}
+        </div>
+
+        {/* Actions Overlay */}
+        <div className="absolute inset-0 bg-theme-bg/80 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Edit */}
+          <button
+            onClick={() => setEditingItem(item)}
+            className="p-3 bg-white/10 hover:bg-brand-teal hover:text-white rounded-xl transition-all"
+            title="Edit"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+
+          {/* Toggle Active */}
+          <button
+            onClick={() =>
+              onToggleActive(item.id, item.isActive !== false)
+            }
+            className="p-3 bg-white/10 hover:bg-red-500 hover:text-white rounded-xl transition-all"
+            title={
+              item.isActive !== false ? "Deactivate" : "Activate"
+            }
+          >
+            {item.isActive !== false ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+          </button>
+
+          {/* Delete */}
+          <button
+            onClick={() => onDelete(item.id)}
+            className="p-3 bg-white/10 hover:bg-red-500 hover:text-white rounded-xl transition-all"
+            title="Delete"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Info */}
+      <div className="p-4">
+        <h4 className="text-sm font-bold truncate">
+          {item.name}
+        </h4>
+        <p className="text-[10px] opacity-40 font-mono mt-1">
+          {item.width}x{item.depth}x{item.height}m
+        </p>
+      </div>
+    </div>
+  ))}
+
+  {/* Empty State */}
+  {filteredEquipment.length === 0 && (
+    <div className="col-span-4 py-20 text-center">
+      <Box className="w-12 h-12 opacity-10 mx-auto mb-4" />
+      <p className="text-sm opacity-40 italic">
+        No equipment found matching your search.
+      </p>
+    </div>
+  )}
+</div>
+
         {filteredEquipment.length === 0 && (
           <div className="col-span-4 py-20 text-center">
             <Box className="w-12 h-12 opacity-10 mx-auto mb-4" />
@@ -957,7 +1090,6 @@ function EquipmentTab({
           </div>
         )}
       </div>
-    </div>
   );
 }
 
@@ -1037,10 +1169,10 @@ const fetchSalesRepCount = async () => {
   //   }
   // };
 
-  const handleAddUser = async (e: React.FormEvent) => {
+const handleAddUser = async (e: React.FormEvent) => {
   e.preventDefault();
   const userId = uuidv4();
-  
+
   const res = await authFetch(`/api/tenant/${tenant.id}/users`, {
     method: 'POST',
     body: JSON.stringify({
@@ -1288,25 +1420,6 @@ const fetchSalesRepCount = async () => {
 
       <div className="grid grid-cols-1 gap-4">
         {users.map(u => (
-          // <div key={u.id} className="p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between group">
-          //   <div className="flex items-center gap-4">
-          //     <div className="w-10 h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal font-bold">
-          //       {u.name.charAt(0)}
-          //     </div>
-          //     <div>
-          //       <h4 className="font-bold text-sm">{u.name}</h4>
-          //       <div className="flex items-center gap-3 mt-1">
-          //         <span className="text-[10px] opacity-40">{u.email}</span>
-          //         <span className="text-[10px] opacity-40">·</span>
-          //         <span className="text-[10px] opacity-40">{u.phone || 'No phone'}</span>
-          //       </div>
-          //     </div>
-          //   </div>
-          //   <div className="flex items-center gap-3">
-          //     <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded">
-          //       {u.role}
-          //     </span>
-
           //  Replace — truncate email, wrap role badge properly
 <div key={u.id} className="p-3 lg:p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between gap-2 group">
   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1503,4 +1616,3 @@ function ProfileTab({ user }: { user: User }) {
     </div>
   );
 }
-
