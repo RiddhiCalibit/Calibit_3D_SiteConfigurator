@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authFetch } from '../utils/api';
-import { User, Tenant, EquipmentDef } from '../types';
+import { User, Tenant, EquipmentDef, DEFAULT_LIBRARY } from '../types';
 import { 
   LayoutDashboard, 
   Package, 
@@ -61,8 +61,9 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
 
   const [logs, setLogs] = useState<any[]>([]);
   const [logFilter, setLogFilter] = useState('all');
+  const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
 
-const fetchLogs = async () => {
+  const fetchLogs = async () => {
   const res = await authFetch(`/api/tenant/${tenant.id}/logs?limit=100`);
   if (res.ok) {
     const data = await res.json();
@@ -86,14 +87,6 @@ const fetchSalesRepCount = async () => {
     setSalesRepCount(count);
   }
 };
-
-  // const fetchEquipment = async () => {
-  //   const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
-  //   if (res.ok) {
-  //     const data = await res.json();
-  //     setEquipment(data);
-  //   }
-  // };
 
 const fetchEquipment = async () => {
   const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
@@ -130,10 +123,23 @@ const fetchEquipmentStats = async () => {
   useEffect(() => {
     fetchEquipment();
     fetchEquipmentStats();
+    fetchDisabledDefaults();
     fetchResetRequests();
     fetchSalesRepCount();
     fetchLogs();
   }, [tenant.id]);
+
+  // Toggle handler for active/inactive status
+  const handleToggleDefault = async (equipmentId: string, currentlyDisabled: boolean) => {
+  const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults/${equipmentId}`, {
+    method: 'POST',
+    body: JSON.stringify({ disable: !currentlyDisabled })
+  });
+  if (res.ok) {
+    fetchDisabledDefaults();
+    fetchEquipmentStats();
+  }
+}; 
 
   // Add resolve handler
   const handleResolveReset = async (requestId: string) => {
@@ -219,10 +225,17 @@ const fetchEquipmentStats = async () => {
     }
   };
 
+  const fetchDisabledDefaults = async () => {
+  const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults`);
+  if (res.ok) {
+    const data = await res.json();
+    setDisabledDefaults(data);
+  }
+};
+
   return (
     <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-auto transition-colors duration-300">
       {/* Sidebar */}
-      {/* <aside className="w-64 border-r border-theme-border flex flex-col"> */}
       <aside className="w-48 lg:w-64 shrink-0 border-r border-theme-border flex flex-col overflow-y-auto">
         <div className="p-6 border-b border-theme-border">
           <div className="flex items-center justify-between mb-4">
@@ -405,6 +418,8 @@ const fetchEquipmentStats = async () => {
             onUpdate={handleUpdateEquipment}
             onDelete={handleDeleteEquipment}
             onToggleActive={handleToggleActive}
+            disabledDefaults={disabledDefaults}
+            onToggleDefault={handleToggleDefault}
           />
         )}
         {activeTab === 'users' && (
@@ -626,7 +641,9 @@ function EquipmentTab({
   onAdd,
   onUpdate,
   onDelete,
-  onToggleActive
+  onToggleActive,
+  disabledDefaults,
+  onToggleDefault
 }: { 
   equipment: EquipmentDef[],
   searchQuery: string,
@@ -640,7 +657,9 @@ function EquipmentTab({
   onAdd: (e: React.FormEvent) => void,
   onUpdate: (e: React.FormEvent) => void,
   onDelete: (id: string) => void,
-  onToggleActive: (id: string, currentlyActive: boolean) => void;
+  onToggleActive: (id: string, currentlyActive: boolean) => void,
+  disabledDefaults: string[],
+  onToggleDefault: (id: string, currentlyDisabled: boolean) => void
 }) {
   const filteredEquipment = equipment.filter(item => 
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -650,6 +669,52 @@ function EquipmentTab({
 return (
   
   <div className="space-y-6">
+
+  {/* Default Equipment Section */}
+<div className="space-y-3">
+  <div className="flex items-center justify-between">
+    <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+      Default Equipment ({DEFAULT_LIBRARY.filter(d => !disabledDefaults.includes(d.id)).length} active)
+    </label>
+  </div>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+    {DEFAULT_LIBRARY.map(item => {
+      const isDisabled = disabledDefaults.includes(item.id);
+      return (
+        <div key={item.id} className={clsx(
+          "flex items-center justify-between p-3 bg-theme-card border rounded-xl transition-all",
+          isDisabled ? "border-red-500/20 opacity-50" : "border-theme-border"
+        )}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg shrink-0" style={{ backgroundColor: item.color }} />
+            <div className="min-w-0">
+              <p className="text-xs font-bold truncate">{item.name}</p>
+              <p className="text-[9px] opacity-40 uppercase">{item.category}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => onToggleDefault(item.id, isDisabled)}
+            className={clsx(
+              "w-10 h-5 rounded-full transition-colors relative shrink-0 ml-2",
+              !isDisabled ? "bg-emerald-500" : "bg-white/20"
+            )}
+          >
+            <div className={clsx(
+              "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+              !isDisabled ? "left-6" : "left-1"
+            )} />
+          </button>
+        </div>
+      );
+    })}
+  </div>
+  <div className="border-t border-theme-border pt-4">
+    <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+      Custom Equipment ({filteredEquipment.filter(e => e.isActive !== false).length} active)
+    </label>
+  </div>
+</div>
+
     {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-20" />
@@ -751,7 +816,7 @@ return (
         img.onload = () => {
           const canvas = document.createElement('canvas');
           
-          // ✅ Maintain square aspect ratio — use the smaller dimension
+          // Maintain square aspect ratio — use the smaller dimension
           const size = Math.min(img.width, img.height);
           canvas.width = size;
           canvas.height = size;
@@ -772,7 +837,7 @@ return (
 
   // Check original size
   if (file.size > MAX_SIZE) {
-    // ✅ Auto compress to fit under 1MB
+    // Auto compress to fit under 1MB
     const compressed = await compressImage(file, 0.7);
     
     // Check if compression was enough
@@ -807,7 +872,7 @@ return (
     return;
   }
 
-  // ✅ Image is within 1MB — still crop to square for consistency
+  // Image is within 1MB — still crop to square for consistency
   const base64 = await compressImage(file, 0.9);
   if (isAdding) {
     setNewEquipment({ ...newEquipment, imageUrl: base64 });
@@ -926,7 +991,7 @@ return (
   <label htmlFor="animations" className="text-xs opacity-60">Enable Animations</label>
 </div>
 
-{/* ✅ Active/Inactive toggle in edit form */}
+{/* Active/Inactive toggle in edit form */}
 <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-theme-border">
   <div>
     <p className="text-xs font-bold">Equipment Status</p>
@@ -1082,13 +1147,6 @@ return (
     </div>
   )}
 </div>
-
-        {filteredEquipment.length === 0 && (
-          <div className="col-span-4 py-20 text-center">
-            <Box className="w-12 h-12 opacity-10 mx-auto mb-4" />
-            <p className="text-sm opacity-40 italic">No equipment found matching your search.</p>
-          </div>
-        )}
       </div>
   );
 }
@@ -1142,32 +1200,6 @@ const fetchSalesRepCount = async () => {
   useEffect(() => {
     fetchUsers();
   }, [tenant.id]);
-
-  // const handleAddUser = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   const id = uuidv4();
-
-  //   const res = await authFetch(`/api/tenant/${tenant.id}/users`, {
-  //     method: 'POST',
-  //     headers: { 'Content-Type': 'application/json' },
-  //     body: JSON.stringify({ ...newUser, id, role: 'sales_rep' })
-  //   });
-
-  //   if (res.ok) {
-  //     setIsAdding(false);
-  //     setNewUser({
-  //       name: '',
-  //       email: '',
-  //       phone: '',
-  //       password: '',
-  //       companyName: tenant.name
-  //     });
-  //     fetchUsers();
-  //   } else {
-  //     const err = await res.json();
-  //     alert(err.error || 'Failed to add user');
-  //   }
-  // };
 
 const handleAddUser = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -1420,7 +1452,6 @@ const handleAddUser = async (e: React.FormEvent) => {
 
       <div className="grid grid-cols-1 gap-4">
         {users.map(u => (
-          //  Replace — truncate email, wrap role badge properly
 <div key={u.id} className="p-3 lg:p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between gap-2 group">
   <div className="flex items-center gap-3 min-w-0 flex-1">
     <div className="w-8 h-8 lg:w-10 lg:h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal font-bold shrink-0">

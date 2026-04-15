@@ -49,87 +49,7 @@ export default function App() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-
-//   const handleLogin = async (email: string, password: string) => {
-//     const res = await fetch('/api/auth/login', {
-//       method: 'POST',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify({ email, password })
-//     });
-    
-//     if (res.ok) {
-//       const data = await res.json();
-//       localStorage.setItem('authToken', data.token); // save token
-//       setUser(data.user);
-//       setTenant(data.tenant);
-
-//     //pass tenant directly instead of relying on state
-//     const fetchProjects = async (tenantData: Tenant | null) => {
-//     if (!tenantData) return;
-//     const res = await authFetch(`/api/projects?tenantId=${tenantData.id}`);
-//     if (res.ok) {
-//       const data = await res.json();
-//       setProjects(data);
-//     }
-//   };
-
-// // Then call it in handleLogin:
-// setTenant(data.tenant);
-// fetchProjects(data.tenant); // pass directly, don't rely on state
-      
-//     // Pass token directly here — don't rely on authFetch reading
-//     // localStorage immediately since it may not have updated yet
-
-//   //     if (data.tenant) {
-//   //       const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`,{
-//   //         headers: {
-//   //           'Content-Type': 'application/json',
-//   //           'Authorization': `Bearer ${data.token}` // use token directly
-//   //         }
-//   //       });
-//   //       if (eqRes.ok) {
-//   //         const eqData = await eqRes.json();
-//   //         setCustomLibrary(eqData);
-//   //       }
-//   //     }
-//   //   } else {
-//   //     throw new Error('Login failed');
-//   //   }
-//   // };
-
-//   if (data.tenant) {
-//   const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`, {
-//     headers: {
-//       'Content-Type': 'application/json',
-//       'Authorization': `Bearer ${data.token}`
-//     }
-//   });
-//   if (eqRes.ok) {
-//     const eqData = await eqRes.json();
-    
-//     //  Map DB snake_case fields to frontend camelCase
-//     const mapped = eqData.map((eq: any) => ({
-//       id: eq.id,
-//       name: eq.name,
-//       category: eq.category,
-//       width: eq.width,
-//       depth: eq.depth,
-//       height: eq.height,
-//       color: eq.color,
-//       modelUrl: eq.model_url,           //  snake_case → camelCase
-//       animationsEnabled: !!eq.animations_enabled  //  0/1 → boolean
-//     }));
-    
-//     setCustomLibrary(mapped);
-//   }
-// } else {
-//   setCustomLibrary(DEFAULT_LIBRARY);
-// }
-
-//     } else {
-//       throw new Error('Login failed');
-//     }
-//   };
+  const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
 
 const handleLogin = async (email: string, password: string) => {
   const res = await fetch('/api/auth/login', {
@@ -167,7 +87,15 @@ const handleLogin = async (email: string, password: string) => {
           modelUrl: eq.model_url,
           animationsEnabled: !!eq.animations_enabled,
           imageUrl: eq.image_url || null,
+          isActive: eq.is_active !== 0,
         }));
+        // ✅ Filter out inactive for sales reps
+const filtered = data.user?.role === 'sales_rep' 
+  ? mapped.filter((eq: any) => eq.isActive !== false)
+  : mapped;
+
+setCustomLibrary(filtered);
+
         setCustomLibrary(mapped);
       }
     } else {
@@ -175,6 +103,18 @@ const handleLogin = async (email: string, password: string) => {
     }
   } else {
     throw new Error('Login failed');
+  }
+
+   const ddRes = await fetch(`/api/tenant/${data.tenant.id}/disabled-defaults`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${data.token}`
+    }
+  });
+  if (ddRes.ok) {
+    const disabledIds = await ddRes.json();
+    // Store in state — add this state at the top of App component
+    setDisabledDefaults(disabledIds);
   }
 
 };

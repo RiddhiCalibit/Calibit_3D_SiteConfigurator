@@ -100,6 +100,12 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS disabled_defaults (
+  tenant_id TEXT NOT NULL,
+  equipment_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, equipment_id)
+);
+
 `);
 
 // Migration: Add phone column to users if it doesn't exist
@@ -329,7 +335,9 @@ const loginLimiter = rateLimit({
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
+    if (req.user) { 
      logActivity(req.user.userId, req.user.userName, req.params.id, 'CREATE', 'sales_rep', name, `Created sales rep: ${email}`);
+    }
   });
 
   // app.put("/api/users/:id",authenticate, requireRole('tenant_admin', 'platform_admin'),async (req, res) => {
@@ -370,12 +378,15 @@ const loginLimiter = rateLimit({
 app.put("/api/users/:id", authenticate, async (req, res) => {
   const { name, phone, password } = req.body;
 
+  if (!req.user) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
   // Allow if updating own profile OR if admin
   const isSelf = req.user.userId === req.params.id;
-  console.log('DEBUG:', req.user.userId, '===', req.params.id, '| isSelf:', isSelf);
   const isAdmin = req.user.role === 'tenant_admin' || req.user.role === 'platform_admin';
 
-  // ✅ Add this debug line temporarily
+  // Add this debug line temporarily
   console.log('PUT users - isSelf:', isSelf, 'isAdmin:', isAdmin, 'tokenUserId:', req.user.userId, 'paramId:', req.params.id);
   
   if (!isSelf && !isAdmin) {
@@ -392,7 +403,9 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   } else {
     db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
       .run(name, phone, req.params.id);
-    logActivity(req.user.userId, req.user.userName || 'User', req.user.tenantId, 'UPDATE', 'profile', name, 'Profile updated');
+    if (req.user) {
+      logActivity(req.user.userId, req.user.userName || 'User', req.user.tenantId || null, 'UPDATE', 'profile', name, 'Profile updated');
+    }
   }
 
   res.json({ success: true });
@@ -406,14 +419,38 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   app.delete("/api/users/:id", authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
   const userToDelete = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as any;
   db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
-  logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId, 'DELETE', 'sales_rep', userToDelete?.name, `Deleted: ${userToDelete?.email}`);
+  if (req.user) {
+    logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId || null, 'DELETE', 'sales_rep', userToDelete?.name, `Deleted: ${userToDelete?.email}`);
+  }
   res.json({ success: true });
+});
+
+  // equipment stats route for overview counts:
+app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (req, res) => {
+  // custom equipments count from the db
+  const customTotal = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ?").get(req.params.id) as any;
+  const customActive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 1").get(req.params.id) as any;
+  const customInactive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 0").get(req.params.id) as any;
+  // default equipments count from the db
+  const defaultTotal = 12; // DEFAULT_LIBRARY has 12 items
+  const disabledDefaultsCount = db.prepare(
+    "SELECT count(*) as count FROM disabled_defaults WHERE tenant_id = ?"
+  ).get(req.params.id) as any;
+  
+  const defaultActive = defaultTotal - (disabledDefaultsCount?.count || 0);
+  const defaultInactive = disabledDefaultsCount?.count || 0;
+
+  res.json({ 
+    total: customTotal.count + defaultTotal,
+    active: customActive.count + defaultActive, 
+    inactive: customInactive.count + defaultInactive, 
+  });
 });
 
   app.get("/api/tenant/:id/equipment",authenticate, requireTenantAccess, (req, res) => {
 
       // user can only access their own tenant
-  if (req.user.tenantId !== req.params.id && req.user.role !== 'platform_admin') {
+  if (!req.user || (req.user.tenantId !== req.params.id && req.user.role !== 'platform_admin')) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
@@ -434,9 +471,11 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
 
     db.prepare(`
       INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, is_active !== false ? 1 : 0);
-    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'CREATE', 'equipment', name, `Category: ${category}`);
+    if (req.user) {
+      logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'CREATE', 'equipment', name, `Category: ${category}`);
+    }
     res.json({ success: true });
   });
 
@@ -447,7 +486,9 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
       SET name = ?, category = ?, width = ?, depth = ?, height = ?, color = ?, model_url = ?, animations_enabled = ?, image_url = ?, is_active = ?
       WHERE id = ? AND tenant_id = ?
     `).run(name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, is_active !== false ? 1 : 0, req.params.id, req.params.tenantId);
-    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', name, 'Equipment updated');
+    if (req.user) {
+      logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', name, 'Equipment updated');
+    }
     res.json({ success: true });
   });
 
@@ -458,7 +499,9 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   app.delete("/api/tenant/:tenantId/equipment/:id", authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
   const eqToDelete = db.prepare("SELECT * FROM equipment WHERE id = ?").get(req.params.id) as any;
   db.prepare("DELETE FROM equipment WHERE id = ? AND tenant_id = ?").run(req.params.id, req.params.tenantId);
-  logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'DELETE', 'equipment', eqToDelete?.name, 'Equipment deleted');
+  if (req.user) {
+    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'DELETE', 'equipment', eqToDelete?.name, 'Equipment deleted');
+  }
   res.json({ success: true });
 });
 // dedicated toggle route for quick active/inactive switching:
@@ -466,16 +509,12 @@ app.patch("/api/tenant/:tenantId/equipment/:id/toggle", authenticate, requireTen
   const { is_active } = req.body;
   db.prepare("UPDATE equipment SET is_active = ? WHERE id = ? AND tenant_id = ?")
     .run(is_active ? 1 : 0, req.params.id, req.params.tenantId);
+    if (req.user){
   logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', req.params.id, is_active ? 'Equipment activated' : 'Equipment deactivated');
   res.json({ success: true });
+    }
 });
-// equipment stats route for overview counts:
-app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (req, res) => {
-  const total = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ?").get(req.params.id) as any;
-  const active = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 1").get(req.params.id) as any;
-  const inactive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 0").get(req.params.id) as any;
-  res.json({ total: total.count, active: active.count, inactive: inactive.count });
-});
+
 
   // Platform Admin API only
   app.get("/api/admin/tenants",authenticate, requireRole('platform_admin'), (req, res) => {
@@ -508,7 +547,9 @@ app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (r
       db.prepare("DELETE FROM tenants WHERE id = ?").run(id);
       res.status(400).json({ error: error.message });
     }
+    if (req.user) {
     logActivity(req.user.userId, req.user.userName || 'Platform Admin', null, 'CREATE', 'tenant', name, `Tier: ${subscription_tier || 'basic'}`);
+    }
   });
 
   app.put("/api/admin/tenants/:id",authenticate, requireRole('platform_admin'), (req, res) => {
@@ -516,7 +557,10 @@ app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (r
     db.prepare("UPDATE tenants SET name = ?, logo_url = ?, subscription_tier = ? WHERE id = ?")
       .run(name, logo_url, subscription_tier, req.params.id);
     res.json({ success: true });
+    if (req.user) {
+       //logActivity(req.user.userId, req.user.userName || 'Platform Admin', null, 'UPDATE', 'tenant', name, `Tier: ${subscription_tier}`);
     logActivity(req.user.userId, req.user.userName || 'Platform Admin', null, 'UPDATE', 'tenant', name, 'Tenant updated');
+    }
   });
 
   app.get("/api/admin/stats",authenticate, requireRole('platform_admin'), (req, res) => {
@@ -565,7 +609,9 @@ app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (r
     db.prepare("INSERT INTO projects (id, tenant_id, user_id, name, data) VALUES (?, ?, ?, ?, ?)")
       .run(id, tenant_id, user_id, name, JSON.stringify(data));
     res.json({ success: true });
+    if (req.user) { 
     logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'SAVE', 'project', name, 'Project saved');
+    }
   });
 
 //   // User submits forgot password request
@@ -598,7 +644,7 @@ app.post("/api/auth/forgot-password", (req, res) => {
 
   if (user) {
     const id = uuidv4();
-    // ✅ Pass IST time explicitly
+    // Pass IST time explicitly
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istTime = new Date(now.getTime() + istOffset);
@@ -676,8 +722,32 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
     .run(req.params.id);
   
   const resetUser = db.prepare("SELECT * FROM users WHERE id = ?").get(request.user_id) as any;
-  logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
+  if (req.user) {
+    logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId || null, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
+  }
 
+  res.json({ success: true });
+});
+
+// Get disabled default equipment IDs for a tenant
+app.get("/api/tenant/:id/disabled-defaults", authenticate, requireTenantAccess, (req, res) => {
+  const rows = db.prepare("SELECT equipment_id FROM disabled_defaults WHERE tenant_id = ?").all(req.params.id);
+  res.json(rows.map((r: any) => r.equipment_id));
+});
+
+// Toggle a default equipment item
+app.post("/api/tenant/:id/disabled-defaults/:equipmentId", authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, (req, res) => {
+  const { disable } = req.body;
+  if (disable) {
+    db.prepare("INSERT OR IGNORE INTO disabled_defaults (tenant_id, equipment_id) VALUES (?, ?)")
+      .run(req.params.id, req.params.equipmentId);
+  } else {
+    db.prepare("DELETE FROM disabled_defaults WHERE tenant_id = ? AND equipment_id = ?")
+      .run(req.params.id, req.params.equipmentId);
+  }
+  if (req.user) {
+    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'UPDATE', 'equipment', req.params.equipmentId, disable ? 'Default equipment disabled' : 'Default equipment enabled');
+  }
   res.json({ success: true });
 });
 
