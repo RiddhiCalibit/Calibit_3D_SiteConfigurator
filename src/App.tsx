@@ -17,6 +17,7 @@ import { clsx } from 'clsx';
 import { AlertTriangle, Download, Trash2 } from 'lucide-react';
 import { ForgotPassword } from './components/ForgotPassword';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
+import { ContactAdmin } from './components/ContactAdmin';
 
 export default function App() {
   const {
@@ -49,6 +50,7 @@ export default function App() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showContactAdmin, setShowContactAdmin] = useState(false);
   const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
 
 const handleLogin = async (email: string, password: string) => {
@@ -68,6 +70,21 @@ const handleLogin = async (email: string, password: string) => {
     fetchProjects(data.tenant);
 
     if (data.tenant) {
+
+      // Fetch disabled defaults for tenant
+    const ddRes = await fetch(`/api/tenant/${data.tenant.id}/disabled-defaults`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${data.token}`
+    }
+  });
+  if (ddRes.ok) {
+    const disabledIds = await ddRes.json();
+    // Store in state — add this state at the top of App component
+    setDisabledDefaults(disabledIds);
+  }
+
+  // Fetch equipment for tenant
       const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`, {
         headers: {
           'Content-Type': 'application/json',
@@ -89,7 +106,7 @@ const handleLogin = async (email: string, password: string) => {
           imageUrl: eq.image_url || null,
           isActive: eq.is_active !== 0,
         }));
-        // ✅ Filter out inactive for sales reps
+        //  Filter out inactive for sales reps
 const filtered = data.user?.role === 'sales_rep' 
   ? mapped.filter((eq: any) => eq.isActive !== false)
   : mapped;
@@ -103,18 +120,6 @@ setCustomLibrary(filtered);
     }
   } else {
     throw new Error('Login failed');
-  }
-
-   const ddRes = await fetch(`/api/tenant/${data.tenant.id}/disabled-defaults`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${data.token}`
-    }
-  });
-  if (ddRes.ok) {
-    const disabledIds = await ddRes.json();
-    // Store in state — add this state at the top of App component
-    setDisabledDefaults(disabledIds);
   }
 
 };
@@ -295,10 +300,14 @@ setCustomLibrary(filtered);
   if (showForgotPassword) {
     return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
   }
+  if (showContactAdmin) {
+    return <ContactAdmin onBack={() => setShowContactAdmin(false)} />;
+  }
   return (
     <Login
       onLogin={handleLogin}
       onForgotPassword={() => setShowForgotPassword(true)}
+      onContactAdmin={() => setShowContactAdmin(true)}
     />
   );
 }
@@ -322,8 +331,7 @@ if (user.force_password_change) {
   }
 
   return (
-    // <div className="flex h-screen w-screen bg-brand-navy overflow-hidden select-none">
-    <div className="flex h-screen w-screen bg-brand-navy overflow-auto select-none">
+    <div className="flex h-screen w-screen bg-brand-navy select-none">
       <Sidebar 
         state={state}
         onSetStyle={setMapStyle}
@@ -349,9 +357,10 @@ if (user.force_password_change) {
            }}
         user={user}
         tenant={tenant}
+        disabledDefaults={disabledDefaults}
       />
 
-      <main className="flex-1 flex relative">
+      <main className="flex-1 flex relative h-screen overflow-hidden">
         <div className="h-full w-full relative">
           <MapPanel 
             state={state}
@@ -409,7 +418,7 @@ if (user.force_password_change) {
             </>
           }
         >
-          <div className="flex items-start gap-4">
+          <div className="flex h-screen items-start gap-4 overflow-auto">
             <div className="p-3 bg-amber-500/20 rounded-xl">
               <AlertTriangle className="w-6 h-6 text-amber-500" />
             </div>
@@ -424,14 +433,15 @@ if (user.force_password_change) {
 
         {/* Status Bar */}
         <div className="absolute bottom-0 left-0 right-0 h-6 bg-brand-navy/90 border-t border-white/10 flex items-center px-4 justify-between text-[10px] text-white/40 font-mono z-50">
-          <div className="flex gap-4">
+          {/* <div className="flex gap-4">
             <span>MODE: {state.pendingPlacement ? 'PLACEMENT' : 'IDLE'}</span>
             <span>OBJECTS: {state.objects.length}</span>
             {state.selectedId && <span>SELECTED: {state.objects.find(o => o.id === state.selectedId)?.type}</span>}
-          </div>
-          <div className="flex gap-4">
+          </div> */}
+          {/* <div className="flex gap-4"> */}
+            {/* <div className="flex h-screen overflow-hidden">
             <span>3D VIEW ENABLED</span>
-          </div>
+          </div> */}
         </div>
       </main>
     </div>

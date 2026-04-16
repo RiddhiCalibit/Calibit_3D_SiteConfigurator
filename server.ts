@@ -181,6 +181,12 @@ if (tenantCount.count === 0) {
   );
 }
 
+  // Migration: Update role for zee@admin.com to tenant_admin if exists
+  const zeeUser = db.prepare("SELECT * FROM users WHERE email = ?").get("zee@admin.com") as any;
+  if (zeeUser && zeeUser.role === 'sales_rep') {
+    db.prepare("UPDATE users SET role = 'tenant_admin' WHERE email = ?").run("zee@admin.com");
+  }
+
   // app.use(express.json());
 
   //  Allow up to 5MB for base64 images

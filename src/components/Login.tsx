@@ -5,9 +5,10 @@ import { motion } from 'motion/react';
 interface Props {
   onLogin: (email: string, password: string) => Promise<void>;
   onForgotPassword: () => void;
+  onContactAdmin: () => void;
 }
 
-export function Login({ onLogin, onForgotPassword }: Props) {
+export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -117,7 +118,7 @@ export function Login({ onLogin, onForgotPassword }: Props) {
 
         <div className="text-center">
           <p className="text-xs opacity-40">
-            Don't have an account? <span className="text-brand-teal cursor-pointer hover:underline">Contact your administrator</span>
+            Don't have an account? <span className="text-brand-teal cursor-pointer hover:underline" onClick={onContactAdmin}>Contact your administrator</span>
           </p>
         </div>
       </motion.div>

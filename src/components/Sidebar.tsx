@@ -59,6 +59,7 @@ interface SidebarProps {
   onLoadProject: (boundary: [number,number][], objects: any[]) => void;
   user: User | null;
   tenant: Tenant | null;
+  disabledDefaults: string[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -83,6 +84,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLoadProject,
   user,
   tenant,
+  disabledDefaults,
+
 }) => {
   const { theme, setTheme } = useTheme();
   const [modalMode, setModalMode] = React.useState<'none' | 'settings' | 'profile'>('none');
@@ -130,8 +133,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
   const selectedObject = state.objects.find(o => o.id === state.selectedId);
-  const fullLibrary = [...DEFAULT_LIBRARY, ...state.customLibrary] 
-   .filter(item => item.isActive !== false);
+  //const fullLibrary = [...DEFAULT_LIBRARY, ...state.customLibrary] 
+  //.filter(item => item.isActive !== false);
+  const fullLibrary = [
+  ...DEFAULT_LIBRARY.filter(item => !disabledDefaults.includes(item.id)),
+  ...state.customLibrary.filter(item => item.isActive !== false)
+];
+
   const selectedDef = selectedObject ? fullLibrary.find(d => d.id === selectedObject.type) : null;
 
   const handleManualMove = (dx: number, dz: number) => {
@@ -232,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     // <aside className="w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">
-    <aside className="w-[200px] lg:w-[280px] h-full bg-theme-bg ... shrink-0">
+    <aside className="w-[200px] lg:w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">
       {/* Header */}
       <div className="p-6 border-b border-theme-border">
         <div className="flex items-center gap-2 mb-1">
@@ -393,7 +401,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Equipment Library */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">Equipment Library</label>
+            <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">Equipment Library Active: {fullLibrary.length}</label>
             <label className="cursor-pointer group">
               <input type="file" accept=".glb" className="hidden" onChange={handleModelUpload} />
               <div className="flex items-center gap-1 text-[10px] text-brand-teal hover:text-brand-teal/80 transition-colors">
