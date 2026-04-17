@@ -1458,11 +1458,11 @@ const handleAddUser = async (e: React.FormEvent) => {
       {u.name.charAt(0)}
     </div>
     <div className="min-w-0 flex-1">
-      <h4 className="font-bold text-sm truncate">{u.name}</h4>
+      <h4 className="font-bold text-sm truncate">Name: {u.name}</h4>
       <div className="flex items-center gap-1 lg:gap-3 mt-1 flex-wrap">
-        <span className="text-[10px] opacity-40 truncate max-w-[120px] lg:max-w-none">{u.email}</span>
+        <span className="text-[10px] opacity-40 truncate max-w-[120px] lg:max-w-none">Email: {u.email}</span>
         <span className="text-[10px] opacity-40 hidden lg:inline">·</span>
-        <span className="text-[10px] opacity-40 hidden lg:inline">{u.phone || 'No phone'}</span>
+        <span className="text-[10px] opacity-40 hidden lg:inline">Phone: {u.phone || 'No phone'}</span>
       </div>
     </div>
   </div>

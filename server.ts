@@ -106,6 +106,16 @@ CREATE TABLE IF NOT EXISTS disabled_defaults (
   PRIMARY KEY (tenant_id, equipment_id)
 );
 
+CREATE TABLE IF NOT EXISTS platform_admin_otps (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  otp TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+
 `);
 
 // Migration: Add phone column to users if it doesn't exist
@@ -180,12 +190,6 @@ if (tenantCount.count === 0) {
     "John Sales"
   );
 }
-
-  // Migration: Update role for zee@admin.com to tenant_admin if exists
-  const zeeUser = db.prepare("SELECT * FROM users WHERE email = ?").get("zee@admin.com") as any;
-  if (zeeUser && zeeUser.role === 'sales_rep') {
-    db.prepare("UPDATE users SET role = 'tenant_admin' WHERE email = ?").run("zee@admin.com");
-  }
 
   // app.use(express.json());
 
@@ -390,6 +394,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
 
   // Allow if updating own profile OR if admin
   const isSelf = req.user.userId === req.params.id;
+  console.log('DEBUG:', req.user.userId, '===', req.params.id, '| isSelf:', isSelf);
   const isAdmin = req.user.role === 'tenant_admin' || req.user.role === 'platform_admin';
 
   // Add this debug line temporarily
@@ -521,7 +526,6 @@ app.patch("/api/tenant/:tenantId/equipment/:id/toggle", authenticate, requireTen
     }
 });
 
-
   // Platform Admin API only
   app.get("/api/admin/tenants",authenticate, requireRole('platform_admin'), (req, res) => {
     const tenants = db.prepare("SELECT * FROM tenants ORDER BY created_at DESC").all();
@@ -648,6 +652,11 @@ app.post("/api/auth/forgot-password", (req, res) => {
 
   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
 
+    if (!user) {
+    // Don't reveal if email exists
+    return res.json({ message: 'If this email exists, a request has been submitted.' });
+  }
+
   if (user) {
     const id = uuidv4();
     // Pass IST time explicitly
@@ -663,17 +672,141 @@ app.post("/api/auth/forgot-password", (req, res) => {
 
     logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email, 'Password reset requested');
   }
+  res.json({ message: 'If this email exists, a request has been submitted.' });
+
+  if (!user) {
+    // Don't reveal if email exists
+    return res.json({ message: 'If this email exists, a request has been submitted.' });
+  }
+
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(now.getTime() + istOffset);
+  const istString = istTime.toISOString().replace('T', ' ').substring(0, 19);
+
+   // ── Platform Admin: self-reset via OTP ──────────────────────────────────
+  if (user.role === 'platform_admin') {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000 + istOffset); // 10 min, stored as IST
+    const expiresAtStr = expiresAt.toISOString().replace('T', ' ').substring(0, 19);
+
+    // Invalidate any existing unused OTPs for this email
+    db.prepare(`UPDATE platform_admin_otps SET used = 1 WHERE email = ? AND used = 0`).run(email);
+
+    db.prepare(`
+      INSERT INTO platform_admin_otps (id, user_id, email, otp, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), user.id, email, otp, expiresAtStr, istString);
+
+    // In production this would send an email. For now, log to console.
+    console.log(`\n╔══════════════════════════════════════╗`);
+    console.log(`║  PLATFORM ADMIN PASSWORD RESET OTP   ║`);
+    console.log(`║  Email : ${email.padEnd(28)}║`);
+    console.log(`║  OTP   : ${otp.padEnd(28)}║`);
+    console.log(`║  Expires in 10 minutes               ║`);
+    console.log(`╚══════════════════════════════════════╝\n`);
+
+    logActivity(user.id, user.name, null, 'REQUEST', 'platform_admin_reset', user.email, 'OTP generated for self-reset');
+    return res.json({ requiresOtp: true });
+  }
+    // ── Tenant Admin: escalate to Platform Admin ─────────────────────────────
+  // ── Sales Rep: escalate to Tenant Admin (existing flow) ──────────────────
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
+    VALUES (?, ?, ?, 'pending', ?)
+  `).run(id, user.id, email, istString);
+
+  logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email,
+    user.role === 'tenant_admin' ? 'Tenant admin password reset requested — awaiting platform admin' : 'Password reset requested'
+  );
 
   res.json({ message: 'If this email exists, a request has been submitted.' });
 });
 
 // Admin fetches all pending reset requests
+
+// OTP verify + password reset for platform admin self-reset
+app.post("/api/auth/platform-reset-verify", async (req, res) => {
+  const { email, otp, new_password } = req.body;
+
+  if (!email || !otp || !new_password) {
+    return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+  }
+
+  const record = db.prepare(`
+    SELECT * FROM platform_admin_otps
+    WHERE email = ? AND otp = ? AND used = 0
+    ORDER BY created_at DESC LIMIT 1
+  `).get(email, otp) as any;
+
+  if (!record) {
+    return res.status(400).json({ error: 'Invalid OTP. Please check the code and try again.' });
+  }
+
+  // Compare IST stored expiry with current IST time
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const nowIst = new Date(now.getTime() + istOffset);
+  const expiresAt = new Date(record.expires_at.replace(' ', 'T'));
+
+  if (nowIst > expiresAt) {
+    return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
+  }
+
+  const pwError = validatePassword(new_password);
+  if (pwError) return res.status(400).json({ error: pwError });
+
+  const hashedPassword = await bcrypt.hash(new_password, 10);
+  db.prepare("UPDATE users SET password_hash = ?, force_password_change = 0 WHERE id = ?")
+    .run(hashedPassword, record.user_id);
+  db.prepare("UPDATE platform_admin_otps SET used = 1 WHERE id = ?").run(record.id);
+
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(record.user_id) as any;
+  logActivity(record.user_id, user?.name || 'Platform Admin', null, 'RESET', 'platform_admin_reset', email, 'Password self-reset via OTP');
+
+  res.json({ success: true });
+});
+
+// Tenant admin fetches pending sales_rep reset requests (their own tenant only)
+
 app.get("/api/admin/reset-requests", authenticate, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+
+    let requests;
+    if (!req.user) {
+  return res.status(401).json({ error: "Unauthorized" });
+}
+    if (req.user.role === 'tenant_admin') {
+    // Only show sales_rep resets for this tenant
+    requests = db.prepare(`
+      SELECT r.*, u.name as user_name, u.role as user_role
+      FROM password_reset_requests r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.status = 'pending' AND u.role = 'sales_rep' AND u.tenant_id = ?
+      ORDER BY r.created_at DESC
+    `).all(req.user.tenantId);
+  } else {
+    // Platform admin sees all (fallback — shouldn't be used directly)
+    requests = db.prepare(`
+      SELECT r.*, u.name as user_name, u.role as user_role
+      FROM password_reset_requests r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.status = 'pending'
+      ORDER BY r.created_at DESC
+    `).all();
+  }
+  res.json(requests);
+});
+
+// Platform admin fetches pending tenant_admin reset requests
+app.get("/api/admin/tenant-admin-resets", authenticate, requireRole('platform_admin'), (req, res) => {
+
   const requests = db.prepare(`
-    SELECT r.*, u.name as user_name 
+    SELECT r.*, u.name as user_name, u.role as user_role, t.name as tenant_name 
     FROM password_reset_requests r
     JOIN users u ON r.user_id = u.id
-    WHERE r.status = 'pending'
+    LEFT JOIN tenants t ON u.tenant_id = t.id
+    WHERE r.status = 'pending' AND u.role = 'tenant_admin'
     ORDER BY r.created_at DESC
   `).all();
   
@@ -700,6 +833,7 @@ app.get("/api/admin/logs", authenticate, requireRole('platform_admin'), (req, re
   const logs = db.prepare(`
     SELECT * FROM activity_logs 
     WHERE tenant_id IS NULL 
+    OR entity_type IN ('password_reset', 'platform_admin_reset')  
     ORDER BY created_at DESC 
     LIMIT ? OFFSET ?
   `).all(limit, offset);
@@ -729,9 +863,10 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
   
   const resetUser = db.prepare("SELECT * FROM users WHERE id = ?").get(request.user_id) as any;
   if (req.user) {
-    logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId || null, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
+  // logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId || null, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
+  const resolvedTenantId = resetUser?.tenant_id ?? req.user.tenantId ?? null;
+  logActivity(req.user.userId, req.user.userName || 'Admin', resolvedTenantId, 'RESOLVE', 'password_reset', resetUser?.name, `Temporary password set by ${req.user.role === 'platform_admin' ? 'Platform Admin' : 'Tenant Admin'}`);
   }
-
   res.json({ success: true });
 });
 

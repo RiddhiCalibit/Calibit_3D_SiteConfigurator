@@ -21,6 +21,7 @@ import {
   X,
   Clock,
   Trash2,
+  KeyRound,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -40,7 +41,7 @@ interface PlatformStats {
 
 export function PlatformAdminDashboard({ user, onLogout }: Props) {
   const { theme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'users' | 'settings' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tenants' | 'users' | 'settings' | 'logs'| 'admin-resets'>('overview');
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<PlatformStats>({ tenants: 0, users: 0, projects: 0 });
@@ -67,11 +68,44 @@ const fetchPlatformLogs = async () => {
   }
 };
 
+ // Admin reset requests (tenant_admin resets)
+  const [adminResetRequests, setAdminResetRequests] = useState<any[]>([]);
+  const [adminTempPasswords, setAdminTempPasswords] = useState<Record<string, string>>({});
+  const [adminResetCount, setAdminResetCount] = useState(0);
+
+  const fetchAdminResetRequests = async () => {
+    const res = await authFetch('/api/admin/tenant-admin-resets');
+    if (res.ok) {
+      const data = await res.json();
+      setAdminResetRequests(data);
+      setAdminResetCount(data.length);
+    }
+  };
+
+  const handleResolveAdminReset = async (requestId: string) => {
+    const tempPwd = adminTempPasswords[requestId];
+    if (!tempPwd || tempPwd.length < 8) {
+      return alert('Temporary password must be at least 8 characters.');
+    }
+    const res = await authFetch(`/api/admin/reset-requests/${requestId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ temp_password: tempPwd }),
+    });
+    if (res.ok) {
+      alert('Temporary password set. Share it securely with the tenant admin.');
+      fetchAdminResetRequests();
+    } else {
+      const data = await res.json();
+      alert(data.error || 'Failed to resolve request.');
+    }
+  };
+
   useEffect(() => {
     fetchTenants();
     fetchUsers();
     fetchStats();
     fetchPlatformLogs();
+    fetchAdminResetRequests();
   }, []);
 
   const fetchTenants = async () => {
@@ -185,8 +219,14 @@ const fetchPlatformLogs = async () => {
             icon={<Activity className="w-4 h-4" />}
             label="Activity Logs"
           />
-        </nav>
-
+          <NavButton
+            active={activeTab === 'admin-resets'}
+            onClick={() => setActiveTab('admin-resets')}
+            icon={<KeyRound className="w-4 h-4" />}
+            label="Admin Resets"
+            badge={adminResetCount > 0 ? adminResetCount : undefined}
+          />
+          </nav>
 
         <div className="p-4 border-t border-theme-border">
           <button 
@@ -209,6 +249,7 @@ const fetchPlatformLogs = async () => {
               {activeTab === 'users' && 'Global User Directory'}  
               {activeTab === 'settings' && 'Platform Settings'}
               {activeTab === 'logs' && 'Platform Activity Logs'}
+              {activeTab === 'admin-resets' && 'Tenant Admin Reset Requests'}
             </h2>
             <p className="text-sm opacity-40">Super Admin: {user.name}</p>
           </div>
@@ -250,7 +291,7 @@ const fetchPlatformLogs = async () => {
         {activeTab === 'logs' && (
   <div className="space-y-4">
     <div className="flex items-center gap-2 flex-wrap">
-      {['all', 'tenant', 'auth'].map(filter => (
+      {['all', 'tenant', 'auth', 'password_reset', 'platform_admin_reset'].map(filter => (
         <button
           key={filter}
           onClick={() => setPlatformLogFilter(filter)}
@@ -261,7 +302,10 @@ const fetchPlatformLogs = async () => {
               : "bg-white/5 border-theme-border opacity-60 hover:opacity-100"
           )}
         >
-          {filter === 'all' ? 'All Activity' : filter}
+          {filter === 'all' ? 'All Activity' 
+            : filter === 'password_reset' ? 'Admin Resets'
+            : filter === 'platform_admin_reset' ? 'Platform Resets'
+            : filter}
         </button>
       ))}
     </div>
@@ -280,11 +324,17 @@ const fetchPlatformLogs = async () => {
               log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
               log.action === 'DELETE' && "bg-red-500/20 text-red-400",
               log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
+              log.action === 'REQUEST' && "bg-amber-500/20 text-amber-400",
+              log.action === 'RESOLVE' && "bg-emerald-500/20 text-emerald-400",
+              log.action === 'RESET' && "bg-purple-500/20 text-purple-400",
             )}>
               {log.action === 'CREATE' && <Plus className="w-4 h-4" />}
               {log.action === 'UPDATE' && <Pencil className="w-4 h-4" />}
               {log.action === 'DELETE' && <Trash2 className="w-4 h-4" />}
               {log.action === 'LOGIN' && <ShieldCheck className="w-4 h-4" />}
+              {log.action === 'REQUEST' && <KeyRound className="w-4 h-4" />}
+              {log.action === 'RESOLVE' && <ShieldCheck className="w-4 h-4" />}
+              {log.action === 'RESET' && <KeyRound className="w-4 h-4" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -295,11 +345,15 @@ const fetchPlatformLogs = async () => {
                     log.action === 'UPDATE' && "bg-blue-500/20 text-blue-400",
                     log.action === 'DELETE' && "bg-red-500/20 text-red-400",
                     log.action === 'LOGIN' && "bg-brand-teal/20 text-brand-teal",
+                    log.action === 'REQUEST' && "bg-amber-500/20 text-amber-400",
+                    log.action === 'RESOLVE' && "bg-emerald-500/20 text-emerald-400",
+                    log.action === 'RESET' && "bg-purple-500/20 text-purple-400",
                   )}>
                     {log.action}
                   </span>
                   <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/5 text-white/40">
-                    {log.entity_type}
+                    {/* {log.entity_type} */}
+                    {log.entity_type.replace(/_/g, ' ')}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 text-[10px] opacity-30 shrink-0">
@@ -320,12 +374,85 @@ const fetchPlatformLogs = async () => {
     </div>
   </div>
 )}
+    {activeTab === 'admin-resets' && (
+  <div className="space-y-4">
+    {/* Info banner */}
+    <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-3">
+      <KeyRound className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+      <div>
+        <p className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1">Tenant Admin Password Resets</p>
+        <p className="text-xs opacity-60 leading-relaxed">
+          When a Tenant Admin forgets their password, the request is escalated here. Set a temporary password and share it securely — they will be forced to change it on next login.
+        </p>
+      </div>
+    </div>
+
+    {adminResetRequests.length === 0 ? (
+      <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
+        <KeyRound className="w-12 h-12 opacity-10 mx-auto mb-4" />
+        <p className="text-sm opacity-40 italic">No pending tenant admin reset requests.</p>
+        <p className="text-xs opacity-20 mt-1">When a tenant admin requests a password reset, it will appear here.</p>
+      </div>
+    ) : (
+      adminResetRequests.map(req => (
+        <div key={req.id} className="p-6 bg-theme-card border border-theme-border rounded-2xl space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <p className="font-bold text-sm">{req.user_name}</p>
+                <p className="text-xs opacity-40">{req.email}</p>
+                {req.tenant_name && (
+                  <p className="text-[10px] opacity-30 mt-0.5 flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    {req.tenant_name}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-amber-500/20 text-amber-400 rounded">
+                Pending
+              </span>
+              <p className="text-[10px] opacity-30 mt-1.5 flex items-center gap-1 justify-end">
+                <Clock className="w-3 h-3" />
+                {new Date(req.created_at).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <input
+              type="text"
+              placeholder="Set temporary password (min. 8 characters)"
+              value={adminTempPasswords[req.id] || ''}
+              onChange={e => setAdminTempPasswords({ ...adminTempPasswords, [req.id]: e.target.value })}
+              className="flex-1 bg-white/5 border border-theme-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
+            />
+            <button
+              onClick={() => handleResolveAdminReset(req.id)}
+              className="px-5 py-2.5 bg-brand-teal text-white text-xs font-bold rounded-xl hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20 whitespace-nowrap"
+            >
+              Set & Resolve
+            </button>
+          </div>
+
+          <p className="text-[10px] opacity-30 leading-relaxed">
+            The tenant admin will be required to change this temporary password on their next login.
+          </p>
+        </div>
+      ))
+    )}
+  </div>
+)}
       </main>
     </div>
   );
 }
 
-function NavButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+function NavButton({ active, onClick, icon, label, badge }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, badge?: number  }) {
   return (
     <button 
       onClick={onClick}
@@ -337,7 +464,16 @@ function NavButton({ active, onClick, icon, label }: { active: boolean, onClick:
       <div className={clsx(active ? "text-white" : "opacity-40 group-hover:opacity-100")}>
         {icon}
       </div>
-      {label}
+  
+      <span className="flex-1 text-left">{label}</span>
+      {badge !== undefined && (
+        <span className={clsx(
+          "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
+          active ? "bg-white/20 text-white" : "bg-amber-500/20 text-amber-400"
+        )}>
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
