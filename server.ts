@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS platform_admin_otps (
   used INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id)
+);
 
 `);
 
@@ -141,6 +142,25 @@ const equipmentCols = db.prepare("PRAGMA table_info(equipment)").all() as any[];
 const hasIsActive = equipmentCols.some((col: any) => col.name === 'is_active');
 if (!hasIsActive) {
   db.exec("ALTER TABLE equipment ADD COLUMN is_active INTEGER DEFAULT 1");
+}
+// Migration: Create platform_admin_otps table if it doesn't exist
+const otpTableExists = db.prepare(
+  "SELECT name FROM sqlite_master WHERE type='table' AND name='platform_admin_otps'"
+).get();
+if (!otpTableExists) {
+  db.exec(`
+    CREATE TABLE platform_admin_otps (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      otp TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+  console.log(' Created platform_admin_otps table');
 }
 
 async function startServer() {
@@ -652,28 +672,6 @@ app.post("/api/auth/forgot-password", (req, res) => {
 
   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
 
-    if (!user) {
-    // Don't reveal if email exists
-    return res.json({ message: 'If this email exists, a request has been submitted.' });
-  }
-
-  if (user) {
-    const id = uuidv4();
-    // Pass IST time explicitly
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istTime = new Date(now.getTime() + istOffset);
-    const istString = istTime.toISOString().replace('T', ' ').substring(0, 19);
-
-    db.prepare(`
-      INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
-      VALUES (?, ?, ?, 'pending', ?)
-    `).run(id, user.id, email, istString);
-
-    logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email, 'Password reset requested');
-  }
-  res.json({ message: 'If this email exists, a request has been submitted.' });
-
   if (!user) {
     // Don't reveal if email exists
     return res.json({ message: 'If this email exists, a request has been submitted.' });
@@ -684,33 +682,39 @@ app.post("/api/auth/forgot-password", (req, res) => {
   const istTime = new Date(now.getTime() + istOffset);
   const istString = istTime.toISOString().replace('T', ' ').substring(0, 19);
 
-   // ── Platform Admin: self-reset via OTP ──────────────────────────────────
+  // ── Platform Admin: self-reset via OTP ──────────────────────────────────
   if (user.role === 'platform_admin') {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000 + istOffset); // 10 min, stored as IST
-    const expiresAtStr = expiresAt.toISOString().replace('T', ' ').substring(0, 19);
+    try {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(now.getTime() + 10 * 60 * 1000 + istOffset); // 10 min, stored as IST
+      //const expiresAtStr = expiresAt.toISOString().replace('T', ' ').substring(0, 19);
+      const expiresAtStr = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    // Invalidate any existing unused OTPs for this email
-    db.prepare(`UPDATE platform_admin_otps SET used = 1 WHERE email = ? AND used = 0`).run(email);
+      // Invalidate any existing unused OTPs for this email
+      db.prepare(`UPDATE platform_admin_otps SET used = 1 WHERE email = ? AND used = 0`).run(email);
 
-    db.prepare(`
-      INSERT INTO platform_admin_otps (id, user_id, email, otp, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(uuidv4(), user.id, email, otp, expiresAtStr, istString);
+      db.prepare(`
+        INSERT INTO platform_admin_otps (id, user_id, email, otp, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(uuidv4(), user.id, email, otp, expiresAtStr, istString);
 
-    // In production this would send an email. For now, log to console.
-    console.log(`\n╔══════════════════════════════════════╗`);
-    console.log(`║  PLATFORM ADMIN PASSWORD RESET OTP   ║`);
-    console.log(`║  Email : ${email.padEnd(28)}║`);
-    console.log(`║  OTP   : ${otp.padEnd(28)}║`);
-    console.log(`║  Expires in 10 minutes               ║`);
-    console.log(`╚══════════════════════════════════════╝\n`);
+      // In production this would send an email. For now, log to console.
+      console.log(`\n╔══════════════════════════════════════╗`);
+      console.log(`║  PLATFORM ADMIN PASSWORD RESET OTP   ║`);
+      console.log(`║  Email : ${email.padEnd(28)}║`);
+      console.log(`║  OTP   : ${otp.padEnd(28)}║`);
+      console.log(`║  Expires in 10 minutes               ║`);
+      console.log(`╚══════════════════════════════════════╝\n`);
 
-    logActivity(user.id, user.name, null, 'REQUEST', 'platform_admin_reset', user.email, 'OTP generated for self-reset');
-    return res.json({ requiresOtp: true });
+      logActivity(user.id, user.name, null, 'REQUEST', 'platform_admin_reset', user.email, 'OTP generated for self-reset');
+      return res.json({ requiresOtp: true, otp });
+    } catch (err) {
+      console.error('❌ OTP generation error:', err);
+      return res.status(500).json({ error: 'Failed to generate OTP. Please try again.' });
+    }
   }
-    // ── Tenant Admin: escalate to Platform Admin ─────────────────────────────
-  // ── Sales Rep: escalate to Tenant Admin (existing flow) ──────────────────
+
+  // ── Tenant Admin and Sales Rep: escalate to higher admin ──────────────────
   const id = uuidv4();
   db.prepare(`
     INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
@@ -745,12 +749,13 @@ app.post("/api/auth/platform-reset-verify", async (req, res) => {
   }
 
   // Compare IST stored expiry with current IST time
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const nowIst = new Date(now.getTime() + istOffset);
-  const expiresAt = new Date(record.expires_at.replace(' ', 'T'));
+  // const now = new Date();
+  // const istOffset = 5.5 * 60 * 60 * 1000;
+  // const nowIst = new Date(now.getTime() + istOffset);
+  // const expiresAt = new Date(record.expires_at.replace(' ', 'T'));
 
-  if (nowIst > expiresAt) {
+  // if (nowIst > expiresAt) {
+    if (new Date() > new Date(record.expires_at)) {
     return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
   }
 
@@ -865,7 +870,14 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
   if (req.user) {
   // logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId || null, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
   const resolvedTenantId = resetUser?.tenant_id ?? req.user.tenantId ?? null;
-  logActivity(req.user.userId, req.user.userName || 'Admin', resolvedTenantId, 'RESOLVE', 'password_reset', resetUser?.name, `Temporary password set by ${req.user.role === 'platform_admin' ? 'Platform Admin' : 'Tenant Admin'}`);
+  logActivity(
+    req.user.userId,
+    req.user.userName || 'Admin', 
+    null, 
+    'RESOLVE', 
+    'password_reset', 
+    resetUser?.name, 
+    `Temporary password set by ${req.user.role === 'platform_admin' ? 'Platform Admin' : 'Tenant Admin'}`);
   }
   res.json({ success: true });
 });
