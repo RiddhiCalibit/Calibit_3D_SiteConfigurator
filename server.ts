@@ -7,7 +7,8 @@ declare global {
     interface Request {
       user?: {
         userId: string;
-        role: 'platform_admin' | 'tenant_admin' | 'sales_rep';
+        id: string;
+        role: 'platform_admin' | 'tenant_admin' | 'sales_rep' | string;
         tenantId?: string;
         userName: string;
       };
@@ -502,7 +503,7 @@ app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (r
 
     db.prepare(`
       INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, is_active !== false ? 1 : 0);
     if (req.user) {
       logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'CREATE', 'equipment', name, `Category: ${category}`);
@@ -714,16 +715,27 @@ app.post("/api/auth/forgot-password", (req, res) => {
     }
   }
 
-  // ── Tenant Admin and Sales Rep: escalate to higher admin ──────────────────
+  // ── Tenant Admin: escalate to Platform admin ──────────────────
+  // __ Sales rep: escalate to tenant admin ───────────────
   const id = uuidv4();
   db.prepare(`
     INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
     VALUES (?, ?, ?, 'pending', ?)
   `).run(id, user.id, email, istString);
 
-  logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email,
-    user.role === 'tenant_admin' ? 'Tenant admin password reset requested — awaiting platform admin' : 'Password reset requested'
-  );
+  // logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email,
+  //   user.role === 'tenant_admin' ? 'Tenant admin password reset requested — awaiting platform admin' : 'Password reset requested'
+  // );
+
+    if (user.role === 'tenant_admin') {
+    // Tenant admin reset → platform-level log (tenant_id null) so ONLY platform admin sees it
+    logActivity(user.id, user.name, null, 'REQUEST', 'tenant_admin_reset', user.email,
+      'Tenant admin password reset requested — awaiting platform admin');
+  } else {
+    // Sales rep reset → tenant-level log so ONLY tenant admin sees it
+    logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email,
+      'Password reset requested');
+  }
 
   res.json({ message: 'If this email exists, a request has been submitted.' });
 });
@@ -833,12 +845,12 @@ app.get("/api/tenant/:id/logs", authenticate, requireRole('tenant_admin', 'platf
 
 // Platform admin logs
 app.get("/api/admin/logs", authenticate, requireRole('platform_admin'), (req, res) => {
-  const limit = Number(req.query.limit) || 50;
+  const limit = Number(req.query.limit) || 100;
   const offset = Number(req.query.offset) || 0;
+  // Platform admins see all platform-level actions (tenant_id IS NULL)
   const logs = db.prepare(`
     SELECT * FROM activity_logs 
     WHERE tenant_id IS NULL 
-    OR entity_type IN ('password_reset', 'platform_admin_reset')  
     ORDER BY created_at DESC 
     LIMIT ? OFFSET ?
   `).all(limit, offset);
@@ -868,16 +880,15 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
   
   const resetUser = db.prepare("SELECT * FROM users WHERE id = ?").get(request.user_id) as any;
   if (req.user) {
-  // logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId || null, 'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set');
-  const resolvedTenantId = resetUser?.tenant_id ?? req.user.tenantId ?? null;
-  logActivity(
-    req.user.userId,
-    req.user.userName || 'Admin', 
-    null, 
-    'RESOLVE', 
-    'password_reset', 
-    resetUser?.name, 
-    `Temporary password set by ${req.user.role === 'platform_admin' ? 'Platform Admin' : 'Tenant Admin'}`);
+    // Log to tenant admin's activity feed (not platform admin)
+    logActivity(
+      req.user.userId,
+      req.user.userName || 'Admin', 
+      resetUser?.tenant_id || req.user.tenantId || null, 
+      'RESOLVE', 
+      'password_reset', 
+      resetUser?.name, 
+      'Temporary password set');
   }
   res.json({ success: true });
 });
@@ -901,6 +912,39 @@ app.post("/api/tenant/:id/disabled-defaults/:equipmentId", authenticate, require
   if (req.user) {
     logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'UPDATE', 'equipment', req.params.equipmentId, disable ? 'Default equipment disabled' : 'Default equipment enabled');
   }
+
+  if (!req.user) {
+  return res.status(401).json({ error: "Unauthorized" });
+}
+  const resetUser = db.prepare(`
+  SELECT * FROM users WHERE email = ?`).get(req.body.email) as any;
+  if (!resetUser) {
+  return res.status(404).json({ error: "User not found" });
+}
+// 🔒 Role check
+if (req.user.role === 'tenant_admin' && resetUser.role !== 'sales_rep') {
+  return res.status(403).json({ error: "Tenant admin can only reset sales users" });
+}
+
+if (req.user.role === 'platform_admin' && resetUser.role !== 'tenant_admin') {
+  return res.status(403).json({ error: "Platform admin can only reset tenant admins" });
+}
+
+   if (resetUser.role === 'tenant_admin') {
+    // Platform admin resolved a tenant admin reset → platform-level log only
+    // tenant_id = null and entity_type = 'tenant_admin_reset' so it appears in
+    // platform admin logs but NOT in the tenant admin's own activity feed
+    logActivity(req.user.userId, req.user.userName || 'Platform Admin', null,
+      'RESOLVE', 'tenant_admin_reset', resetUser.name,
+      'Temporary password set by Platform Admin');
+  } else {
+    // Tenant admin resolved a sales rep reset → tenant-level log
+    // tenant_id = salesRep's tenant so it appears ONLY in that tenant admin's feed
+    logActivity(req.user.userId, req.user.userName || 'Admin', resetUser.tenant_id,
+      'RESOLVE', 'password_reset', resetUser.name,
+      'Temporary password set by Tenant Admin');
+  }
+
   res.json({ success: true });
 });
 
