@@ -26,6 +26,7 @@ import fs from "fs";
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { v4 as uuidv4 } from 'uuid';
+import { DEFAULT_LIBRARY } from './src/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -472,26 +473,67 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-  // equipment stats route for overview counts:
-app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (req, res) => {
-  // custom equipments count from the db
-  const customTotal = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ?").get(req.params.id) as any;
-  const customActive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 1").get(req.params.id) as any;
-  const customInactive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 0").get(req.params.id) as any;
-  // default equipments count from the db
-  const defaultTotal = 12; // DEFAULT_LIBRARY has 12 items
-  const disabledDefaultsCount = db.prepare(
-    "SELECT count(*) as count FROM disabled_defaults WHERE tenant_id = ?"
-  ).get(req.params.id) as any;
+//   // equipment stats route for overview counts:
+// app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (req, res) => {
+//   // custom equipments count from the db
+//   const customTotal = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ?").get(req.params.id) as any;
+//   const customActive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 1").get(req.params.id) as any;
+//   const customInactive = db.prepare("SELECT count(*) as count FROM equipment WHERE tenant_id = ? AND is_active = 0").get(req.params.id) as any;
+//   // default equipments count from the db
+//   const defaultTotal = 12; // DEFAULT_LIBRARY has 12 items
+//   const disabledDefaultsCount = db.prepare(
+//     "SELECT count(*) as count FROM disabled_defaults WHERE tenant_id = ?"
+//   ).get(req.params.id) as any;
   
-  const defaultActive = defaultTotal - (disabledDefaultsCount?.count || 0);
-  const defaultInactive = disabledDefaultsCount?.count || 0;
+//   const defaultActive = defaultTotal - (disabledDefaultsCount?.count || 0);
+//   const defaultInactive = disabledDefaultsCount?.count || 0;
 
-  res.json({ 
-    total: customTotal.count + defaultTotal,
-    active: customActive.count + defaultActive, 
-    inactive: customInactive.count + defaultInactive, 
-  });
+//   res.json({ 
+//     total: customTotal.count + defaultTotal,
+//     active: customActive.count + defaultActive, 
+//     inactive: customInactive.count + defaultInactive, 
+//   });
+// });
+
+app.get('/api/tenant/:tenantId/equipment/stats', (req, res) => {
+  const { tenantId } = req.params;
+
+  // 1. Custom equipment stats
+  const custom = db.prepare(`
+    SELECT 
+      COUNT(*) as total,
+      SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active,
+      SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) as inactive
+    FROM equipment
+    WHERE tenant_id = ?
+  `).get(tenantId)as {
+  total: number;
+  active: number;
+  inactive: number;
+};
+
+  // 2. Disabled defaults
+  const disabled = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM tenant_disabled_defaults
+    WHERE tenant_id = ?
+  `).get(tenantId)as { count: number };
+
+  const DEFAULT_COUNT = DEFAULT_LIBRARY.length;
+
+  const activeDefaults = DEFAULT_COUNT - disabled.count;
+  const inactiveDefaults = disabled.count;
+
+  const total =
+    custom.total + DEFAULT_COUNT;
+
+  const active =
+    custom.active + activeDefaults;
+
+  const inactive =
+    custom.inactive + inactiveDefaults;
+
+  res.json({ total, active, inactive });
 });
 
   app.get("/api/tenant/:id/equipment",authenticate, requireTenantAccess, (req, res) => {
