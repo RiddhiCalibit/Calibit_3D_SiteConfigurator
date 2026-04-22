@@ -58,10 +58,12 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
 
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [tempPasswords, setTempPasswords] = useState<Record<string, string>>({});
+  const [ResetCount, setResetCount] = useState(0);
 
   const [logs, setLogs] = useState<any[]>([]);
   const [logFilter, setLogFilter] = useState('all');
-  const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
+  //const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
+  const [disabledDefaults, setDisabledDefaults] = useState<Set<string>>(new Set());
 
   const fetchLogs = async () => {
   const res = await authFetch(`/api/tenant/${tenant.id}/logs?limit=100`);
@@ -76,6 +78,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   if (res.ok) {
     const data = await res.json();
     setResetRequests(data);
+    setResetCount(data.length);
   }
 };
 
@@ -120,26 +123,39 @@ const fetchEquipmentStats = async () => {
   }
 };
 
+  const fetchDisabledDefaults = async () => {
+    const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults`);
+    if (res.ok) {
+      const ids: string[] = await res.json();
+      setDisabledDefaults(new Set(ids));
+    }
+  };
+
   useEffect(() => {
     fetchEquipment();
     fetchEquipmentStats();
     fetchDisabledDefaults();
-    fetchResetRequests();
     fetchSalesRepCount();
     fetchLogs();
+    fetchResetRequests();
+      const interval = setInterval(() => {
+    fetchResetRequests();
+  }, 5000);
+
+  return () => clearInterval(interval);
   }, [tenant.id]);
 
-  // Toggle handler for active/inactive status
-  const handleToggleDefault = async (equipmentId: string, currentlyDisabled: boolean) => {
-  const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults/${equipmentId}`, {
-    method: 'POST',
-    body: JSON.stringify({ disable: !currentlyDisabled })
-  });
-  if (res.ok) {
-    fetchDisabledDefaults();
-    fetchEquipmentStats();
-  }
-}; 
+//   // Toggle handler for active/inactive status
+//   const handleToggleDefault = async (equipmentId: string, currentlyDisabled: boolean) => {
+//   const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults/${equipmentId}`, {
+//     method: 'POST',
+//     body: JSON.stringify({ disable: !currentlyDisabled })
+//   });
+//   if (res.ok) {
+//     fetchDisabledDefaults();
+//     fetchEquipmentStats();
+//   }
+// }; 
 
   // Add resolve handler
   const handleResolveReset = async (requestId: string) => {
@@ -219,23 +235,62 @@ const fetchEquipmentStats = async () => {
       body: JSON.stringify({ is_active: currentlyActive ? 0 : 1 })
     });
 
-    if (res.ok) {
-      fetchEquipment();
-      fetchEquipmentStats();
+  //   if (res.ok) {
+  //     // Optimistically update the UI immediately
+  //     setEquipment(equipment.map(eq => 
+  //       eq.id === id ? { ...eq, isActive: !currentlyActive } : eq
+  //     ));
+  //     // Then fetch fresh data from server
+  //     await fetchEquipment();
+  //     await fetchEquipmentStats();
+  //   }
+  // };
+
+  if (res.ok) {
+      fetchEquipmentStats(); // just refresh counts, equipment list is already updated
+    } else {
+      // Revert on failure
+      setEquipment(prev => prev.map(eq => eq.id === id ? { ...eq, isActive: currentlyActive } : eq));
     }
   };
 
-  const fetchDisabledDefaults = async () => {
-  const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults`);
-  if (res.ok) {
-    const data = await res.json();
-    setDisabledDefaults(data);
-  }
-};
+
+//   const fetchDisabledDefaults = async () => {
+//   const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults`);
+//   if (res.ok) {
+//     const data = await res.json();
+//     setDisabledDefaults(data);
+//   }
+// };
+
+  // Toggle a DEFAULT_LIBRARY item on/off for this tenant
+  const handleToggleDefault = async (equipmentId: string) => {
+    const isCurrentlyDisabled = disabledDefaults.has(equipmentId);
+    // Optimistic update
+    setDisabledDefaults(prev => {
+      const next = new Set(prev);
+      isCurrentlyDisabled ? next.delete(equipmentId) : next.add(equipmentId);
+      return next;
+    });
+
+    const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults/${equipmentId}`, {
+      method: 'POST',
+    });
+
+    if (!res.ok) {
+      // Revert on failure
+      setDisabledDefaults(prev => {
+        const next = new Set(prev);
+        isCurrentlyDisabled ? next.add(equipmentId) : next.delete(equipmentId);
+        return next;
+      });
+    }
+  };
 
   return (
     <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-auto transition-colors duration-300">
       {/* Sidebar */}
+      {/* <aside className="w-64 border-r border-theme-border flex flex-col"> */}
       <aside className="w-48 lg:w-64 shrink-0 border-r border-theme-border flex flex-col overflow-y-auto">
         <div className="p-6 border-b border-theme-border">
           <div className="flex items-center justify-between mb-4">
@@ -267,19 +322,18 @@ const fetchEquipmentStats = async () => {
             label="Overview"
           />
           <NavButton
-  active={activeTab === 'resets'}
-  onClick={() => setActiveTab('resets')}
-  icon={<KeyRound className="w-4 h-4" />}
-  label="Password Resets"
-/>
-
-            <NavButton
-  active={activeTab === 'logs'}
-  onClick={() => setActiveTab('logs')}
-  icon={<Activity className="w-4 h-4" />}
-  label="Activity Logs"
-/>
-
+            active={activeTab === 'resets'}
+            onClick={() => setActiveTab('resets')}
+            icon={<KeyRound className="w-4 h-4" />}
+            label="Password Resets"
+            badge={ResetCount > 0 ? ResetCount : undefined}
+          />
+          <NavButton
+            active={activeTab === 'logs'}
+            onClick={() => setActiveTab('logs')}
+            icon={<Activity className="w-4 h-4" />}
+            label="Activity Logs"
+          />
           <NavButton 
             active={activeTab === 'equipment'} 
             onClick={() => setActiveTab('equipment')}
@@ -577,7 +631,7 @@ const fetchEquipmentStats = async () => {
   );
 }
 
-function NavButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+function NavButton({ active, onClick, icon, label, badge }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, badge?: number }) {
   return (
     <button 
       onClick={onClick}
@@ -590,6 +644,15 @@ function NavButton({ active, onClick, icon, label }: { active: boolean, onClick:
         {icon}
       </div>
       {label}
+      
+              {badge !== undefined && (
+                <span className={clsx(
+                  "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
+                  active ? "bg-white/20 text-white" : "bg-amber-500/20 text-amber-400"
+                )}>
+                  {badge}
+                </span>
+              )}
     </button>
   );
 }
@@ -658,10 +721,16 @@ function EquipmentTab({
   onUpdate: (e: React.FormEvent) => void,
   onDelete: (id: string) => void,
   onToggleActive: (id: string, currentlyActive: boolean) => void,
-  disabledDefaults: string[],
-  onToggleDefault: (id: string, currentlyDisabled: boolean) => void
+  //disabledDefaults: string[],
+  //onToggleDefault: (id: string, currentlyDisabled: boolean) => void
+  disabledDefaults: Set<string>,
+  onToggleDefault: (id: string) => void;
 }) {
   const filteredEquipment = equipment.filter(item => 
+    item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const filteredDefaults = DEFAULT_LIBRARY.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -669,51 +738,6 @@ function EquipmentTab({
 return (
   
   <div className="space-y-6">
-
-  {/* Default Equipment Section */}
-<div className="space-y-3">
-  <div className="flex items-center justify-between">
-    <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
-      Default Equipment ({DEFAULT_LIBRARY.filter(d => !disabledDefaults.includes(d.id)).length} active)
-    </label>
-  </div>
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-    {DEFAULT_LIBRARY.map(item => {
-      const isDisabled = disabledDefaults.includes(item.id);
-      return (
-        <div key={item.id} className={clsx(
-          "flex items-center justify-between p-3 bg-theme-card border rounded-xl transition-all",
-          isDisabled ? "border-red-500/20 opacity-50" : "border-theme-border"
-        )}>
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg shrink-0" style={{ backgroundColor: item.color }} />
-            <div className="min-w-0">
-              <p className="text-xs font-bold truncate">{item.name}</p>
-              <p className="text-[9px] opacity-40 uppercase">{item.category}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => onToggleDefault(item.id, isDisabled)}
-            className={clsx(
-              "w-10 h-5 rounded-full transition-colors relative shrink-0 ml-2",
-              !isDisabled ? "bg-emerald-500" : "bg-white/20"
-            )}
-          >
-            <div className={clsx(
-              "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-              !isDisabled ? "left-6" : "left-1"
-            )} />
-          </button>
-        </div>
-      );
-    })}
-  </div>
-  <div className="border-t border-theme-border pt-4">
-    <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
-      Custom Equipment ({filteredEquipment.filter(e => e.isActive !== false).length} active)
-    </label>
-  </div>
-</div>
 
     {/* Search Bar */}
       <div className="relative">
@@ -781,7 +805,8 @@ return (
       >
         {(isAdding ? newEquipment.imageUrl : editingItem?.imageUrl) ? (
           <img
-            src={isAdding ? newEquipment.imageUrl : editingItem?.imageUrl}
+            //src={isAdding ? newEquipment.imageUrl ?? '' : editingItem?.imageUrl ?? ''}
+            src={isAdding ? newEquipment.imageUrl : editingItem?.imageUrl ?? ''}
             alt="Equipment"
             className="w-full h-full object-cover"
           />
@@ -1147,8 +1172,86 @@ return (
     </div>
   )}
 </div>
+
+      <div className="space-y-4 pt-2">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-theme-border" />
+          <span className="text-[10px] font-bold uppercase tracking-widest opacity-30">Default Library</span>
+          <div className="flex-1 h-px bg-theme-border" />
+        </div>
+        <p className="text-[10px] opacity-30 text-center">
+          Toggle visibility of built-in equipment for your sales reps. Disabled items won't appear in the configurator.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
+          {filteredDefaults.map(item => {
+            const isDisabled = disabledDefaults.has(item.id);
+            return (
+              <div
+                key={item.id}
+                className={clsx(
+                  "bg-theme-card border rounded-2xl overflow-hidden group transition-all relative",
+                  isDisabled ? "border-red-500/20 opacity-60" : "border-theme-border hover:border-brand-teal/50"
+                )}
+              >
+                {/* Built-in badge */}
+                <div className="absolute top-3 left-3 z-10 text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
+                  Built-in
+                </div>
+
+                {/* Status badge */}
+                <div
+                  className={clsx(
+                    "absolute top-3 right-3 z-10 text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
+                    isDisabled ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400"
+                  )}
+                >
+                  {isDisabled ? "Hidden" : "Visible"}
+                </div>
+
+                {/* Visual block */}
+                <div
+                  className="aspect-square flex items-center justify-center relative overflow-hidden"
+                  style={{ backgroundColor: item.color + '22' }}
+                >
+                  <div
+                    className="w-12 h-12 rounded-xl"
+                    style={{ backgroundColor: item.color, opacity: isDisabled ? 0.3 : 0.8 }}
+                  />
+
+                  {/* Hover overlay — toggle only */}
+                  <div className="absolute inset-0 bg-theme-bg/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onToggleDefault(item.id)}
+                      className={clsx(
+                        "p-3 rounded-xl transition-all",
+                        isDisabled
+                          ? "bg-white/10 hover:bg-emerald-500 hover:text-white"
+                          : "bg-white/10 hover:bg-red-500 hover:text-white"
+                      )}
+                      title={isDisabled ? "Show in configurator" : "Hide from configurator"}
+                    >
+                      {isDisabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="p-4">
+                  <h4 className="text-sm font-bold truncate">{item.name}</h4>
+                  <p className="text-[10px] opacity-40 uppercase tracking-widest mt-0.5">{item.category}</p>
+                  <p className="text-[10px] opacity-30 font-mono mt-1">
+                    {item.width}x{item.depth}x{item.height}m
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
+    </div>
   );
+  
 }
 
 function UsersTab({ 

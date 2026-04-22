@@ -7,8 +7,7 @@ declare global {
     interface Request {
       user?: {
         userId: string;
-        id: string;
-        role: 'platform_admin' | 'tenant_admin' | 'sales_rep' | string;
+        role: 'platform_admin' | 'tenant_admin' | 'sales_rep';
         tenantId?: string;
         userName: string;
       };
@@ -101,10 +100,11 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS disabled_defaults (
+CREATE TABLE IF NOT EXISTS tenant_disabled_defaults (
   tenant_id TEXT NOT NULL,
   equipment_id TEXT NOT NULL,
-  PRIMARY KEY (tenant_id, equipment_id)
+  PRIMARY KEY (tenant_id, equipment_id),
+  FOREIGN KEY(tenant_id) REFERENCES tenants(id)
 );
 
 CREATE TABLE IF NOT EXISTS platform_admin_otps (
@@ -119,6 +119,20 @@ CREATE TABLE IF NOT EXISTS platform_admin_otps (
 );
 
 `);
+
+// // Migration: tenant_disabled_defaults — tracks which DEFAULT_LIBRARY items a tenant has turned off
+// const disabledDefaultsExists = db.prepare(
+//   "SELECT name FROM sqlite_master WHERE type='table' AND name='tenant_disabled_defaults'"
+// ).get();
+// if (!disabledDefaultsExists) {
+//   db.exec(`CREATE TABLE tenant_disabled_defaults (
+//     tenant_id TEXT NOT NULL,
+//     equipment_id TEXT NOT NULL,
+//     PRIMARY KEY (tenant_id, equipment_id),
+//     FOREIGN KEY(tenant_id) REFERENCES tenants(id)
+//   )`);
+//   console.log(' Created tenant_disabled_defaults table');
+//   }
 
 // Migration: Add phone column to users if it doesn't exist
 const tableInfo = db.prepare("PRAGMA table_info(users)").all() as any[];
@@ -435,6 +449,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
   } else {
     db.prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
       .run(name, phone, req.params.id);
+
     if (req.user) {
       logActivity(req.user.userId, req.user.userName || 'User', req.user.tenantId || null, 'UPDATE', 'profile', name, 'Profile updated');
     }
@@ -503,7 +518,7 @@ app.get("/api/tenant/:id/equipment/stats", authenticate, requireTenantAccess, (r
 
     db.prepare(`
       INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled ? 1 : 0, image_url || null, is_active !== false ? 1 : 0);
     if (req.user) {
       logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'CREATE', 'equipment', name, `Category: ${category}`);
@@ -541,10 +556,12 @@ app.patch("/api/tenant/:tenantId/equipment/:id/toggle", authenticate, requireTen
   const { is_active } = req.body;
   db.prepare("UPDATE equipment SET is_active = ? WHERE id = ? AND tenant_id = ?")
     .run(is_active ? 1 : 0, req.params.id, req.params.tenantId);
-    if (req.user){
-  logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', req.params.id, is_active ? 'Equipment activated' : 'Equipment deactivated');
+  
+  if (req.user) {
+    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', req.params.id, is_active ? 'Equipment activated' : 'Equipment deactivated');
+  }
+  
   res.json({ success: true });
-    }
 });
 
   // Platform Admin API only
@@ -879,74 +896,104 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
     .run(req.params.id);
   
   const resetUser = db.prepare("SELECT * FROM users WHERE id = ?").get(request.user_id) as any;
-  if (req.user) {
-    // Log to tenant admin's activity feed (not platform admin)
-    logActivity(
-      req.user.userId,
-      req.user.userName || 'Admin', 
-      resetUser?.tenant_id || req.user.tenantId || null, 
-      'RESOLVE', 
-      'password_reset', 
-      resetUser?.name, 
-      'Temporary password set');
-  }
-  res.json({ success: true });
-});
 
-// Get disabled default equipment IDs for a tenant
-app.get("/api/tenant/:id/disabled-defaults", authenticate, requireTenantAccess, (req, res) => {
-  const rows = db.prepare("SELECT equipment_id FROM disabled_defaults WHERE tenant_id = ?").all(req.params.id);
-  res.json(rows.map((r: any) => r.equipment_id));
-});
+//   if (req.user) {
+//     // Log to tenant admin's activity feed (not platform admin)
+//     logActivity(
+//       req.user.userId,
+//       req.user.userName || 'Admin', 
+//       resetUser?.tenant_id || req.user.tenantId || null, 
+//       'RESOLVE', 
+//       'password_reset', 
+//       resetUser?.name, 
+//       'Temporary password set');
+//   }
+//   res.json({ success: true });
+// });
 
-// Toggle a default equipment item
-app.post("/api/tenant/:id/disabled-defaults/:equipmentId", authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, (req, res) => {
-  const { disable } = req.body;
-  if (disable) {
-    db.prepare("INSERT OR IGNORE INTO disabled_defaults (tenant_id, equipment_id) VALUES (?, ?)")
-      .run(req.params.id, req.params.equipmentId);
-  } else {
-    db.prepare("DELETE FROM disabled_defaults WHERE tenant_id = ? AND equipment_id = ?")
-      .run(req.params.id, req.params.equipmentId);
-  }
-  if (req.user) {
-    logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'UPDATE', 'equipment', req.params.equipmentId, disable ? 'Default equipment disabled' : 'Default equipment enabled');
-  }
+// // Get disabled default equipment IDs for a tenant
+// app.get("/api/tenant/:id/disabled-defaults", authenticate, requireTenantAccess, (req, res) => {
+//   const rows = db.prepare("SELECT equipment_id FROM disabled_defaults WHERE tenant_id = ?").all(req.params.id);
+//   res.json(rows.map((r: any) => r.equipment_id));
+// });
 
-  if (!req.user) {
-  return res.status(401).json({ error: "Unauthorized" });
-}
-  const resetUser = db.prepare(`
-  SELECT * FROM users WHERE email = ?`).get(req.body.email) as any;
-  if (!resetUser) {
-  return res.status(404).json({ error: "User not found" });
-}
+// // Toggle a default equipment item
+// app.post("/api/tenant/:tenantId/disabled-defaults/:equipmentId", authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, (req, res) => {
+//   const { disable } = req.body;
+//   if (disable) {
+//     db.prepare("INSERT OR IGNORE INTO disabled_defaults (tenant_id, equipment_id) VALUES (?, ?)")
+//       .run(req.params.tenantId, req.params.equipmentId);
+//   } else {
+//     db.prepare("DELETE FROM disabled_defaults WHERE tenant_id = ? AND equipment_id = ?")
+//       .run(req.params.tenantId , req.params.equipmentId);
+//   }
+//   if (req.user) {
+//     logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', req.params.equipmentId, disable ? 'Default equipment disabled' : 'Default equipment enabled');
+//   }
+
+//   if (!req.user) {
+//   return res.status(401).json({ error: "Unauthorized" });
+// }
+//   const resetUser = db.prepare(`
+//   SELECT * FROM users WHERE email = ?`).get(req.body.email) as any;
+//   if (!resetUser) {
+//   return res.status(404).json({ error: "User not found" });
+// }
 // 🔒 Role check
-if (req.user.role === 'tenant_admin' && resetUser.role !== 'sales_rep') {
-  return res.status(403).json({ error: "Tenant admin can only reset sales users" });
-}
+// if (req.user.role === 'tenant_admin' && resetUser.role !== 'sales_rep') {
+//   return res.status(403).json({ error: "Tenant admin can only reset sales users" });
+// }
 
-if (req.user.role === 'platform_admin' && resetUser.role !== 'tenant_admin') {
-  return res.status(403).json({ error: "Platform admin can only reset tenant admins" });
-}
+// if (req.user.role === 'platform_admin' && resetUser.role !== 'tenant_admin') {
+//   return res.status(403).json({ error: "Platform admin can only reset tenant admins" });
+// }
 
-   if (resetUser.role === 'tenant_admin') {
+   if (resetUser?.role === 'tenant_admin') {
     // Platform admin resolved a tenant admin reset → platform-level log only
     // tenant_id = null and entity_type = 'tenant_admin_reset' so it appears in
     // platform admin logs but NOT in the tenant admin's own activity feed
-    logActivity(req.user.userId, req.user.userName || 'Platform Admin', null,
-      'RESOLVE', 'tenant_admin_reset', resetUser.name,
+    logActivity(req.user!.userId, req.user!.userName || 'Platform Admin', null,
+      'RESOLVE', 'tenant_admin_reset', resetUser?.name,
       'Temporary password set by Platform Admin');
   } else {
     // Tenant admin resolved a sales rep reset → tenant-level log
     // tenant_id = salesRep's tenant so it appears ONLY in that tenant admin's feed
-    logActivity(req.user.userId, req.user.userName || 'Admin', resetUser.tenant_id,
+    logActivity(req.user!.userId, req.user!.userName || 'Admin', resetUser?.tenant_id,
       'RESOLVE', 'password_reset', resetUser.name,
       'Temporary password set by Tenant Admin');
   }
 
   res.json({ success: true });
 });
+
+// ── Default Library per-tenant toggle ─────────────────────────────────────
+  // GET: returns array of equipment_id strings that this tenant has disabled from the DEFAULT_LIBRARY
+  app.get("/api/tenant/:tenantId/disabled-defaults", authenticate, requireTenantAccess, (req, res) => {
+    const rows = db.prepare(
+      "SELECT equipment_id FROM tenant_disabled_defaults WHERE tenant_id = ?"
+    ).all(req.params.tenantId) as any[];
+    res.json(rows.map((r: any) => r.equipment_id));
+  });
+
+  // POST: toggles a DEFAULT_LIBRARY item disabled/enabled for this tenant (idempotent toggle)
+  app.post("/api/tenant/:tenantId/disabled-defaults/:equipmentId", authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), (req, res) => {
+    const { tenantId, equipmentId } = req.params;
+    const existing = db.prepare(
+      "SELECT 1 FROM tenant_disabled_defaults WHERE tenant_id = ? AND equipment_id = ?"
+    ).get(tenantId, equipmentId);
+
+    if (existing) {
+      // Currently disabled → re-enable
+      db.prepare("DELETE FROM tenant_disabled_defaults WHERE tenant_id = ? AND equipment_id = ?").run(tenantId, equipmentId);
+      logActivity(req.user!.userId, req.user!.userName || 'Admin', tenantId, 'UPDATE', 'equipment', equipmentId, 'Default equipment re-enabled');
+      res.json({ disabled: false });
+    } else {
+      // Currently enabled → disable
+      db.prepare("INSERT INTO tenant_disabled_defaults (tenant_id, equipment_id) VALUES (?, ?)").run(tenantId, equipmentId);
+      logActivity(req.user!.userId, req.user!.userName || 'Admin', tenantId, 'UPDATE', 'equipment', equipmentId, 'Default equipment disabled');
+      res.json({ disabled: true });
+    }
+  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
