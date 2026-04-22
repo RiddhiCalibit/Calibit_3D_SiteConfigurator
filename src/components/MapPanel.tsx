@@ -368,7 +368,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     if (!source) return;
 
     const features = state.objects.map(obj => {
-      const def = DEFAULT_LIBRARY.find(d => d.id === obj.type);
+      const def = DEFAULT_LIBRARY.find(d => d.id === obj.type) ?? state.customLibrary.find(d => d.id === obj.type);
       if (!def) return null;
 
       const lngLat = metresToLngLat(obj.x, obj.z, state.originLngLat!);
