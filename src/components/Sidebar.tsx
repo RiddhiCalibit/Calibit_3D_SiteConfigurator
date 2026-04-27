@@ -21,12 +21,13 @@ import {
   RotateCcw,
   RotateCw,
   ShieldCheck,
+  SaveIcon,
   LogOut,
   Settings,
   User as UserIcon,
   Moon,
   Sun,
-  X
+  X,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -59,7 +60,6 @@ interface SidebarProps {
   onLoadProject: (boundary: [number,number][], objects: any[]) => void;
   user: User | null;
   tenant: Tenant | null;
-  disabledDefaults: string[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -84,11 +84,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLoadProject,
   user,
   tenant,
-  disabledDefaults,
-
 }) => {
   const { theme, setTheme } = useTheme();
   const [modalMode, setModalMode] = React.useState<'none' | 'settings' | 'profile'>('none');
+   const [disabledDefaults, setDisabledDefaults] = React.useState<Set<string>>(new Set());
+
+  // Fetch which DEFAULT_LIBRARY items this tenant has hidden
+  React.useEffect(() => {
+    if (!tenant) return;
+    authFetch(`/api/tenant/${tenant.id}/disabled-defaults`)
+      .then(r => r.ok ? r.json() : [])
+      .then((ids: string[]) => setDisabledDefaults(new Set(ids)))
+      .catch(() => {});
+  }, [tenant?.id]);
+
   const [profileData, setProfileData] = React.useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -136,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   //const fullLibrary = [...DEFAULT_LIBRARY, ...state.customLibrary] 
   //.filter(item => item.isActive !== false);
   const fullLibrary = [
-  ...DEFAULT_LIBRARY.filter(item => !disabledDefaults.includes(item.id)),
+  ...DEFAULT_LIBRARY.filter(item => !disabledDefaults.has(item.id)),
   ...state.customLibrary.filter(item => item.isActive !== false)
 ];
 
@@ -541,8 +550,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={onSave}
           className="w-full flex items-center justify-center gap-2 py-2 mb-2 bg-brand-teal text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-brand-teal/20 hover:bg-brand-teal/90"
         >
-          <ShieldCheck className="w-3 h-3" />
-          Save to Cloud
+          <SaveIcon className="w-4 h-4" />
+          Save Project
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button 
