@@ -1,0 +1,97 @@
+{
+  "hash": "93d6a6d7",
+  "configHash": "394d9d7f",
+  "lockfileHash": "8c187333",
+  "browserHash": "253f53f9",
+  "optimized": {
+    "@google/genai": {
+      "src": "../../node_modules/@google/genai/dist/web/index.mjs",
+      "file": "@google_genai.js",
+      "fileHash": "eba6954b",
+      "needsInterop": false
+    },
+    "@mapbox/mapbox-gl-draw": {
+      "src": "../../node_modules/@mapbox/mapbox-gl-draw/index.js",
+      "file": "@mapbox_mapbox-gl-draw.js",
+      "fileHash": "39b2b302",
+      "needsInterop": false
+    },
+    "@turf/turf": {
+      "src": "../../node_modules/@turf/turf/dist/esm/index.js",
+      "file": "@turf_turf.js",
+      "fileHash": "bb07d780",
+      "needsInterop": false
+    },
+    "clsx": {
+      "src": "../../node_modules/clsx/dist/clsx.mjs",
+      "file": "clsx.js",
+      "fileHash": "782eb1ec",
+      "needsInterop": false
+    },
+    "lucide-react": {
+      "src": "../../node_modules/lucide-react/dist/esm/lucide-react.js",
+      "file": "lucide-react.js",
+      "fileHash": "3bfbafe4",
+      "needsInterop": false
+    },
+    "mapbox-gl": {
+      "src": "../../node_modules/mapbox-gl/dist/mapbox-gl.js",
+      "file": "mapbox-gl.js",
+      "fileHash": "c08c31eb",
+      "needsInterop": true
+    },
+    "motion/react": {
+      "src": "../../node_modules/motion/dist/es/react.mjs",
+      "file": "motion_react.js",
+      "fileHash": "2edb5f9b",
+      "needsInterop": false
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "694f6b3a",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "707fbbbb",
+      "needsInterop": true
+    },
+    "recharts": {
+      "src": "../../node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "ae49233c",
+      "needsInterop": false
+    },
+    "tailwind-merge": {
+      "src": "../../node_modules/tailwind-merge/dist/bundle-mjs.mjs",
+      "file": "tailwind-merge.js",
+      "fileHash": "f14f3b8c",
+      "needsInterop": false
+    },
+    "uuid": {
+      "src": "../../node_modules/uuid/dist/index.js",
+      "file": "uuid.js",
+      "fileHash": "da8d01ad",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-B4ENHANT": {
+      "file": "chunk-B4ENHANT.js"
+    },
+    "chunk-INUNRAEP": {
+      "file": "chunk-INUNRAEP.js"
+    },
+    "chunk-KDVGFZWC": {
+      "file": "chunk-KDVGFZWC.js"
+    },
+    "chunk-6V6IQ3MJ": {
+      "file": "chunk-6V6IQ3MJ.js"
+    },
+    "chunk-EWTE5DHJ": {
+      "file": "chunk-EWTE5DHJ.js"
+    }
+  }
+}
