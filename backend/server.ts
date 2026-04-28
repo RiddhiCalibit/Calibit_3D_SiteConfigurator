@@ -18,6 +18,7 @@ declare global {
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
 import express from "express";
+import cors from 'cors';
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -181,6 +182,12 @@ if (!otpTableExists) {
 
 async function startServer() {
   const app = express();
+  app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true
+}));
+
+app.use(express.json());
   const PORT = 3000;
 
   // Seed initial data if empty

@@ -20,6 +20,10 @@ import { ForcePasswordChange } from './components/ForcePasswordChange';
 import { ContactAdmin } from './components/ContactAdmin';
 
 export default function App() {
+
+  console.log("API URL:", import.meta.env.VITE_API_URL);
+  console.log("ENV CHECK:", import.meta.env);
+
   const {
     state,
     setBoundary,
@@ -39,6 +43,8 @@ export default function App() {
     setUnitSystem,
   } = useAppState();
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const [drawTrigger, setDrawTrigger] = useState(0);
   const [isMeasuring, setIsMeasuring] = useState(false);
   const [targetLocation, setTargetLocation] = useState<{ lng: number; lat: number } | undefined>();
@@ -54,14 +60,23 @@ export default function App() {
   const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
 
 const handleLogin = async (email: string, password: string) => {
-  const res = await fetch('/api/auth/login', {
+  // const res = await fetch('/api/auth/login', {
+  try {
+     const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
 
-  if (res.ok) {
-    const data = await res.json();
+   const data = await res.json();
+   console.log("LOGIN RESPONSE:", data);
+
+     if (!res.ok) {
+    throw new Error(data.error || 'Login failed');
+  }
+
+  // if (res.ok) {
+  //   const data = await res.json();
     localStorage.setItem('authToken', data.token);
     setUser(data.user);
     setTenant(data.tenant);
@@ -118,7 +133,8 @@ setCustomLibrary(filtered);
     } else {
       setCustomLibrary([]);
     }
-  } else {
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
     throw new Error('Login failed');
   }
 
@@ -357,7 +373,7 @@ if (user.force_password_change) {
            }}
         user={user}
         tenant={tenant}
-        disabledDefaults={disabledDefaults}
+        // disabledDefaults={disabledDefaults}
       />
 
       <main className="flex-1 flex relative h-screen overflow-hidden">
