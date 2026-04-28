@@ -183,11 +183,6 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use((req, res, next) => {
-  console.log("👉 Incoming request:", req.method, req.url);
-  next();
-});
-
   // Seed initial data if empty
 const tenantCount = db.prepare("SELECT count(*) as count FROM tenants").get() as any;
 if (tenantCount.count === 0) {
@@ -324,6 +319,14 @@ const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // max 10 attempts per IP
   message: { error: 'Too many login attempts. Try again in 15 minutes.' }
+});
+
+  // ✅ 1. Middleware
+app.use(express.json());
+
+app.use((req, res, next) => {
+  console.log("👉 Incoming request:", req.method, req.url);
+  next();
 });
 
 app.get('/', (req, res) => {
