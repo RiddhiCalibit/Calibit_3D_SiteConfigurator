@@ -1819,7 +1819,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   const [disabledDefaults, setDisabledDefaults] = useState<Set<string>>(new Set());
 
   const fetchLogs = async () => {
-  const res = await authFetch(`/api/tenant/${tenant.id}/logs?limit=100`);
+    const res = await authFetch(`/api/tenant/${tenant.id}/logs?limit=100`);
   if (res.ok) {
     const data = await res.json();
     setLogs(data);
@@ -1891,10 +1891,10 @@ const fetchEquipmentStats = async () => {
     fetchResetRequests();
     fetchSalesRepCount();
     fetchLogs();
-    fetchResetRequests();
-      const interval = setInterval(() => {
-    fetchResetRequests();
-  }, 5000);
+    
+    const interval = setInterval(() => {
+      fetchResetRequests();
+  }, 30000);
 
   return () => clearInterval(interval);
   }, [tenant.id]);
@@ -3078,7 +3078,7 @@ const fetchSalesRepCount = async () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [tenant.id]);
+   }, [tenant.id]);
 
 const handleAddUser = async (e: React.FormEvent) => {
   e.preventDefault();

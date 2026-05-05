@@ -148,12 +148,12 @@ const hasForceChange = userInfo.some(col => col.name === 'force_password_change'
 if (!hasForceChange) {
   db.exec("ALTER TABLE users ADD COLUMN force_password_change INTEGER DEFAULT 0");
 }
-// Add imageUrl column to DB if it doesn't exist
-const equipmentInfo = db.prepare("PRAGMA table_info(equipment)").all() as any[];
-const hasImageUrl = equipmentInfo.some((col: any) => col.name === 'image_url');
-if (!hasImageUrl) {
-  db.exec("ALTER TABLE equipment ADD COLUMN image_url TEXT");
-}
+// // Add imageUrl column to DB if it doesn't exist
+// const equipmentInfo = db.prepare("PRAGMA table_info(equipment)").all() as any[];
+// const hasImageUrl = equipmentInfo.some((col: any) => col.name === 'image_url');
+// if (!hasImageUrl) {
+//   db.exec("ALTER TABLE equipment ADD COLUMN image_url TEXT");
+// }
 // IsActive column for soft deletes
 const equipmentCols = db.prepare("PRAGMA table_info(equipment)").all() as any[];
 const hasIsActive = equipmentCols.some((col: any) => col.name === 'is_active');
@@ -847,13 +847,6 @@ app.post("/api/auth/platform-reset-verify", async (req, res) => {
     return res.status(400).json({ error: 'Invalid OTP. Please check the code and try again.' });
   }
 
-  // Compare IST stored expiry with current IST time
-  // const now = new Date();
-  // const istOffset = 5.5 * 60 * 60 * 1000;
-  // const nowIst = new Date(now.getTime() + istOffset);
-  // const expiresAt = new Date(record.expires_at.replace(' ', 'T'));
-
-  // if (nowIst > expiresAt) {
     if (new Date() > new Date(record.expires_at)) {
     return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
   }
@@ -1066,20 +1059,45 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
-    });
-  }
 
-  app.listen(PORT, "0.0.0.0", () => {
+
+  // if (process.env.NODE_ENV !== "production") {
+  //   const vite = await createViteServer({
+  //     server: { middlewareMode: true },
+  //     appType: "spa",
+  //   });
+  //   app.use(vite.middlewares);
+  // } else {
+  //   app.use(express.static(path.join(__dirname, "dist")));
+  //   app.get("*", (req, res) => {
+  //     res.sendFile(path.join(__dirname, "dist", "index.html"));
+  //   });
+  // }
+
+  if (process.env.NODE_ENV !== "production") {
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: "spa",
+  });
+
+  app.use((req, res, next) => {
+    // 🔥 IMPORTANT: Skip Vite for API routes
+    if (req.url.startsWith("/api")) {
+      return next();
+    }
+    vite.middlewares(req, res, next);
+  });
+
+} else {
+  app.use(express.static(path.join(__dirname, "dist")));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "dist", "index.html"));
+  });
+}
+
+
+    app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }

@@ -21,8 +21,10 @@ import { ContactAdmin } from './components/ContactAdmin';
 
 export default function App() {
 
-  console.log("API URL:", import.meta.env.VITE_API_URL);
-  console.log("ENV CHECK:", import.meta.env);
+  // useEffect(() => {
+  //  console.log("API URL:", import.meta.env.VITE_API_URL);
+  //  console.log("ENV CHECK:", import.meta.env);
+  //  }, []);
 
   const {
     state,
@@ -68,7 +70,17 @@ const handleLogin = async (email: string, password: string) => {
     body: JSON.stringify({ email, password })
   });
 
-   const data = await res.json();
+// const contentType = res.headers.get("content-type");
+
+// if (!contentType || !contentType.includes("application/json")) {
+//   const text = await res.text();
+//   console.error("❌ BROKEN API:", res.url);
+//   console.error("❌ RESPONSE:", text);
+//   throw new Error("Invalid JSON response");
+// }
+
+// const data = await res.json();
+const data = await res.json();
    console.log("LOGIN RESPONSE:", data);
 
      if (!res.ok) {
@@ -87,12 +99,12 @@ const handleLogin = async (email: string, password: string) => {
     if (data.tenant) {
 
       // Fetch disabled defaults for tenant
-    const ddRes = await fetch(`/api/tenant/${data.tenant.id}/disabled-defaults`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${data.token}`
-    }
-  });
+    const ddRes = await authFetch(`/api/tenant/${data.tenant.id}/disabled-defaults`); 
+  //     { headers: {
+  //     'Content-Type': 'application/json',
+  //     'Authorization': `Bearer ${data.token}`
+  //   }
+  // });
   if (ddRes.ok) {
     const disabledIds = await ddRes.json();
     // Store in state — add this state at the top of App component
@@ -100,12 +112,13 @@ const handleLogin = async (email: string, password: string) => {
   }
 
   // Fetch equipment for tenant
-      const eqRes = await fetch(`/api/tenant/${data.tenant.id}/equipment`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${data.token}`
-        }
-      });
+      const eqRes = await authFetch(`/api/tenant/${data.tenant.id}/equipment`);
+      //    {
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //     'Authorization': `Bearer ${data.token}`
+      //   }
+      // });
       if (eqRes.ok) {
         const eqData = await eqRes.json();
         const mapped = eqData.map((eq: any) => ({
@@ -274,7 +287,17 @@ setCustomLibrary(filtered);
     if (!tenantData) return;
     const res = await authFetch(`/api/projects?tenantId=${tenantData.id}`);
     if (res.ok) {
-      const data = await res.json();
+
+// const contentType = res.headers.get("content-type");
+
+// if (!contentType || !contentType.includes("application/json")) {
+//   const text = await res.text();
+//   console.error("❌ BROKEN API:", res.url);
+//   console.error("❌ RESPONSE:", text);
+//   throw new Error("Invalid JSON response");
+// }
+
+const data = await res.json();
       setProjects(data);
     }
   };
