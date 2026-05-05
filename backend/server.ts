@@ -1,3 +1,4 @@
+import { GoogleGenAI, Type } from '@google/genai';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -16,10 +17,13 @@ declare global {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set in .env');
+const genai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 import express from "express";
 import cors from 'cors';
-import { createServer as createViteServer } from "vite";
+// import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import Database from "better-sqlite3";
@@ -148,12 +152,12 @@ const hasForceChange = userInfo.some(col => col.name === 'force_password_change'
 if (!hasForceChange) {
   db.exec("ALTER TABLE users ADD COLUMN force_password_change INTEGER DEFAULT 0");
 }
-// // Add imageUrl column to DB if it doesn't exist
-// const equipmentInfo = db.prepare("PRAGMA table_info(equipment)").all() as any[];
-// const hasImageUrl = equipmentInfo.some((col: any) => col.name === 'image_url');
-// if (!hasImageUrl) {
-//   db.exec("ALTER TABLE equipment ADD COLUMN image_url TEXT");
-// }
+// Add imageUrl column to DB if it doesn't exist
+const equipmentInfo = db.prepare("PRAGMA table_info(equipment)").all() as any[];
+const hasImageUrl = equipmentInfo.some((col: any) => col.name === 'image_url');
+if (!hasImageUrl) {
+  db.exec("ALTER TABLE equipment ADD COLUMN image_url TEXT");
+}
 // IsActive column for soft deletes
 const equipmentCols = db.prepare("PRAGMA table_info(equipment)").all() as any[];
 const hasIsActive = equipmentCols.some((col: any) => col.name === 'is_active');
@@ -1074,28 +1078,94 @@ app.post("/api/admin/reset-requests/:id/resolve", authenticate, requireRole('ten
   //   });
   // }
 
-  if (process.env.NODE_ENV !== "production") {
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-  });
+//   if (process.env.NODE_ENV !== "production") {
+//   const vite = await createViteServer({
+//     server: { middlewareMode: true },
+//     appType: "spa",
+//   });
 
-  app.use((req, res, next) => {
-    // 🔥 IMPORTANT: Skip Vite for API routes
-    if (req.url.startsWith("/api")) {
-      return next();
+//   app.use((req, res, next) => {
+//     // 🔥 IMPORTANT: Skip Vite for API routes
+//     if (req.url.startsWith("/api")) {
+//       return next();
+//     }
+//     vite.middlewares(req, res, next);
+//   });
+
+// } else {
+//   app.use(express.static(path.join(__dirname, "dist")));
+
+//   app.get("*", (req, res) => {
+//     res.sendFile(path.join(__dirname, "dist", "index.html"));
+//   });
+// }
+
+app.post('/api/compliance/check', async (req, res) => {
+  try {
+    const siteData = req.body;
+
+    const prompt = `
+      Analyze the following 3D site configuration for compliance with safety and operational standards.
+      The site is a water park / recreational facility.
+      
+      Rules to check:
+      1. Safety Distances: Pools (category 'pools') should have at least 5m clearance from facilities (category 'facilities').
+      2. Capacity: If there are more than 5 major attractions (slides/pools) but only 1 ticket booth or food kiosk, flag as a capacity warning.
+      3. Accessibility: Seating areas should be distributed near pools.
+      4. Safety: Slides should not be placed too close to each other (min 3m).
+      
+      Site Data:
+      ${JSON.stringify(siteData, null, 2)}
+      
+      Return a structured JSON report.
+    `;
+
+    const response = await genai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            overallScore: { type: Type.NUMBER, description: 'Score from 0 to 100' },
+            summary: { type: Type.STRING },
+            checks: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  category: { type: Type.STRING },
+                  status: { type: Type.STRING, enum: ['pass', 'fail', 'warning'] },
+                  message: { type: Type.STRING },
+                  details: { type: Type.STRING }
+                },
+                required: ['category', 'status', 'message']
+              }
+            },
+            recommendations: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ['overallScore', 'summary', 'checks', 'recommendations']
+        }
+      }
+    });
+
+    const reportText = response.text;
+    if (!reportText) {
+      return res.status(500).json({ error: 'Compliance model returned no text response' });
     }
-    vite.middlewares(req, res, next);
-  });
 
-} else {
-  app.use(express.static(path.join(__dirname, "dist")));
+    const report = JSON.parse(reportText);
+    res.json(report);
 
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "dist", "index.html"));
-  });
-}
-
+  } catch (err: any) {
+    console.error('Compliance check failed:', err);
+    res.status(500).json({ error: err.message || 'Compliance check failed' });
+  }
+});
 
     app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

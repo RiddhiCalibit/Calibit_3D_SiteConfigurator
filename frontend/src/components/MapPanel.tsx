@@ -251,7 +251,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       return;
     }
 
-    mapboxgl.accessToken = token;
+    mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,

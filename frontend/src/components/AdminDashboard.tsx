@@ -1751,7 +1751,7 @@
 //   );
 // }
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { authFetch } from '../utils/api';
 import { User, Tenant, EquipmentDef, DEFAULT_LIBRARY } from '../../../backend/types';
 import { 
@@ -1826,14 +1826,14 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
   }
 };
 
-  const fetchResetRequests = async () => {
+  const fetchResetRequests = useCallback(async () => {
   const res = await authFetch(`/api/admin/reset-requests`);
   if (res.ok) {
     const data = await res.json();
     setResetRequests(data);
     setResetCount(data.length);
   }
-};
+},[tenant.id]);
 
 const fetchSalesRepCount = async () => {
   const res = await authFetch(`/api/tenant/${tenant.id}/users`);
@@ -1887,9 +1887,9 @@ const fetchEquipmentStats = async () => {
   useEffect(() => {
     fetchEquipment();
     fetchEquipmentStats();
-    fetchDisabledDefaults();
+   // fetchDisabledDefaults();
     fetchResetRequests();
-    fetchSalesRepCount();
+    //fetchSalesRepCount();
     fetchLogs();
     
     const interval = setInterval(() => {
@@ -3073,6 +3073,7 @@ const fetchSalesRepCount = async () => {
     if (res.ok) {
       const data = await res.json();
       setUsers(data);
+      setSalesRepCount(data.filter((u: any) => u.role === 'sales_rep').length);
     }
   };
 
