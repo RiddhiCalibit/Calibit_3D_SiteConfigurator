@@ -20,16 +20,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_LIBRARY } from './types';
 import { GoogleGenAI, Type } from '@google/genai';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // ─── PostgreSQL Connection Pool ───────────────────────────────────────────────
 const pool = new Pool({
