@@ -25,7 +25,7 @@ import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_LIBRARY } from './types';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 
 // ─── PostgreSQL Connection Pool ───────────────────────────────────────────────
 const pool = new Pool({
@@ -36,7 +36,7 @@ const pool = new Pool({
 // ─── Gemini AI ────────────────────────────────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set in .env');
-const genai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+const genai = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -775,32 +775,33 @@ async function startServer() {
         Return a structured JSON report.
       `;
 
-      const response = await genai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-        config: {
+      const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: {
-            type: Type.OBJECT,
+            type: SchemaType.OBJECT,
             properties: {
-              overallScore: { type: Type.NUMBER, description: 'Score from 0 to 100' },
-              summary: { type: Type.STRING },
+              overallScore: { type: SchemaType.NUMBER, description: 'Score from 0 to 100' },
+              summary: { type: SchemaType.STRING },
               checks: {
-                type: Type.ARRAY,
+                type: SchemaType.ARRAY,
                 items: {
-                  type: Type.OBJECT,
+                  type: SchemaType.OBJECT,
                   properties: {
-                    category: { type: Type.STRING },
-                    status: { type: Type.STRING, enum: ['pass', 'fail', 'warning'] },
-                    message: { type: Type.STRING },
-                    details: { type: Type.STRING },
+                    category: { type: SchemaType.STRING },
+                    status: { type: SchemaType.STRING, format: 'enum', enum: ['pass', 'fail', 'warning'] },
+                    message: { type: SchemaType.STRING },
+                    details: { type: SchemaType.STRING },
                   },
                   required: ['category', 'status', 'message'],
                 },
               },
               recommendations: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
+                type: SchemaType.ARRAY,
+                items: { type: SchemaType.STRING },
               },
             },
             required: ['overallScore', 'summary', 'checks', 'recommendations'],
@@ -808,10 +809,12 @@ async function startServer() {
         },
       });
 
-      if (!response.text) {
+      const response = result.response;
+      const text = response.text();
+      if (!text) {
         throw new Error('Failed to get response text from AI');
       }
-      const report = JSON.parse(response.text);
+      const report = JSON.parse(text);
       res.json(report);
     } catch (err: any) {
       console.error('Compliance check failed:', err);

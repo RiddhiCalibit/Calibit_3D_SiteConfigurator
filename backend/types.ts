@@ -1,4 +1,4 @@
-import { Type } from "@google/genai";
+// import { SchemaType } from "@google/generative-ai";
 
 export interface Tenant {
   id: string;
