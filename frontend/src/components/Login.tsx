@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
+import logo from "../assets/logo.png";
 
 interface Props {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -13,6 +14,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,12 +41,27 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
         className="w-full max-w-md space-y-8 relative z-10"
       >
         <div className="text-center space-y-2">
-          <div className="inline-flex p-4 bg-brand-teal/10 rounded-2xl mb-4">
-            <Box className="w-10 h-10 text-brand-teal" />
+          {/* <div className="inline-flex p-4 bg-brand-teal/10 rounded-2xl mb-4"> */}
+          {/* <div className="flex justify-center mb-4">
+            <img src={logo} alt="Company Logo" className="w-10 h-10 text-brand-teal" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Site3D Enterprise</h1>
+          <h1 className="text-3xl font-bold tracking-tight">3D Site Configurator</h1>
           <p className="opacity-40 text-sm">Sign in to your company workspace</p>
-        </div>
+        </div> */}
+        <div className="flex flex-col items-center mb-6">
+            <img
+              src={logo}
+              alt="Company Logo"
+              className="h-16 mb-2"
+            />
+            <h1 className="text-2xl font-bold text-white">
+              3D Site Configurator
+            </h1>
+            <p className="text-sm text-gray-400">
+              Sign in to your company workspace
+            </p>
+          </div>
+          </div>
 
         <form onSubmit={handleSubmit} className="bg-theme-card backdrop-blur-xl border border-theme-border p-8 rounded-3xl shadow-2xl space-y-6">
           {error && (
@@ -61,6 +78,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
                 <input 
                   type="email"
                   required
+                  autoComplete='off'
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all"
@@ -74,13 +92,22 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-20" />
                 <input 
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
+                  placeholder="Enter password"
+                  autoComplete='new-password'
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all"
-                  placeholder="••••••••"
                 />
+                  <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500 hover:text-white"
+                   >
+                    {/* {showPassword ? "Hide" : "Show"} */}
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
               </div>
             </div>
           </div>
@@ -123,7 +150,5 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
         </div>
       </motion.div>
     </div>
-
-    
   );
 }
