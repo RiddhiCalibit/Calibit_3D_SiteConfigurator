@@ -28,6 +28,7 @@ import {
   Moon,
   Sun,
   X,
+  FolderOpen,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -53,6 +54,9 @@ interface SidebarProps {
   onExport: () => void;
   onImport: () => void;
   onSave: () => void;
+  onOpenProjects: () => void;
+  projects: any[];
+  currentProjectId: string | null;
   onAddCustomEquipment: (def: EquipmentDef) => void;
   onOpenCompliance: () => void;
   onSetUnitSystem: (unit: 'metric' | 'imperial') => void;
@@ -77,6 +81,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onExport,
   onImport,
   onSave,
+  onOpenProjects,
+  projects,
+  currentProjectId,
   onAddCustomEquipment,
   onOpenCompliance,
   onSetUnitSystem,
@@ -545,14 +552,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 border-t border-theme-border bg-black/20">
+
+      {/* <div className="p-4 border-t border-theme-border bg-black/20">
         <button 
           onClick={onSave}
           className="w-full flex items-center justify-center gap-2 py-2 mb-2 bg-brand-teal text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-brand-teal/20 hover:bg-brand-teal/90"
         >
           <SaveIcon className="w-4 h-4" />
           Save Project
-        </button>
+        </button> */}
+
+        <div className="flex gap-2 mb-2">
+          <button
+            onClick={onSave}
+            className="flex-1 flex items-center justify-center gap-2 py-2 bg-brand-teal text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-brand-teal/20 hover:bg-brand-teal/90"
+            >
+            <SaveIcon className="w-4 h-4" />
+            {currentProjectId ? 'Update' : 'Save'}
+          </button>
+          <button
+            onClick={onOpenProjects}
+            className="relative flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors border border-white/10"
+            title="My Projects"
+               >
+            <FolderOpen className="w-4 h-4" />
+            {projects.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-teal rounded-full text-[9px] font-bold flex items-center justify-center">
+              {projects.length > 9 ? '9+' : projects.length}
+              </span>
+            )}
+          </button>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <button 
             onClick={onExport}
@@ -589,7 +620,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>Del · Esc · R · M · G</span>
           <span>v1.0</span>
         </div>
-      </div>
 
       {/* Settings/Profile Modal */}
       <AnimatePresence>

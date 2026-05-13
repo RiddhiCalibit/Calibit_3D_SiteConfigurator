@@ -18,6 +18,7 @@ import { AlertTriangle, Download, Trash2 } from 'lucide-react';
 import { ForgotPassword } from './components/ForgotPassword';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
 import { ContactAdmin } from './components/ContactAdmin';
+import { ProjectsPanel } from './components/ProjectsPanel';
 
 export default function App() {
 
@@ -61,13 +62,16 @@ export default function App() {
   const [showContactAdmin, setShowContactAdmin] = useState(false);
   const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
 
-const handleLogin = async (email: string, password: string) => {
+  const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+
+  const handleLogin = async (email: string, password: string) => {
   // const res = await fetch('/api/auth/login', {
-  try {
+    try {
      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ email, password })
   });
 
 // const contentType = res.headers.get("content-type");
@@ -232,35 +236,111 @@ setCustomLibrary(filtered);
     input.click();
   };
 
-  const handleSave = async () => {
-    if (!user || !tenant) return;
+  // const handleSave = async () => {
+  //   if (!user || !tenant) return;
     
-    const projectName = prompt("Enter project name:", "New Project") || "Untitled Project";
+  //   const projectName = prompt("Enter project name:", "New Project") || "Untitled Project";
     
-    const data = {
-      origin: state.originLngLat,
-      siteBoundary: state.siteBoundary,
-      objects: state.objects,
-    };
+  //   const data = {
+  //     origin: state.originLngLat,
+  //     siteBoundary: state.siteBoundary,
+  //     objects: state.objects,
+  //   };
 
+  //   const res = await authFetch('/api/projects', {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({
+  //       id: uuidv4(),
+  //       tenant_id: tenant.id,
+  //       user_id: user.id,
+  //       name: projectName,
+  //       data
+  //     })
+  //   });
+
+  //   if (res.ok) {
+  //     alert("Project saved successfully!");
+  //   } else {
+  //     alert("Failed to save project.");
+  //   }
+  // };
+  const handleSave = async () => {
+  if (!user || !tenant) return;
+ 
+  const data = {
+    origin: state.originLngLat,
+    siteBoundary: state.siteBoundary,
+    objects: state.objects,
+  };
+ 
+  if (currentProjectId) {
+    // Re-save existing project
+    const res = await authFetch(`/api/projects/${currentProjectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    });
+    if (res.ok) {
+      alert('Project updated successfully!');
+      fetchProjects(tenant);
+    } else {
+      alert('Failed to update project.');
+    }
+  } else {
+    // Create new project
+    const projectName = prompt('Enter project name:', 'New Project') || 'Untitled Project';
+    const newId = uuidv4();
     const res = await authFetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: uuidv4(),
+        id: newId,
         tenant_id: tenant.id,
         user_id: user.id,
         name: projectName,
-        data
-      })
+        data,
+      }),
     });
-
     if (res.ok) {
-      alert("Project saved successfully!");
+      setCurrentProjectId(newId);
+      alert('Project saved successfully!');
+      fetchProjects(tenant);
     } else {
-      alert("Failed to save project.");
+      alert('Failed to save project.');
     }
-  };
+  }
+};
+
+// ─── Add handleOpenProject function (after handleSave) ───
+const handleOpenProject = async (projectId: string) => {
+  try {
+    const res = await authFetch(`/api/projects/${projectId}`);
+    if (!res.ok) {
+      alert('Failed to load project.');
+      return;
+    }
+    const project = await res.json();
+    const data = typeof project.data === 'string' ? JSON.parse(project.data) : project.data;
+ 
+    if (data.siteBoundary) setBoundary(data.siteBoundary);
+    if (data.objects) setObjects(data.objects);
+ 
+    setCurrentProjectId(projectId);
+  } catch {
+    alert('Failed to load project.');
+  }
+};
+ 
+ 
+// ───  Add handleDeleteProject function (after handleOpenProject) ───
+const handleDeleteProject = (projectId: string) => {
+  setProjects(prev => prev.filter(p => p.id !== projectId));
+  // If currently editing this project, clear it
+  if (currentProjectId === projectId) {
+    setCurrentProjectId(null);
+  }
+};
 
   const applyImport = (data: any) => {
     if (data.siteBoundary) setBoundary(data.siteBoundary);
@@ -390,12 +470,15 @@ if (user.force_password_change) {
         onSetUnitSystem={setUnitSystem}
         onOpenCompliance={() => setComplianceOpen(true)}
         onLogout={handleLogout}
+        onOpenProjects={() => setProjectsPanelOpen(true)}
         onLoadProject={(boundary, objects) => {
         setBoundary(boundary);
         setObjects(objects);
-           }}
+        }}
+        projects={projects}
         user={user}
         tenant={tenant}
+        currentProjectId={currentProjectId}
         // disabledDefaults={disabledDefaults}
       />
 
@@ -417,6 +500,17 @@ if (user.force_password_change) {
             state={state}
             isOpen={complianceOpen}
             onClose={() => setComplianceOpen(false)}
+          />
+
+          <ProjectsPanel
+            isOpen={projectsPanelOpen}
+            onClose={() => setProjectsPanelOpen(false)}
+            projects={projects}
+            user={user}
+            tenant={tenant}
+            onOpenProject={handleOpenProject}
+            onDeleteProject={handleDeleteProject}
+            onRefresh={() => fetchProjects(tenant)}
           />
           
           {/* Top Overlays */}

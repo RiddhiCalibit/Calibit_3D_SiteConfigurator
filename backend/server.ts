@@ -335,7 +335,7 @@ async function startServer() {
     );
     if (parseInt(rows[0].count) >= 10) {
       return res.status(403).json({
-        error: 'User creation limit reached. This tenant has reached the maximum of 10 sales representatives.',
+        error: 'User creation limit reached. This tenant has reached the maximum of 10 sales representatives.'
       });
     }
 
@@ -623,27 +623,232 @@ async function startServer() {
   // PROJECT ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
+  // app.get('/api/projects', authenticate, async (req, res) => {
+  //   if (!req.user || (req.user.tenantId !== req.query.tenantId && req.user.role !== 'platform_admin')) {
+  //     return res.status(403).json({ error: 'Access denied' });
+  //   }
+  //   const { rows } = await pool.query(
+  //     'SELECT * FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC',
+  //     [req.query.tenantId]
+  //   );
+  //   res.json(rows);
+  // });
+
+  // app.post('/api/projects', authenticate, async (req, res) => {
+  //   const { id, tenant_id, user_id, name, data } = req.body;
+  //   await pool.query(
+  //     'INSERT INTO projects (id, tenant_id, user_id, name, data) VALUES ($1, $2, $3, $4, $5)',
+  //     [id, tenant_id, user_id, name, JSON.stringify(data)]
+  //   );
+  //   if (req.user) {
+  //     await logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'SAVE', 'project', name, 'Project saved');
+  //   }
+  //   res.json({ success: true });
+  // });
+
+  // // 1. Get projects for a specific sales rep (for their own list)
+  // //GET /api/projects?tenantId=x&userId=x
+
+  // // 2. Update existing project (for edit/re-save)
+  // //PUT /api/projects/:id
+
+  // // 3. Delete a project
+  // //DELETE /api/projects/:id
+
+  // // 4. Generate share token for a project
+  // //POST /api/projects/:id/share
+
+  // // 5. Load a project via share token (public, no auth)
+  // //GET /api/projects/shared/:token
+
+  // // 6. Project stats per sales rep (for Tenant Admin)
+  // //GET /api/tenant/:tenantId/project-stats
+
+  // // 7. Active projects count (modified in last 5 days)
+  // //GET /api/tenant/:tenantId/active-projects
+
+    // GET all projects for a tenant (sales rep sees only their own)
   app.get('/api/projects', authenticate, async (req, res) => {
-    if (!req.user || (req.user.tenantId !== req.query.tenantId && req.user.role !== 'platform_admin')) {
+    const { tenantId, userId } = req.query as { tenantId: string; userId?: string };
+
+    if (!req.user || (req.user.tenantId !== tenantId && req.user.role !== 'platform_admin')) {
       return res.status(403).json({ error: 'Access denied' });
     }
+
+    // Sales rep: only their own projects
+    if (req.user.role === 'sales_rep') {
+      const { rows } = await pool.query(
+        `SELECT id, tenant_id, user_id, name, created_at, updated_at
+         FROM projects WHERE tenant_id = $1 AND user_id = $2
+         ORDER BY COALESCE(updated_at, created_at) DESC`,
+        [tenantId, req.user.userId]
+      );
+      return res.json(rows);
+    }
+
+    // Tenant admin / platform admin — optionally filter by userId
+    if (userId) {
+      const { rows } = await pool.query(
+        `SELECT id, tenant_id, user_id, name, created_at, updated_at
+         FROM projects WHERE tenant_id = $1 AND user_id = $2
+         ORDER BY COALESCE(updated_at, created_at) DESC`,
+        [tenantId, userId]
+      );
+      return res.json(rows);
+    }
+
     const { rows } = await pool.query(
-      'SELECT * FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC',
-      [req.query.tenantId]
+      `SELECT id, tenant_id, user_id, name, created_at, updated_at
+       FROM projects WHERE tenant_id = $1
+       ORDER BY COALESCE(updated_at, created_at) DESC`,
+      [tenantId]
     );
     res.json(rows);
   });
 
+  // GET a single project by ID — returns full data for loading into map
+  // NOTE: This route must come BEFORE /api/projects/shared/:token
+  app.get('/api/projects/:id', authenticate, async (req, res) => {
+    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+    const project = rows[0];
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (req.user!.role === 'tenant_admin' && project.tenant_id !== req.user!.tenantId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (typeof project.data === 'string') project.data = JSON.parse(project.data);
+    res.json(project);
+  });
+
+  // POST create a new project
   app.post('/api/projects', authenticate, async (req, res) => {
     const { id, tenant_id, user_id, name, data } = req.body;
+    const now = getISTString();
     await pool.query(
-      'INSERT INTO projects (id, tenant_id, user_id, name, data) VALUES ($1, $2, $3, $4, $5)',
-      [id, tenant_id, user_id, name, JSON.stringify(data)]
+      'INSERT INTO projects (id, tenant_id, user_id, name, data, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, tenant_id, user_id, name, JSON.stringify(data), now, now]
     );
     if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'SAVE', 'project', name, 'Project saved');
+      await logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'CREATE', 'project', name, 'Project created');
+    }
+    res.json({ success: true, id });
+  });
+
+  // PUT update/re-save an existing project
+  app.put('/api/projects/:id', authenticate, async (req, res) => {
+    const { name, data } = req.body;
+    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+    const project = rows[0];
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const now = getISTString();
+    await pool.query(
+      'UPDATE projects SET name = $1, data = $2, updated_at = $3 WHERE id = $4',
+      [name || project.name, JSON.stringify(data), now, req.params.id]
+    );
+    if (req.user) {
+      await logActivity(req.user.userId, req.user.userName || 'User', project.tenant_id, 'UPDATE', 'project', name || project.name, 'Project updated');
     }
     res.json({ success: true });
+  });
+
+  // DELETE a project
+  app.delete('/api/projects/:id', authenticate, async (req, res) => {
+    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+    const project = rows[0];
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (req.user!.role === 'tenant_admin' && project.tenant_id !== req.user!.tenantId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await pool.query('DELETE FROM projects WHERE id = $1', [req.params.id]);
+    if (req.user) {
+      await logActivity(req.user.userId, req.user.userName || 'User', project.tenant_id, 'DELETE', 'project', project.name, 'Project deleted');
+    }
+    res.json({ success: true });
+  });
+
+  // POST generate or retrieve share link for a project
+  app.post('/api/projects/:id/share', authenticate, async (req, res) => {
+    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+    const project = rows[0];
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    let token = project.share_token;
+    if (!token) {
+      token = uuidv4().replace(/-/g, '');
+      await pool.query('UPDATE projects SET share_token = $1 WHERE id = $2', [token, req.params.id]);
+    }
+
+    if (req.user) {
+      await logActivity(req.user.userId, req.user.userName || 'User', project.tenant_id, 'SHARE', 'project', project.name, 'Share link generated');
+    }
+    res.json({
+      token,
+      shareUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/shared/${token}`,
+    });
+  });
+
+  // GET load a shared project by token — no auth required (view-only)
+  app.get('/api/projects/shared/:token', async (req, res) => {
+    const { rows } = await pool.query('SELECT * FROM projects WHERE share_token = $1', [req.params.token]);
+    const project = rows[0];
+    if (!project) return res.status(404).json({ error: 'Shared project not found or link has expired' });
+
+    if (typeof project.data === 'string') project.data = JSON.parse(project.data);
+    res.json({
+      id: project.id,
+      name: project.name,
+      created_at: project.created_at,
+      updated_at: project.updated_at,
+      data: project.data,
+    });
+  });
+
+  // GET project stats per sales rep (Tenant Admin dashboard)
+  app.get('/api/tenant/:tenantId/project-stats', authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT
+         u.id as user_id,
+         u.name as user_name,
+         u.email,
+         COUNT(p.id) as project_count,
+         MAX(COALESCE(p.updated_at, p.created_at)) as last_active
+       FROM users u
+       LEFT JOIN projects p ON p.user_id = u.id AND p.tenant_id = $1
+       WHERE u.tenant_id = $1 AND u.role = 'sales_rep'
+       GROUP BY u.id, u.name, u.email
+       ORDER BY project_count DESC`,
+      [req.params.tenantId]
+    );
+    res.json(rows);
+  });
+
+  // GET count of active projects (modified in last 5 days)
+  app.get('/api/tenant/:tenantId/active-projects', authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*) as count FROM projects
+       WHERE tenant_id = $1
+       AND COALESCE(updated_at, created_at) >= NOW() - INTERVAL '5 days'`,
+      [req.params.tenantId]
+    );
+    res.json({ count: parseInt(rows[0].count) });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -778,7 +983,7 @@ async function startServer() {
         Return a structured JSON report.
       `;
 
-      const model = genai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = genai.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
