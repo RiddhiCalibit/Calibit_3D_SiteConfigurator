@@ -70,6 +70,7 @@ interface SidebarProps {
   onLoadProject: (boundary: [number, number][], objects: any[]) => void;
   user: User | null;
   tenant: Tenant | null;
+  onNewProject: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -97,6 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLoadProject,
   user,
   tenant,
+  onNewProject,
 }) => {
   const { theme, setTheme } = useTheme();
   const [modalMode, setModalMode] = React.useState<
@@ -648,7 +650,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <SaveIcon className="w-4 h-4" />
           <span>{currentProjectId ? "Update" : "Save"}</span>
+          {/* <div style={{ color: "red", fontSize: "10px" }}>
+            PID: {currentProjectId || "null"}
+          </div> */}
         </button>
+
+        {currentProjectId && (
+          <button
+            onClick={onNewProject}
+            className="flex items-center justify-center gap-1.5 px-3 py-2  bg-brand-teal hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 rounded-lg text-xs transition-colors border border-white/10"
+            title="Close project — Start New Project"
+          >
+            <X className="w-4 h-4" />
+            <span className="text-[10px] font-semibold uppercase tracking-wide">
+              Close
+            </span>
+          </button>
+        )}
 
         <button
           onClick={onOpenProjects}
