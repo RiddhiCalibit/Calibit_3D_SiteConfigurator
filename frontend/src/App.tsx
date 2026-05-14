@@ -547,7 +547,6 @@ export default function App() {
         onSetUnitSystem={setUnitSystem}
         onOpenCompliance={() => setComplianceOpen(true)}
         onLogout={handleLogout}
-        onNewProject={handleNewProject}
         onOpenProjects={() => setProjectsPanelOpen(true)}
         onLoadProject={(boundary, objects) => {
           setBoundary(boundary);
@@ -589,6 +588,8 @@ export default function App() {
             onOpenProject={handleOpenProject}
             onDeleteProject={handleDeleteProject}
             onRefresh={() => fetchProjects(tenant)}
+            currentProjectId={currentProjectId}
+            onNewProject={handleNewProject}
           />
 
           {/* Top Overlays */}

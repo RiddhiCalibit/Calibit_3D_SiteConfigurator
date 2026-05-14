@@ -1,8 +1,17 @@
-import React, { useState } from 'react';
-import { authFetch } from '../utils/api';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, FolderOpen, Trash2, Share2, Clock, Plus, Check, Copy } from 'lucide-react';
-import { User, Tenant } from '../types';
+import React, { useState } from "react";
+import { authFetch } from "../utils/api";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  X,
+  FolderOpen,
+  Trash2,
+  Share2,
+  Clock,
+  Plus,
+  Check,
+  Copy,
+} from "lucide-react";
+import { User, Tenant } from "../types";
 
 interface Project {
   id: string;
@@ -22,6 +31,8 @@ interface ProjectsPanelProps {
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onRefresh: () => void;
+  currentProjectId: string | null;
+  onNewProject: () => void;
 }
 
 export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
@@ -33,6 +44,8 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
   onOpenProject,
   onDeleteProject,
   onRefresh,
+  currentProjectId,
+  onNewProject,
 }) => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [sharingId, setSharingId] = useState<string | null>(null);
@@ -43,15 +56,17 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
     if (!confirm(`Delete "${projectName}"? This cannot be undone.`)) return;
     setDeletingId(projectId);
     try {
-      const res = await authFetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         onDeleteProject(projectId);
         onRefresh();
       } else {
-        alert('Failed to delete project.');
+        alert("Failed to delete project.");
       }
     } catch {
-      alert('Failed to delete project.');
+      alert("Failed to delete project.");
     } finally {
       setDeletingId(null);
     }
@@ -65,16 +80,18 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
     }
     setSharingId(projectId);
     try {
-      const res = await authFetch(`/api/projects/${projectId}/share`, { method: 'POST' });
+      const res = await authFetch(`/api/projects/${projectId}/share`, {
+        method: "POST",
+      });
       if (res.ok) {
         const data = await res.json();
-        setShareUrls(prev => ({ ...prev, [projectId]: data.shareUrl }));
+        setShareUrls((prev) => ({ ...prev, [projectId]: data.shareUrl }));
       } else {
-        alert('Failed to generate share link.');
+        alert("Failed to generate share link.");
         setSharingId(null);
       }
     } catch {
-      alert('Failed to generate share link.');
+      alert("Failed to generate share link.");
       setSharingId(null);
     }
   };
@@ -88,9 +105,13 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
   };
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—';
+    if (!dateStr) return "—";
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   const isActive = (project: Project) => {
@@ -115,24 +136,43 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
 
           {/* Panel */}
           <motion.div
-            initial={{ x: '100%' }}
+            initial={{ x: "100%" }}
             animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
             className="fixed right-0 top-0 h-full w-full max-w-md bg-[#0f1623] border-l border-white/10 z-50 flex flex-col shadow-2xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-white/10">
               <div>
-                <h2 className="text-lg font-bold tracking-tight text-white">My Projects</h2>
-                <p className="text-xs opacity-40 mt-0.5">{projects.length} saved project{projects.length !== 1 ? 's' : ''}</p>
+                <h2 className="text-lg font-bold tracking-tight text-white">
+                  My Projects
+                </h2>
+                <p className="text-xs opacity-40 mt-0.5">
+                  {projects.length} saved project
+                  {projects.length !== 1 ? "s" : ""}
+                </p>
               </div>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {currentProjectId && (
+                  <button
+                    onClick={() => {
+                      onNewProject();
+                      onClose();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-teal hover:bg-brand-teal/20 text-white border border-brand-teal/20 rounded-lg text-xs font-semibold transition-colors"
+                    title="Clear map and start a new project"
+                  >
+                    New Project
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Project list */}
@@ -143,10 +183,12 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
                     <FolderOpen className="w-8 h-8 opacity-20" />
                   </div>
                   <p className="text-sm opacity-40">No saved projects yet</p>
-                  <p className="text-xs opacity-20 mt-1">Save your first project using the button below</p>
+                  <p className="text-xs opacity-20 mt-1">
+                    Save your first project using the button below
+                  </p>
                 </div>
               ) : (
-                projects.map(project => (
+                projects.map((project) => (
                   <div
                     key={project.id}
                     className="bg-white/5 border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all"
@@ -155,7 +197,9 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-white truncate">{project.name}</h3>
+                          <h3 className="text-sm font-semibold text-white truncate">
+                            {project.name}
+                          </h3>
                           {isActive(project) && (
                             <span className="flex-shrink-0 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded">
                               Active
@@ -187,9 +231,13 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
                           className="flex-shrink-0 flex items-center gap-1 px-2 py-1 bg-brand-teal/20 hover:bg-brand-teal/30 text-brand-teal rounded text-[10px] font-bold transition-colors"
                         >
                           {copiedId === project.id ? (
-                            <><Check className="w-3 h-3" /> Copied</>
+                            <>
+                              <Check className="w-3 h-3" /> Copied
+                            </>
                           ) : (
-                            <><Copy className="w-3 h-3" /> Copy</>
+                            <>
+                              <Copy className="w-3 h-3" /> Copy
+                            </>
                           )}
                         </button>
                       </div>
@@ -198,7 +246,10 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
                     {/* Action buttons */}
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => { onOpenProject(project.id); onClose(); }}
+                        onClick={() => {
+                          onOpenProject(project.id);
+                          onClose();
+                        }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-brand-teal/10 hover:bg-brand-teal/20 text-brand-teal rounded-lg text-xs font-semibold transition-colors border border-brand-teal/20"
                       >
                         <FolderOpen className="w-3.5 h-3.5" />
