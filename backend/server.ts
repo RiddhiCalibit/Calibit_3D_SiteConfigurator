@@ -1,5 +1,5 @@
-import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
 dotenv.config();
 
 declare global {
@@ -7,7 +7,7 @@ declare global {
     interface Request {
       user?: {
         userId: string;
-        role: 'platform_admin' | 'tenant_admin' | 'sales_rep';
+        role: "platform_admin" | "tenant_admin" | "sales_rep";
         tenantId?: string;
         userName: string;
       };
@@ -15,27 +15,30 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import { Pool } from 'pg';
-import bcrypt from 'bcryptjs';
-import rateLimit from 'express-rate-limit';
-import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_LIBRARY } from './types';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { Pool } from "pg";
+import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
+import { v4 as uuidv4 } from "uuid";
+import { DEFAULT_LIBRARY } from "./types";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 // ─── PostgreSQL Connection Pool ───────────────────────────────────────────────
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
 // ─── Gemini AI ────────────────────────────────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set in .env');
+if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set in .env");
 const genai = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -45,7 +48,7 @@ function getISTString(): string {
   const now = new Date();
   const istOffset = 5.5 * 60 * 60 * 1000;
   const istTime = new Date(now.getTime() + istOffset);
-  return istTime.toISOString().replace('T', ' ').substring(0, 19);
+  return istTime.toISOString().replace("T", " ").substring(0, 19);
 }
 
 async function logActivity(
@@ -55,62 +58,76 @@ async function logActivity(
   action: string,
   entityType: string,
   entityName?: string,
-  details?: string
+  details?: string,
 ) {
   try {
     await pool.query(
       `INSERT INTO activity_logs (id, tenant_id, user_id, user_name, action, entity_type, entity_name, details, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [uuidv4(), tenantId, userId, userName, action, entityType, entityName || null, details || null, getISTString()]
+      [
+        uuidv4(),
+        tenantId,
+        userId,
+        userName,
+        action,
+        entityType,
+        entityName || null,
+        details || null,
+        getISTString(),
+      ],
     );
   } catch (err) {
-    console.error('Failed to log activity:', err);
+    console.error("Failed to log activity:", err);
   }
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 function authenticate(req: any, res: any, next: any) {
-  const authHeader = req.headers['authorization'];
+  const authHeader = req.headers["authorization"];
   if (!authHeader) {
-    console.log('❌ No token provided');
-    return res.status(401).json({ error: 'No token provided' });
+    console.log("❌ No token provided");
+    return res.status(401).json({ error: "No token provided" });
   }
-  const token = authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token provided' });
+  const token = authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token provided" });
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: string; role: string; tenantId?: string; userName: string;
+      userId: string;
+      role: string;
+      tenantId?: string;
+      userName: string;
     };
     req.user = decoded;
     next();
   } catch (error) {
-    console.log('❌ Token error:', (error as Error).message);
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    console.log("❌ Token error:", (error as Error).message);
+    return res.status(403).json({ error: "Invalid or expired token" });
   }
 }
 
 function requireRole(...roles: string[]) {
   return (req: any, res: any, next: any) => {
     if (!roles.includes(req.user?.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+      return res.status(403).json({ error: "Insufficient permissions" });
     }
     next();
   };
 }
 
 function requireTenantAccess(req: any, res: any, next: any) {
-  const requestedTenantId = req.params.tenantId || req.params.id || req.query.tenantId;
-  if (req.user.role === 'platform_admin') return next();
+  const requestedTenantId =
+    req.params.tenantId || req.params.id || req.query.tenantId;
+  if (req.user.role === "platform_admin") return next();
   if (req.user.tenantId !== requestedTenantId) {
-    return res.status(403).json({ error: 'Access denied to this tenant' });
+    return res.status(403).json({ error: "Access denied to this tenant" });
   }
   next();
 }
 
 function validatePassword(password: string) {
-  if (typeof password !== 'string' || password.length < 8) {
-    return 'Password must be at least 8 characters';
+  if (typeof password !== "string" || password.length < 8) {
+    return "Password must be at least 8 characters";
   }
   return null;
 }
@@ -118,128 +135,181 @@ function validatePassword(password: string) {
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+  message: { error: "Too many login attempts. Try again in 15 minutes." },
 });
 
 // ─── Server Bootstrap ─────────────────────────────────────────────────────────
 
 async function startServer() {
   // Verify DB connection
-  await pool.query('SELECT 1');
-  console.log('✅ PostgreSQL connected');
+  await pool.query("SELECT 1");
+  console.log("✅ PostgreSQL connected");
 
   const app = express();
 
-  app.use(cors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:5173',
-      'http://localhost:5173',
-    ],  
-    credentials: true,
-  }));
-  app.use(express.json({ limit: '5mb' }));
-  app.use(express.urlencoded({ limit: '5mb', extended: true }));
+  app.use(
+    cors({
+      origin: [
+        process.env.FRONTEND_URL || "http://localhost:5173",
+        "http://localhost:5173",
+      ],
+      credentials: true,
+    }),
+  );
+  app.use(express.json({ limit: "5mb" }));
+  app.use(express.urlencoded({ limit: "5mb", extended: true }));
 
   app.use((req, res, next) => {
-    console.log('👉 Incoming request:', req.method, req.url);
+    console.log("👉 Incoming request:", req.method, req.url);
     next();
   });
 
   const PORT = 3000;
 
   // ─── Seed initial data if DB is empty ─────────────────────────────────────
-  const { rows: tenantRows } = await pool.query('SELECT count(*) as count FROM tenants');
+  const { rows: tenantRows } = await pool.query(
+    "SELECT count(*) as count FROM tenants",
+  );
   if (parseInt(tenantRows[0].count) === 0) {
-    const tenantId = 'default-tenant';
+    const tenantId = "default-tenant";
     await pool.query(
-      'INSERT INTO tenants (id, name, logo_url) VALUES ($1, $2, $3)',
-      [tenantId, 'EquipmentCo Global', 'https://picsum.photos/seed/logo/200/200']
+      "INSERT INTO tenants (id, name, logo_url) VALUES ($1, $2, $3)",
+      [
+        tenantId,
+        "EquipmentCo Global",
+        "https://picsum.photos/seed/logo/200/200",
+      ],
     );
 
-    const hashedPassword = await bcrypt.hash('password', 10);
+    const hashedPassword = await bcrypt.hash("password", 10);
 
     await pool.query(
-      'INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)',
-      ['admin-1', null, 'platform@admin.com', hashedPassword, 'platform_admin', 'Platform Creator']
+      "INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)",
+      [
+        "admin-1",
+        null,
+        "platform@admin.com",
+        hashedPassword,
+        "platform_admin",
+        "Platform Creator",
+      ],
     );
     await pool.query(
-      'INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)',
-      ['tenant-admin-1', tenantId, 'admin@equipmentco.com', hashedPassword, 'tenant_admin', 'EquipmentCo Admin']
+      "INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)",
+      [
+        "tenant-admin-1",
+        tenantId,
+        "admin@equipmentco.com",
+        hashedPassword,
+        "tenant_admin",
+        "EquipmentCo Admin",
+      ],
     );
     await pool.query(
-      'INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)',
-      ['sales-1', tenantId, 'sales@equipmentco.com', hashedPassword, 'sales_rep', 'John Sales']
+      "INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)",
+      [
+        "sales-1",
+        tenantId,
+        "sales@equipmentco.com",
+        hashedPassword,
+        "sales_rep",
+        "John Sales",
+      ],
     );
-    console.log('✅ Database seeded');
+    console.log("✅ Database seeded");
   }
 
   // ─── Health check ──────────────────────────────────────────────────────────
-  app.get('/', (req, res) => {
-    res.send('Backend is running 🚀');
+  app.get("/", (req, res) => {
+    res.send("Backend is running 🚀");
   });
 
   // ══════════════════════════════════════════════════════════════════════════
   // AUTH ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.post('/api/auth/login', loginLimiter, async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
     const user = rows[0];
 
-    if (user && await bcrypt.compare(password, user.password_hash)) {
+    if (user && (await bcrypt.compare(password, user.password_hash))) {
       let tenant = null;
       if (user.tenant_id) {
-        const tenantResult = await pool.query('SELECT * FROM tenants WHERE id = $1', [user.tenant_id]);
+        const tenantResult = await pool.query(
+          "SELECT * FROM tenants WHERE id = $1",
+          [user.tenant_id],
+        );
         tenant = tenantResult.rows[0] || null;
       }
 
       const token = jwt.sign(
-        { userId: user.id, role: user.role, tenantId: user.tenant_id, userName: user.name },
+        {
+          userId: user.id,
+          role: user.role,
+          tenantId: user.tenant_id,
+          userName: user.name,
+        },
         JWT_SECRET,
-        { expiresIn: '8h' }
+        { expiresIn: "8h" },
       );
 
       const { password_hash, ...safeUser } = user;
       res.json({ user: safeUser, tenant, token });
-      await logActivity(user.id, user.name, user.tenant_id, 'LOGIN', 'auth', user.name, `Logged in as ${user.role}`);
+      await logActivity(
+        user.id,
+        user.name,
+        user.tenant_id,
+        "LOGIN",
+        "auth",
+        user.name,
+        `Logged in as ${user.role}`,
+      );
     } else {
-      res.status(401).json({ error: 'Invalid credentials' });
+      res.status(401).json({ error: "Invalid credentials" });
     }
   });
 
-  app.post('/api/auth/forgot-password', async (req, res) => {
+  app.post("/api/auth/forgot-password", async (req, res) => {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!email) return res.status(400).json({ error: "Email is required" });
 
-    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
     const user = rows[0];
 
     if (!user) {
-      return res.json({ message: 'If this email exists, a request has been submitted.' });
+      return res.json({
+        message: "If this email exists, a request has been submitted.",
+      });
     }
 
     const istString = getISTString();
 
     // Platform admin: self-reset via OTP
-    if (user.role === 'platform_admin') {
+    if (user.role === "platform_admin") {
       try {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAtStr = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        const expiresAtStr = new Date(
+          Date.now() + 10 * 60 * 1000,
+        ).toISOString();
 
         // Invalidate existing unused OTPs
         await pool.query(
-          'UPDATE platform_admin_otps SET used = TRUE WHERE email = $1 AND used = FALSE',
-          [email]
+          "UPDATE platform_admin_otps SET used = TRUE WHERE email = $1 AND used = FALSE",
+          [email],
         );
         await pool.query(
           `INSERT INTO platform_admin_otps (id, user_id, email, otp, expires_at, created_at)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [uuidv4(), user.id, email, otp, expiresAtStr, istString]
+          [uuidv4(), user.id, email, otp, expiresAtStr, istString],
         );
 
         console.log(`\n╔══════════════════════════════════════╗`);
@@ -249,11 +319,21 @@ async function startServer() {
         console.log(`║  Expires in 10 minutes               ║`);
         console.log(`╚══════════════════════════════════════╝\n`);
 
-        await logActivity(user.id, user.name, null, 'REQUEST', 'platform_admin_reset', user.email, 'OTP generated for self-reset');
+        await logActivity(
+          user.id,
+          user.name,
+          null,
+          "REQUEST",
+          "platform_admin_reset",
+          user.email,
+          "OTP generated for self-reset",
+        );
         return res.json({ requiresOtp: true, otp });
       } catch (err) {
-        console.error('❌ OTP generation error:', err);
-        return res.status(500).json({ error: 'Failed to generate OTP. Please try again.' });
+        console.error("❌ OTP generation error:", err);
+        return res
+          .status(500)
+          .json({ error: "Failed to generate OTP. Please try again." });
       }
     }
 
@@ -262,39 +342,61 @@ async function startServer() {
     await pool.query(
       `INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
        VALUES ($1, $2, $3, 'pending', $4)`,
-      [id, user.id, email, istString]
+      [id, user.id, email, istString],
     );
 
-    if (user.role === 'tenant_admin') {
-      await logActivity(user.id, user.name, null, 'REQUEST', 'tenant_admin_reset', user.email,
-        'Tenant admin password reset requested — awaiting platform admin');
+    if (user.role === "tenant_admin") {
+      await logActivity(
+        user.id,
+        user.name,
+        null,
+        "REQUEST",
+        "tenant_admin_reset",
+        user.email,
+        "Tenant admin password reset requested — awaiting platform admin",
+      );
     } else {
-      await logActivity(user.id, user.name, user.tenant_id, 'REQUEST', 'password_reset', user.email,
-        'Password reset requested');
+      await logActivity(
+        user.id,
+        user.name,
+        user.tenant_id,
+        "REQUEST",
+        "password_reset",
+        user.email,
+        "Password reset requested",
+      );
     }
 
-    res.json({ message: 'If this email exists, a request has been submitted.' });
+    res.json({
+      message: "If this email exists, a request has been submitted.",
+    });
   });
 
-  app.post('/api/auth/platform-reset-verify', async (req, res) => {
+  app.post("/api/auth/platform-reset-verify", async (req, res) => {
     const { email, otp, new_password } = req.body;
     if (!email || !otp || !new_password) {
-      return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+      return res
+        .status(400)
+        .json({ error: "Email, OTP, and new password are required" });
     }
 
     const { rows } = await pool.query(
       `SELECT * FROM platform_admin_otps
        WHERE email = $1 AND otp = $2 AND used = FALSE
        ORDER BY created_at DESC LIMIT 1`,
-      [email, otp]
+      [email, otp],
     );
     const record = rows[0];
 
     if (!record) {
-      return res.status(400).json({ error: 'Invalid OTP. Please check the code and try again.' });
+      return res
+        .status(400)
+        .json({ error: "Invalid OTP. Please check the code and try again." });
     }
     if (new Date() > new Date(record.expires_at)) {
-      return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
+      return res
+        .status(400)
+        .json({ error: "OTP has expired. Please request a new one." });
     }
 
     const pwError = validatePassword(new_password);
@@ -302,14 +404,27 @@ async function startServer() {
 
     const hashedPassword = await bcrypt.hash(new_password, 10);
     await pool.query(
-      'UPDATE users SET password_hash = $1, force_password_change = 0 WHERE id = $2',
-      [hashedPassword, record.user_id]
+      "UPDATE users SET password_hash = $1, force_password_change = 0 WHERE id = $2",
+      [hashedPassword, record.user_id],
     );
-    await pool.query('UPDATE platform_admin_otps SET used = TRUE WHERE id = $1', [record.id]);
+    await pool.query(
+      "UPDATE platform_admin_otps SET used = TRUE WHERE id = $1",
+      [record.id],
+    );
 
-    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [record.user_id]);
+    const userResult = await pool.query("SELECT * FROM users WHERE id = $1", [
+      record.user_id,
+    ]);
     const user = userResult.rows[0];
-    await logActivity(record.user_id, user?.name || 'Platform Admin', null, 'RESET', 'platform_admin_reset', email, 'Password self-reset via OTP');
+    await logActivity(
+      record.user_id,
+      user?.name || "Platform Admin",
+      null,
+      "RESET",
+      "platform_admin_reset",
+      email,
+      "Password self-reset via OTP",
+    );
 
     res.json({ success: true });
   });
@@ -318,54 +433,85 @@ async function startServer() {
   // USER ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/tenant/:id/users', authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, async (req, res) => {
-    const { rows } = await pool.query(
-      'SELECT id, tenant_id, email, role, name, phone FROM users WHERE tenant_id = $1',
-      [req.params.id]
-    );
-    res.json(rows);
-  });
-
-  app.post('/api/tenant/:id/users', authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, async (req, res) => {
-    const { id, email, password, role, name, phone } = req.body;
-
-    const { rows } = await pool.query(
-      "SELECT count(*) as count FROM users WHERE tenant_id = $1 AND role = 'sales_rep'",
-      [req.params.id]
-    );
-    if (parseInt(rows[0].count) >= 10) {
-      return res.status(403).json({
-        error: 'User creation limit reached. This tenant has reached the maximum of 10 sales representatives.'
-      });
-    }
-
-    const pwError = validatePassword(password);
-    if (pwError) return res.status(400).json({ error: pwError });
-
-    try {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await pool.query(
-        'INSERT INTO users (id, tenant_id, email, password_hash, role, name, phone) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [id, req.params.id, email, hashedPassword, role || 'sales_rep', name, phone]
+  app.get(
+    "/api/tenant/:id/users",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    requireTenantAccess,
+    async (req, res) => {
+      const { rows } = await pool.query(
+        "SELECT id, tenant_id, email, role, name, phone FROM users WHERE tenant_id = $1",
+        [req.params.id],
       );
-      if (req.user) {
-        await logActivity(req.user.userId, req.user.userName, req.params.id, 'CREATE', 'sales_rep', name, `Created sales rep: ${email}`);
-      }
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
+      res.json(rows);
+    },
+  );
 
-  app.put('/api/users/:id', authenticate, async (req, res) => {
+  app.post(
+    "/api/tenant/:id/users",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    requireTenantAccess,
+    async (req, res) => {
+      const { id, email, password, role, name, phone } = req.body;
+
+      const { rows } = await pool.query(
+        "SELECT count(*) as count FROM users WHERE tenant_id = $1 AND role = 'sales_rep'",
+        [req.params.id],
+      );
+      if (parseInt(rows[0].count) >= 10) {
+        return res.status(403).json({
+          error:
+            "User creation limit reached. This tenant has reached the maximum of 10 sales representatives.",
+        });
+      }
+
+      const pwError = validatePassword(password);
+      if (pwError) return res.status(400).json({ error: pwError });
+
+      try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.query(
+          "INSERT INTO users (id, tenant_id, email, password_hash, role, name, phone) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+          [
+            id,
+            req.params.id,
+            email,
+            hashedPassword,
+            role || "sales_rep",
+            name,
+            phone,
+          ],
+        );
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName,
+            req.params.id,
+            "CREATE",
+            "sales_rep",
+            name,
+            `Created sales rep: ${email}`,
+          );
+        }
+        res.json({ success: true });
+      } catch (error: any) {
+        res.status(400).json({ error: error.message });
+      }
+    },
+  );
+
+  app.put("/api/users/:id", authenticate, async (req, res) => {
     const { name, phone, password } = req.body;
-    if (!req.user) return res.status(401).json({ error: 'User not authenticated' });
+    if (!req.user)
+      return res.status(401).json({ error: "User not authenticated" });
 
     const isSelf = req.user.userId === req.params.id;
-    const isAdmin = req.user.role === 'tenant_admin' || req.user.role === 'platform_admin';
+    const isAdmin =
+      req.user.role === "tenant_admin" || req.user.role === "platform_admin";
 
     if (!isSelf && !isAdmin) {
-      return res.status(403).json({ error: 'Access denied' });
+      return res.status(403).json({ error: "Access denied" });
     }
 
     if (password) {
@@ -373,36 +519,60 @@ async function startServer() {
       if (pwError) return res.status(400).json({ error: pwError });
       const hashedPassword = await bcrypt.hash(password, 10);
       await pool.query(
-        'UPDATE users SET name = $1, phone = $2, password_hash = $3, force_password_change = 0 WHERE id = $4',
-        [name, phone, hashedPassword, req.params.id]
+        "UPDATE users SET name = $1, phone = $2, password_hash = $3, force_password_change = 0 WHERE id = $4",
+        [name, phone, hashedPassword, req.params.id],
       );
     } else {
-      await pool.query(
-        'UPDATE users SET name = $1, phone = $2 WHERE id = $3',
-        [name, phone, req.params.id]
-      );
+      await pool.query("UPDATE users SET name = $1, phone = $2 WHERE id = $3", [
+        name,
+        phone,
+        req.params.id,
+      ]);
       if (req.user) {
-        await logActivity(req.user.userId, req.user.userName || 'User', req.user.tenantId || null, 'UPDATE', 'profile', name, 'Profile updated');
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "User",
+          req.user.tenantId || null,
+          "UPDATE",
+          "profile",
+          name,
+          "Profile updated",
+        );
       }
     }
     res.json({ success: true });
   });
 
-  app.delete('/api/users/:id', authenticate, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
-    const userToDelete = rows[0];
-    await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
-    if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'Admin', req.user.tenantId || null, 'DELETE', 'sales_rep', userToDelete?.name, `Deleted: ${userToDelete?.email}`);
-    }
-    res.json({ success: true });
-  });
+  app.delete(
+    "/api/users/:id",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [
+        req.params.id,
+      ]);
+      const userToDelete = rows[0];
+      await pool.query("DELETE FROM users WHERE id = $1", [req.params.id]);
+      if (req.user) {
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "Admin",
+          req.user.tenantId || null,
+          "DELETE",
+          "sales_rep",
+          userToDelete?.name,
+          `Deleted: ${userToDelete?.email}`,
+        );
+      }
+      res.json({ success: true });
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // EQUIPMENT ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/tenant/:tenantId/equipment/stats', async (req, res) => {
+  app.get("/api/tenant/:tenantId/equipment/stats", async (req, res) => {
     const { tenantId } = req.params;
 
     const { rows: customRows } = await pool.query(
@@ -412,212 +582,421 @@ async function startServer() {
         SUM(CASE WHEN is_active = FALSE THEN 1 ELSE 0 END) as inactive
        FROM equipment
        WHERE tenant_id = $1`,
-      [tenantId]
+      [tenantId],
     );
     const custom = customRows[0];
 
     const { rows: disabledRows } = await pool.query(
-      'SELECT COUNT(*) as count FROM tenant_disabled_defaults WHERE tenant_id = $1',
-      [tenantId]
+      "SELECT COUNT(*) as count FROM tenant_disabled_defaults WHERE tenant_id = $1",
+      [tenantId],
     );
     const disabledCount = parseInt(disabledRows[0].count);
 
     const DEFAULT_COUNT = DEFAULT_LIBRARY.length;
     const total = parseInt(custom.total) + DEFAULT_COUNT;
-    const active = parseInt(custom.active || 0) + (DEFAULT_COUNT - disabledCount);
+    const active =
+      parseInt(custom.active || 0) + (DEFAULT_COUNT - disabledCount);
     const inactive = parseInt(custom.inactive || 0) + disabledCount;
 
     res.json({ total, active, inactive });
   });
 
-  app.get('/api/tenant/:id/equipment', authenticate, requireTenantAccess, async (req, res) => {
-    if (!req.user || (req.user.tenantId !== req.params.id && req.user.role !== 'platform_admin')) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-    const { rows } = await pool.query('SELECT * FROM equipment WHERE tenant_id = $1', [req.params.id]);
-    res.json(rows);
-  });
+  app.get(
+    "/api/tenant/:id/equipment",
+    authenticate,
+    requireTenantAccess,
+    async (req, res) => {
+      if (
+        !req.user ||
+        (req.user.tenantId !== req.params.id &&
+          req.user.role !== "platform_admin")
+      ) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const { rows } = await pool.query(
+        "SELECT * FROM equipment WHERE tenant_id = $1",
+        [req.params.id],
+      );
+      res.json(rows);
+    },
+  );
 
-  app.post('/api/tenant/:id/equipment', authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    const { id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active } = req.body;
+  app.post(
+    "/api/tenant/:id/equipment",
+    authenticate,
+    requireTenantAccess,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      const {
+        id,
+        name,
+        category,
+        width,
+        depth,
+        height,
+        color,
+        model_url,
+        animations_enabled,
+        image_url,
+        is_active,
+      } = req.body;
 
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      return res.status(400).json({ error: 'Name is required' });
-    }
-    if (isNaN(width) || isNaN(depth) || isNaN(height) || width <= 0 || depth <= 0 || height <= 0) {
-      return res.status(400).json({ error: 'Invalid dimensions' });
-    }
+      if (!name || typeof name !== "string" || name.trim() === "") {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      if (
+        isNaN(width) ||
+        isNaN(depth) ||
+        isNaN(height) ||
+        width <= 0 ||
+        depth <= 0 ||
+        height <= 0
+      ) {
+        return res.status(400).json({ error: "Invalid dimensions" });
+      }
 
-    await pool.query(
-      `INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
+      await pool.query(
+        `INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [id, req.params.id, name, category, width, depth, height, color, model_url, animations_enabled || false, image_url || null, is_active !== false]
-    );
-    if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'Admin', req.params.id, 'CREATE', 'equipment', name, `Category: ${category}`);
-    }
-    res.json({ success: true });
-  });
+        [
+          id,
+          req.params.id,
+          name,
+          category,
+          width,
+          depth,
+          height,
+          color,
+          model_url,
+          animations_enabled || false,
+          image_url || null,
+          is_active !== false,
+        ],
+      );
+      if (req.user) {
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "Admin",
+          req.params.id,
+          "CREATE",
+          "equipment",
+          name,
+          `Category: ${category}`,
+        );
+      }
+      res.json({ success: true });
+    },
+  );
 
-  app.put('/api/tenant/:tenantId/equipment/:id', authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    const { name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active } = req.body;
-    await pool.query(
-      `UPDATE equipment
+  app.put(
+    "/api/tenant/:tenantId/equipment/:id",
+    authenticate,
+    requireTenantAccess,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      const {
+        name,
+        category,
+        width,
+        depth,
+        height,
+        color,
+        model_url,
+        animations_enabled,
+        image_url,
+        is_active,
+      } = req.body;
+      await pool.query(
+        `UPDATE equipment
        SET name = $1, category = $2, width = $3, depth = $4, height = $5,
            color = $6, model_url = $7, animations_enabled = $8, image_url = $9, is_active = $10
        WHERE id = $11 AND tenant_id = $12`,
-      [name, category, width, depth, height, color, model_url, animations_enabled || false, image_url || null, is_active !== false, req.params.id, req.params.tenantId]
-    );
-    if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', name, 'Equipment updated');
-    }
-    res.json({ success: true });
-  });
+        [
+          name,
+          category,
+          width,
+          depth,
+          height,
+          color,
+          model_url,
+          animations_enabled || false,
+          image_url || null,
+          is_active !== false,
+          req.params.id,
+          req.params.tenantId,
+        ],
+      );
+      if (req.user) {
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "Admin",
+          req.params.tenantId,
+          "UPDATE",
+          "equipment",
+          name,
+          "Equipment updated",
+        );
+      }
+      res.json({ success: true });
+    },
+  );
 
-  app.delete('/api/tenant/:tenantId/equipment/:id', authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM equipment WHERE id = $1', [req.params.id]);
-    const eqToDelete = rows[0];
-    await pool.query('DELETE FROM equipment WHERE id = $1 AND tenant_id = $2', [req.params.id, req.params.tenantId]);
-    if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'DELETE', 'equipment', eqToDelete?.name, 'Equipment deleted');
-    }
-    res.json({ success: true });
-  });
+  app.delete(
+    "/api/tenant/:tenantId/equipment/:id",
+    authenticate,
+    requireTenantAccess,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      const { rows } = await pool.query(
+        "SELECT * FROM equipment WHERE id = $1",
+        [req.params.id],
+      );
+      const eqToDelete = rows[0];
+      await pool.query(
+        "DELETE FROM equipment WHERE id = $1 AND tenant_id = $2",
+        [req.params.id, req.params.tenantId],
+      );
+      if (req.user) {
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "Admin",
+          req.params.tenantId,
+          "DELETE",
+          "equipment",
+          eqToDelete?.name,
+          "Equipment deleted",
+        );
+      }
+      res.json({ success: true });
+    },
+  );
 
-  app.patch('/api/tenant/:tenantId/equipment/:id/toggle', authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    const { is_active } = req.body;
-    await pool.query(
-      'UPDATE equipment SET is_active = $1 WHERE id = $2 AND tenant_id = $3',
-      [is_active, req.params.id, req.params.tenantId]
-    );
-    if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'Admin', req.params.tenantId, 'UPDATE', 'equipment', req.params.id, is_active ? 'Equipment activated' : 'Equipment deactivated');
-    }
-    res.json({ success: true });
-  });
+  app.patch(
+    "/api/tenant/:tenantId/equipment/:id/toggle",
+    authenticate,
+    requireTenantAccess,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      const { is_active } = req.body;
+      await pool.query(
+        "UPDATE equipment SET is_active = $1 WHERE id = $2 AND tenant_id = $3",
+        [is_active, req.params.id, req.params.tenantId],
+      );
+      if (req.user) {
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "Admin",
+          req.params.tenantId,
+          "UPDATE",
+          "equipment",
+          req.params.id,
+          is_active ? "Equipment activated" : "Equipment deactivated",
+        );
+      }
+      res.json({ success: true });
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // DISABLED DEFAULTS ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/tenant/:tenantId/disabled-defaults', authenticate, requireTenantAccess, async (req, res) => {
-    const { rows } = await pool.query(
-      'SELECT equipment_id FROM tenant_disabled_defaults WHERE tenant_id = $1',
-      [req.params.tenantId]
-    );
-    res.json(rows.map((r: any) => r.equipment_id));
-  });
-
-  app.post('/api/tenant/:tenantId/disabled-defaults/:equipmentId', authenticate, requireTenantAccess, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    const { tenantId, equipmentId } = req.params;
-
-    const { rows } = await pool.query(
-      'SELECT 1 FROM tenant_disabled_defaults WHERE tenant_id = $1 AND equipment_id = $2',
-      [tenantId, equipmentId]
-    );
-
-    if (rows.length > 0) {
-      // Currently disabled → re-enable
-      await pool.query(
-        'DELETE FROM tenant_disabled_defaults WHERE tenant_id = $1 AND equipment_id = $2',
-        [tenantId, equipmentId]
+  app.get(
+    "/api/tenant/:tenantId/disabled-defaults",
+    authenticate,
+    requireTenantAccess,
+    async (req, res) => {
+      const { rows } = await pool.query(
+        "SELECT equipment_id FROM tenant_disabled_defaults WHERE tenant_id = $1",
+        [req.params.tenantId],
       );
-      await logActivity(req.user!.userId, req.user!.userName || 'Admin', tenantId, 'UPDATE', 'equipment', equipmentId, 'Default equipment re-enabled');
-      res.json({ disabled: false });
-    } else {
-      // Currently enabled → disable
-      await pool.query(
-        'INSERT INTO tenant_disabled_defaults (tenant_id, equipment_id) VALUES ($1, $2)',
-        [tenantId, equipmentId]
+      res.json(rows.map((r: any) => r.equipment_id));
+    },
+  );
+
+  app.post(
+    "/api/tenant/:tenantId/disabled-defaults/:equipmentId",
+    authenticate,
+    requireTenantAccess,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      const { tenantId, equipmentId } = req.params;
+
+      const { rows } = await pool.query(
+        "SELECT 1 FROM tenant_disabled_defaults WHERE tenant_id = $1 AND equipment_id = $2",
+        [tenantId, equipmentId],
       );
-      await logActivity(req.user!.userId, req.user!.userName || 'Admin', tenantId, 'UPDATE', 'equipment', equipmentId, 'Default equipment disabled');
-      res.json({ disabled: true });
-    }
-  });
+
+      if (rows.length > 0) {
+        // Currently disabled → re-enable
+        await pool.query(
+          "DELETE FROM tenant_disabled_defaults WHERE tenant_id = $1 AND equipment_id = $2",
+          [tenantId, equipmentId],
+        );
+        await logActivity(
+          req.user!.userId,
+          req.user!.userName || "Admin",
+          tenantId,
+          "UPDATE",
+          "equipment",
+          equipmentId,
+          "Default equipment re-enabled",
+        );
+        res.json({ disabled: false });
+      } else {
+        // Currently enabled → disable
+        await pool.query(
+          "INSERT INTO tenant_disabled_defaults (tenant_id, equipment_id) VALUES ($1, $2)",
+          [tenantId, equipmentId],
+        );
+        await logActivity(
+          req.user!.userId,
+          req.user!.userName || "Admin",
+          tenantId,
+          "UPDATE",
+          "equipment",
+          equipmentId,
+          "Default equipment disabled",
+        );
+        res.json({ disabled: true });
+      }
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // PLATFORM ADMIN ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/admin/tenants', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM tenants ORDER BY created_at DESC');
-    res.json(rows);
-  });
-
-  app.post('/api/admin/tenants', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const { id, name, logo_url, subscription_tier, email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required for tenant admin' });
-    }
-
-    try {
-      await pool.query(
-        'INSERT INTO tenants (id, name, logo_url, subscription_tier) VALUES ($1, $2, $3, $4)',
-        [id, name, logo_url, subscription_tier || 'basic']
+  app.get(
+    "/api/admin/tenants",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const { rows } = await pool.query(
+        "SELECT * FROM tenants ORDER BY created_at DESC",
       );
+      res.json(rows);
+    },
+  );
 
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const userId = `tenant-admin-${id}`;
+  app.post(
+    "/api/admin/tenants",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const { id, name, logo_url, subscription_tier, email, password } =
+        req.body;
+
+      if (!email || !password) {
+        return res
+          .status(400)
+          .json({ error: "Email and password are required for tenant admin" });
+      }
+
+      try {
+        await pool.query(
+          "INSERT INTO tenants (id, name, logo_url, subscription_tier) VALUES ($1, $2, $3, $4)",
+          [id, name, logo_url, subscription_tier || "basic"],
+        );
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userId = `tenant-admin-${id}`;
+        await pool.query(
+          "INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)",
+          [userId, id, email, hashedPassword, "tenant_admin", `${name} Admin`],
+        );
+
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName || "Platform Admin",
+            null,
+            "CREATE",
+            "tenant",
+            name,
+            `Tier: ${subscription_tier || "basic"}`,
+          );
+        }
+        res.json({ success: true });
+      } catch (error: any) {
+        // Rollback tenant if user creation fails
+        await pool.query("DELETE FROM tenants WHERE id = $1", [id]);
+        res.status(400).json({ error: error.message });
+      }
+    },
+  );
+
+  app.put(
+    "/api/admin/tenants/:id",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const { name, logo_url, subscription_tier } = req.body;
       await pool.query(
-        'INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)',
-        [userId, id, email, hashedPassword, 'tenant_admin', `${name} Admin`]
+        "UPDATE tenants SET name = $1, logo_url = $2, subscription_tier = $3 WHERE id = $4",
+        [name, logo_url, subscription_tier, req.params.id],
       );
-
       if (req.user) {
-        await logActivity(req.user.userId, req.user.userName || 'Platform Admin', null, 'CREATE', 'tenant', name, `Tier: ${subscription_tier || 'basic'}`);
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "Platform Admin",
+          null,
+          "UPDATE",
+          "tenant",
+          name,
+          "Tenant updated",
+        );
       }
       res.json({ success: true });
-    } catch (error: any) {
-      // Rollback tenant if user creation fails
-      await pool.query('DELETE FROM tenants WHERE id = $1', [id]);
-      res.status(400).json({ error: error.message });
-    }
-  });
+    },
+  );
 
-  app.put('/api/admin/tenants/:id', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const { name, logo_url, subscription_tier } = req.body;
-    await pool.query(
-      'UPDATE tenants SET name = $1, logo_url = $2, subscription_tier = $3 WHERE id = $4',
-      [name, logo_url, subscription_tier, req.params.id]
-    );
-    if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'Platform Admin', null, 'UPDATE', 'tenant', name, 'Tenant updated');
-    }
-    res.json({ success: true });
-  });
+  app.get(
+    "/api/admin/stats",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const [tenantRes, userRes, projectRes] = await Promise.all([
+        pool.query("SELECT count(*) as count FROM tenants"),
+        pool.query("SELECT count(*) as count FROM users"),
+        pool.query("SELECT count(*) as count FROM projects"),
+      ]);
+      res.json({
+        tenants: parseInt(tenantRes.rows[0].count),
+        users: parseInt(userRes.rows[0].count),
+        projects: parseInt(projectRes.rows[0].count),
+      });
+    },
+  );
 
-  app.get('/api/admin/stats', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const [tenantRes, userRes, projectRes] = await Promise.all([
-      pool.query('SELECT count(*) as count FROM tenants'),
-      pool.query('SELECT count(*) as count FROM users'),
-      pool.query('SELECT count(*) as count FROM projects'),
-    ]);
-    res.json({
-      tenants: parseInt(tenantRes.rows[0].count),
-      users: parseInt(userRes.rows[0].count),
-      projects: parseInt(projectRes.rows[0].count),
-    });
-  });
-
-  app.get('/api/admin/users', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const { rows } = await pool.query(`
+  app.get(
+    "/api/admin/users",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const { rows } = await pool.query(`
       SELECT u.id, u.tenant_id, u.email, u.role, u.name, u.phone, t.name as tenant_name
       FROM users u
       LEFT JOIN tenants t ON u.tenant_id = t.id
     `);
-    res.json(rows);
-  });
+      res.json(rows);
+    },
+  );
 
-  app.post('/api/admin/users', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const { id, tenant_id, email, password, role, name } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await pool.query(
-      'INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)',
-      [id, tenant_id, email, hashedPassword, role, name]
-    );
-    res.json({ success: true });
-  });
+  app.post(
+    "/api/admin/users",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const { id, tenant_id, email, password, role, name } = req.body;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await pool.query(
+        "INSERT INTO users (id, tenant_id, email, password_hash, role, name) VALUES ($1, $2, $3, $4, $5, $6)",
+        [id, tenant_id, email, hashedPassword, role, name],
+      );
+      res.json({ success: true });
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // PROJECT ROUTES
@@ -667,21 +1046,27 @@ async function startServer() {
   // // 7. Active projects count (modified in last 5 days)
   // //GET /api/tenant/:tenantId/active-projects
 
-    // GET all projects for a tenant (sales rep sees only their own)
-  app.get('/api/projects', authenticate, async (req, res) => {
-    const { tenantId, userId } = req.query as { tenantId: string; userId?: string };
+  // GET all projects for a tenant (sales rep sees only their own)
+  app.get("/api/projects", authenticate, async (req, res) => {
+    const { tenantId, userId } = req.query as {
+      tenantId: string;
+      userId?: string;
+    };
 
-    if (!req.user || (req.user.tenantId !== tenantId && req.user.role !== 'platform_admin')) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (
+      !req.user ||
+      (req.user.tenantId !== tenantId && req.user.role !== "platform_admin")
+    ) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     // Sales rep: only their own projects
-    if (req.user.role === 'sales_rep') {
+    if (req.user.role === "sales_rep") {
       const { rows } = await pool.query(
-        `SELECT id, tenant_id, user_id, name, created_at, updated_at
+        `SELECT id, tenant_id, user_id, name, client_name, created_at, updated_at
          FROM projects WHERE tenant_id = $1 AND user_id = $2
          ORDER BY COALESCE(updated_at, created_at) DESC`,
-        [tenantId, req.user.userId]
+        [tenantId, req.user.userId],
       );
       return res.json(rows);
     }
@@ -689,129 +1074,214 @@ async function startServer() {
     // Tenant admin / platform admin — optionally filter by userId
     if (userId) {
       const { rows } = await pool.query(
-        `SELECT id, tenant_id, user_id, name, created_at, updated_at
+        `SELECT id, tenant_id, user_id, name, client_name, created_at, updated_at
          FROM projects WHERE tenant_id = $1 AND user_id = $2
          ORDER BY COALESCE(updated_at, created_at) DESC`,
-        [tenantId, userId]
+        [tenantId, userId],
       );
       return res.json(rows);
     }
 
     const { rows } = await pool.query(
-      `SELECT id, tenant_id, user_id, name, created_at, updated_at
+      `SELECT id, tenant_id, user_id, name, client_name, created_at, updated_at
        FROM projects WHERE tenant_id = $1
        ORDER BY COALESCE(updated_at, created_at) DESC`,
-      [tenantId]
+      [tenantId],
     );
     res.json(rows);
   });
 
   // GET a single project by ID — returns full data for loading into map
   // NOTE: This route must come BEFORE /api/projects/shared/:token
-  app.get('/api/projects/:id', authenticate, async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+  app.get("/api/projects/:id", authenticate, async (req, res) => {
+    const { rows } = await pool.query("SELECT * FROM projects WHERE id = $1", [
+      req.params.id,
+    ]);
     const project = rows[0];
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project) return res.status(404).json({ error: "Project not found" });
 
-    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (
+      req.user!.role === "sales_rep" &&
+      project.user_id !== req.user!.userId
+    ) {
+      return res.status(403).json({ error: "Access denied" });
     }
-    if (req.user!.role === 'tenant_admin' && project.tenant_id !== req.user!.tenantId) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (
+      req.user!.role === "tenant_admin" &&
+      project.tenant_id !== req.user!.tenantId
+    ) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    if (typeof project.data === 'string') project.data = JSON.parse(project.data);
+    if (typeof project.data === "string")
+      project.data = JSON.parse(project.data);
     res.json(project);
   });
 
   // POST create a new project
-  app.post('/api/projects', authenticate, async (req, res) => {
-    const { id, tenant_id, user_id, name, data } = req.body;
+  app.post("/api/projects", authenticate, async (req, res) => {
+    const { id, tenant_id, user_id, name, data, client_name } = req.body;
     const now = getISTString();
     await pool.query(
-      'INSERT INTO projects (id, tenant_id, user_id, name, data, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [id, tenant_id, user_id, name, JSON.stringify(data), now, now]
+      "INSERT INTO projects (id, tenant_id, user_id, name, data, client_name, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+      [
+        id,
+        tenant_id,
+        user_id,
+        name,
+        JSON.stringify(data),
+        client_name || null,
+        now,
+        now,
+      ],
     );
     if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'CREATE', 'project', name, 'Project created');
+      await logActivity(
+        req.user.userId,
+        req.user.userName || "User",
+        tenant_id,
+        "CREATE",
+        "project",
+        name,
+        "Project created",
+      );
     }
     res.json({ success: true, id });
   });
 
   // PUT update/re-save an existing project
-  app.put('/api/projects/:id', authenticate, async (req, res) => {
-    const { name, data } = req.body;
-    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+  app.put("/api/projects/:id", authenticate, async (req, res) => {
+    const { name, data, client_name } = req.body;
+    const { rows } = await pool.query("SELECT * FROM projects WHERE id = $1", [
+      req.params.id,
+    ]);
     const project = rows[0];
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project) return res.status(404).json({ error: "Project not found" });
 
-    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (
+      req.user!.role === "sales_rep" &&
+      project.user_id !== req.user!.userId
+    ) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     const now = getISTString();
     await pool.query(
-      'UPDATE projects SET name = $1, data = $2, updated_at = $3 WHERE id = $4',
-      [name || project.name, JSON.stringify(data), now, req.params.id]
+      "UPDATE projects SET name = $1, data = $2, client_name = $3, updated_at = $4 WHERE id = $5 ",
+      [
+        name || project.name,
+        JSON.stringify(data),
+        // client_name || project.client_name,
+        client_name !== undefined ? client_name : project.client_name,
+        now,
+        req.params.id,
+      ],
     );
     if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'User', project.tenant_id, 'UPDATE', 'project', name || project.name, 'Project updated');
+      await logActivity(
+        req.user.userId,
+        req.user.userName || "User",
+        project.tenant_id,
+        "UPDATE",
+        "project",
+        name || project.name,
+        "Project updated",
+      );
     }
     res.json({ success: true });
   });
 
   // DELETE a project
-  app.delete('/api/projects/:id', authenticate, async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+  app.delete("/api/projects/:id", authenticate, async (req, res) => {
+    const { rows } = await pool.query("SELECT * FROM projects WHERE id = $1", [
+      req.params.id,
+    ]);
     const project = rows[0];
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project) return res.status(404).json({ error: "Project not found" });
 
-    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (
+      req.user!.role === "sales_rep" &&
+      project.user_id !== req.user!.userId
+    ) {
+      return res.status(403).json({ error: "Access denied" });
     }
-    if (req.user!.role === 'tenant_admin' && project.tenant_id !== req.user!.tenantId) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (
+      req.user!.role === "tenant_admin" &&
+      project.tenant_id !== req.user!.tenantId
+    ) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    await pool.query('DELETE FROM projects WHERE id = $1', [req.params.id]);
+    await pool.query("DELETE FROM projects WHERE id = $1", [req.params.id]);
     if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'User', project.tenant_id, 'DELETE', 'project', project.name, 'Project deleted');
+      await logActivity(
+        req.user.userId,
+        req.user.userName || "User",
+        project.tenant_id,
+        "DELETE",
+        "project",
+        project.name,
+        "Project deleted",
+      );
     }
     res.json({ success: true });
   });
 
   // POST generate or retrieve share link for a project
-  app.post('/api/projects/:id/share', authenticate, async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+  app.post("/api/projects/:id/share", authenticate, async (req, res) => {
+    const { rows } = await pool.query("SELECT * FROM projects WHERE id = $1", [
+      req.params.id,
+    ]);
     const project = rows[0];
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project) return res.status(404).json({ error: "Project not found" });
 
-    if (req.user!.role === 'sales_rep' && project.user_id !== req.user!.userId) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (
+      req.user!.role === "sales_rep" &&
+      project.user_id !== req.user!.userId
+    ) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     let token = project.share_token;
     if (!token) {
-      token = uuidv4().replace(/-/g, '');
-      await pool.query('UPDATE projects SET share_token = $1 WHERE id = $2', [token, req.params.id]);
+      token = uuidv4().replace(/-/g, "");
+      await pool.query("UPDATE projects SET share_token = $1 WHERE id = $2", [
+        token,
+        req.params.id,
+      ]);
     }
 
     if (req.user) {
-      await logActivity(req.user.userId, req.user.userName || 'User', project.tenant_id, 'SHARE', 'project', project.name, 'Share link generated');
+      await logActivity(
+        req.user.userId,
+        req.user.userName || "User",
+        project.tenant_id,
+        "SHARE",
+        "project",
+        project.name,
+        "Share link generated",
+      );
     }
     res.json({
       token,
-      shareUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/shared/${token}`,
+      shareUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/shared/${token}`,
     });
   });
 
   // GET load a shared project by token — no auth required (view-only)
-  app.get('/api/projects/shared/:token', async (req, res) => {
-    const { rows } = await pool.query('SELECT * FROM projects WHERE share_token = $1', [req.params.token]);
+  app.get("/api/projects/shared/:token", async (req, res) => {
+    const { rows } = await pool.query(
+      "SELECT * FROM projects WHERE share_token = $1",
+      [req.params.token],
+    );
     const project = rows[0];
-    if (!project) return res.status(404).json({ error: 'Shared project not found or link has expired' });
+    if (!project)
+      return res
+        .status(404)
+        .json({ error: "Shared project not found or link has expired" });
 
-    if (typeof project.data === 'string') project.data = JSON.parse(project.data);
+    if (typeof project.data === "string")
+      project.data = JSON.parse(project.data);
     res.json({
       id: project.id,
       name: project.name,
@@ -822,9 +1292,14 @@ async function startServer() {
   });
 
   // GET project stats per sales rep (Tenant Admin dashboard)
-  app.get('/api/tenant/:tenantId/project-stats', authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, async (req, res) => {
-    const { rows } = await pool.query(
-      `SELECT
+  app.get(
+    "/api/tenant/:tenantId/project-stats",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    requireTenantAccess,
+    async (req, res) => {
+      const { rows } = await pool.query(
+        `SELECT
          u.id as user_id,
          u.name as user_name,
          u.email,
@@ -835,135 +1310,189 @@ async function startServer() {
        WHERE u.tenant_id = $1 AND u.role = 'sales_rep'
        GROUP BY u.id, u.name, u.email
        ORDER BY project_count DESC`,
-      [req.params.tenantId]
-    );
-    res.json(rows);
-  });
+        [req.params.tenantId],
+      );
+      res.json(rows);
+    },
+  );
 
   // GET count of active projects (modified in last 5 days)
-  app.get('/api/tenant/:tenantId/active-projects', authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, async (req, res) => {
-    const { rows } = await pool.query(
-      `SELECT COUNT(*) as count FROM projects
+  app.get(
+    "/api/tenant/:tenantId/active-projects",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    requireTenantAccess,
+    async (req, res) => {
+      const { rows } = await pool.query(
+        `SELECT COUNT(*) as count FROM projects
        WHERE tenant_id = $1
        AND COALESCE(updated_at, created_at) >= NOW() - INTERVAL '5 days'`,
-      [req.params.tenantId]
-    );
-    res.json({ count: parseInt(rows[0].count) });
-  });
+        [req.params.tenantId],
+      );
+      res.json({ count: parseInt(rows[0].count) });
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // PASSWORD RESET ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/admin/reset-requests', authenticate, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+  app.get(
+    "/api/admin/reset-requests",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
 
-    let rows;
-    if (req.user.role === 'tenant_admin') {
-      const result = await pool.query(
-        `SELECT r.*, u.name as user_name, u.role as user_role
+      let rows;
+      if (req.user.role === "tenant_admin") {
+        const result = await pool.query(
+          `SELECT r.*, u.name as user_name, u.role as user_role
          FROM password_reset_requests r
          JOIN users u ON r.user_id = u.id
          WHERE r.status = 'pending' AND u.role = 'sales_rep' AND u.tenant_id = $1
          ORDER BY r.created_at DESC`,
-        [req.user.tenantId]
-      );
-      rows = result.rows;
-    } else {
-      const result = await pool.query(
-        `SELECT r.*, u.name as user_name, u.role as user_role
+          [req.user.tenantId],
+        );
+        rows = result.rows;
+      } else {
+        const result = await pool.query(
+          `SELECT r.*, u.name as user_name, u.role as user_role
          FROM password_reset_requests r
          JOIN users u ON r.user_id = u.id
          WHERE r.status = 'pending'
-         ORDER BY r.created_at DESC`
-      );
-      rows = result.rows;
-    }
-    res.json(rows);
-  });
+         ORDER BY r.created_at DESC`,
+        );
+        rows = result.rows;
+      }
+      res.json(rows);
+    },
+  );
 
-  app.get('/api/admin/tenant-admin-resets', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const { rows } = await pool.query(
-      `SELECT r.*, u.name as user_name, u.role as user_role, t.name as tenant_name
+  app.get(
+    "/api/admin/tenant-admin-resets",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const { rows } = await pool.query(
+        `SELECT r.*, u.name as user_name, u.role as user_role, t.name as tenant_name
        FROM password_reset_requests r
        JOIN users u ON r.user_id = u.id
        LEFT JOIN tenants t ON u.tenant_id = t.id
        WHERE r.status = 'pending' AND u.role = 'tenant_admin'
-       ORDER BY r.created_at DESC`
-    );
-    res.json(rows);
-  });
+       ORDER BY r.created_at DESC`,
+      );
+      res.json(rows);
+    },
+  );
 
-  app.post('/api/admin/reset-requests/:id/resolve', authenticate, requireRole('tenant_admin', 'platform_admin'), async (req, res) => {
-    const { temp_password } = req.body;
+  app.post(
+    "/api/admin/reset-requests/:id/resolve",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      const { temp_password } = req.body;
 
-    if (!temp_password || temp_password.length < 8) {
-      return res.status(400).json({ error: 'Temp password must be at least 8 characters' });
-    }
+      if (!temp_password || temp_password.length < 8) {
+        return res
+          .status(400)
+          .json({ error: "Temp password must be at least 8 characters" });
+      }
 
-    const { rows } = await pool.query('SELECT * FROM password_reset_requests WHERE id = $1', [req.params.id]);
-    const request = rows[0];
-    if (!request) return res.status(404).json({ error: 'Request not found' });
+      const { rows } = await pool.query(
+        "SELECT * FROM password_reset_requests WHERE id = $1",
+        [req.params.id],
+      );
+      const request = rows[0];
+      if (!request) return res.status(404).json({ error: "Request not found" });
 
-    const hashedPassword = await bcrypt.hash(temp_password, 10);
-    await pool.query(
-      'UPDATE users SET password_hash = $1, force_password_change = 1 WHERE id = $2',
-      [hashedPassword, request.user_id]
-    );
-    await pool.query(
-      "UPDATE password_reset_requests SET status = 'resolved' WHERE id = $1",
-      [req.params.id]
-    );
+      const hashedPassword = await bcrypt.hash(temp_password, 10);
+      await pool.query(
+        "UPDATE users SET password_hash = $1, force_password_change = 1 WHERE id = $2",
+        [hashedPassword, request.user_id],
+      );
+      await pool.query(
+        "UPDATE password_reset_requests SET status = 'resolved' WHERE id = $1",
+        [req.params.id],
+      );
 
-    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [request.user_id]);
-    const resetUser = userResult.rows[0];
+      const userResult = await pool.query("SELECT * FROM users WHERE id = $1", [
+        request.user_id,
+      ]);
+      const resetUser = userResult.rows[0];
 
-    if (resetUser?.role === 'tenant_admin') {
-      await logActivity(req.user!.userId, req.user!.userName || 'Platform Admin', null,
-        'RESOLVE', 'tenant_admin_reset', resetUser?.name, 'Temporary password set by Platform Admin');
-    } else {
-      await logActivity(req.user!.userId, req.user!.userName || 'Admin', resetUser?.tenant_id,
-        'RESOLVE', 'password_reset', resetUser?.name, 'Temporary password set by Tenant Admin');
-    }
+      if (resetUser?.role === "tenant_admin") {
+        await logActivity(
+          req.user!.userId,
+          req.user!.userName || "Platform Admin",
+          null,
+          "RESOLVE",
+          "tenant_admin_reset",
+          resetUser?.name,
+          "Temporary password set by Platform Admin",
+        );
+      } else {
+        await logActivity(
+          req.user!.userId,
+          req.user!.userName || "Admin",
+          resetUser?.tenant_id,
+          "RESOLVE",
+          "password_reset",
+          resetUser?.name,
+          "Temporary password set by Tenant Admin",
+        );
+      }
 
-    res.json({ success: true });
-  });
+      res.json({ success: true });
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // LOGS ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/tenant/:id/logs', authenticate, requireRole('tenant_admin', 'platform_admin'), requireTenantAccess, async (req, res) => {
-    const limit = Number(req.query.limit) || 50;
-    const offset = Number(req.query.offset) || 0;
-    const { rows } = await pool.query(
-      `SELECT * FROM activity_logs
+  app.get(
+    "/api/tenant/:id/logs",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    requireTenantAccess,
+    async (req, res) => {
+      const limit = Number(req.query.limit) || 50;
+      const offset = Number(req.query.offset) || 0;
+      const { rows } = await pool.query(
+        `SELECT * FROM activity_logs
        WHERE tenant_id = $1
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
-      [req.params.id, limit, offset]
-    );
-    res.json(rows);
-  });
+        [req.params.id, limit, offset],
+      );
+      res.json(rows);
+    },
+  );
 
-  app.get('/api/admin/logs', authenticate, requireRole('platform_admin'), async (req, res) => {
-    const limit = Number(req.query.limit) || 100;
-    const offset = Number(req.query.offset) || 0;
-    const { rows } = await pool.query(
-      `SELECT * FROM activity_logs
+  app.get(
+    "/api/admin/logs",
+    authenticate,
+    requireRole("platform_admin"),
+    async (req, res) => {
+      const limit = Number(req.query.limit) || 100;
+      const offset = Number(req.query.offset) || 0;
+      const { rows } = await pool.query(
+        `SELECT * FROM activity_logs
        WHERE tenant_id IS NULL
        ORDER BY created_at DESC
        LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    res.json(rows);
-  });
+        [limit, offset],
+      );
+      res.json(rows);
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // COMPLIANCE ROUTE (Gemini AI)
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.post('/api/compliance/check', async (req, res) => {
+  app.post("/api/compliance/check", async (req, res) => {
     try {
       const siteData = req.body;
 
@@ -983,16 +1512,19 @@ async function startServer() {
         Return a structured JSON report.
       `;
 
-      const model = genai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
-          responseMimeType: 'application/json',
+          responseMimeType: "application/json",
           responseSchema: {
             type: SchemaType.OBJECT,
             properties: {
-              overallScore: { type: SchemaType.NUMBER, description: 'Score from 0 to 100' },
+              overallScore: {
+                type: SchemaType.NUMBER,
+                description: "Score from 0 to 100",
+              },
               summary: { type: SchemaType.STRING },
               checks: {
                 type: SchemaType.ARRAY,
@@ -1000,11 +1532,15 @@ async function startServer() {
                   type: SchemaType.OBJECT,
                   properties: {
                     category: { type: SchemaType.STRING },
-                    status: { type: SchemaType.STRING, format: 'enum', enum: ['pass', 'fail', 'warning'] },
+                    status: {
+                      type: SchemaType.STRING,
+                      format: "enum",
+                      enum: ["pass", "fail", "warning"],
+                    },
                     message: { type: SchemaType.STRING },
                     details: { type: SchemaType.STRING },
                   },
-                  required: ['category', 'status', 'message'],
+                  required: ["category", "status", "message"],
                 },
               },
               recommendations: {
@@ -1012,7 +1548,7 @@ async function startServer() {
                 items: { type: SchemaType.STRING },
               },
             },
-            required: ['overallScore', 'summary', 'checks', 'recommendations'],
+            required: ["overallScore", "summary", "checks", "recommendations"],
           },
         },
       });
@@ -1020,23 +1556,23 @@ async function startServer() {
       const response = result.response;
       const text = response.text();
       if (!text) {
-        throw new Error('Failed to get response text from AI');
+        throw new Error("Failed to get response text from AI");
       }
       const report = JSON.parse(text);
       res.json(report);
     } catch (err: any) {
-      console.error('Compliance check failed:', err);
-      res.status(500).json({ error: err.message || 'Compliance check failed' });
+      console.error("Compliance check failed:", err);
+      res.status(500).json({ error: err.message || "Compliance check failed" });
     }
   });
 
   // ─── Start Listening ───────────────────────────────────────────────────────
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
 startServer().catch((err) => {
-  console.error('❌ Failed to start server:', err);
+  console.error("❌ Failed to start server:", err);
   process.exit(1);
 });

@@ -10,14 +10,104 @@ import {
   Plus,
   Check,
   Copy,
+  ChevronDown,
+  Building2,
 } from "lucide-react";
 import { User, Tenant } from "../types";
 
+const DEFAULT_EQUIPMENT: Record<
+  string,
+  { name: string; width: number; depth: number; height: number }
+> = {
+  slide_small: { name: "Small Slide", width: 4, depth: 2, height: 3 },
+  slide_large: { name: "Large Slide", width: 8, depth: 3, height: 6 },
+  tower_3d: { name: "Tower", width: 5, depth: 5, height: 10 },
+  duck_3d: { name: "Duck", width: 2, depth: 2, height: 2 },
+  wave_pool: { name: "Wave Pool", width: 20, depth: 15, height: 2 },
+  lazy_river: { name: "Lazy River", width: 30, depth: 5, height: 1.5 },
+  splash_pad: { name: "Splash Pad", width: 10, depth: 10, height: 0.5 },
+  pump_station: { name: "Pump Station", width: 5, depth: 5, height: 4 },
+  ticket_booth: { name: "Ticket Booth", width: 3, depth: 3, height: 3 },
+  locker_block: { name: "Locker Block", width: 10, depth: 4, height: 3 },
+  food_kiosk: { name: "Food Kiosk", width: 4, depth: 4, height: 3 },
+  seating_area: { name: "Seating Area", width: 6, depth: 6, height: 1 },
+};
+const getEquipmentList = (
+  projectData: any,
+  equipmentLookup: Record<
+    string,
+    { name: string; width: number; depth: number; height: number }
+  >,
+) => {
+  if (!projectData?.objects) return [];
+  const counts: Record<string, number> = {};
+  projectData.objects.forEach((obj: any) => {
+    counts[obj.type] = (counts[obj.type] || 0) + 1;
+  });
+  return Object.entries(counts).map(([type, count]) => {
+    const def = equipmentLookup[type];
+    return {
+      type,
+      name: def?.name || type,
+      count,
+      width: def?.width || 0,
+      depth: def?.depth || 0,
+      height: def?.height || 0,
+    };
+  });
+};
+
+// // All equipment definitions for lookup
+// const ALL_EQUIPMENT: Record<
+//   string,
+//   { name: string; width: number; depth: number; height: number }
+// > = {
+//   slide_small: { name: "Small Slide", width: 4, depth: 2, height: 3 },
+//   slide_large: { name: "Large Slide", width: 8, depth: 3, height: 6 },
+//   tower_3d: { name: "Tower", width: 5, depth: 5, height: 10 },
+//   duck_3d: { name: "Duck", width: 2, depth: 2, height: 2 },
+//   wave_pool: { name: "Wave Pool", width: 20, depth: 15, height: 2 },
+//   lazy_river: { name: "Lazy River", width: 30, depth: 5, height: 1.5 },
+//   splash_pad: { name: "Splash Pad", width: 10, depth: 10, height: 0.5 },
+//   pump_station: { name: "Pump Station", width: 5, depth: 5, height: 4 },
+//   ticket_booth: { name: "Ticket Booth", width: 3, depth: 3, height: 3 },
+//   locker_block: { name: "Locker Block", width: 10, depth: 4, height: 3 },
+//   food_kiosk: { name: "Food Kiosk", width: 4, depth: 4, height: 3 },
+//   seating_area: { name: "Seating Area", width: 6, depth: 6, height: 1 },
+// };
+
+// // Groups objects by type and returns counted equipment list
+// function getEquipmentList(projectData: any): {
+//   type: string;
+//   name: string;
+//   count: number;
+//   width: number;
+//   depth: number;
+//   height: number;
+// }[] {
+//   if (!projectData?.objects) return [];
+//   const counts: Record<string, number> = {};
+//   projectData.objects.forEach((obj: any) => {
+//     counts[obj.type] = (counts[obj.type] || 0) + 1;
+//   });
+//   return Object.entries(counts).map(([type, count]) => {
+//     const def = ALL_EQUIPMENT[type];
+//     return {
+//       type,
+//       name: def?.name || type,
+//       count,
+//       width: def?.width || 0,
+//       depth: def?.depth || 0,
+//       height: def?.height || 0,
+//     };
+//   });
+// }
 interface Project {
   id: string;
   name: string;
   tenant_id: string;
   user_id: string;
+  client_name: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -33,6 +123,7 @@ interface ProjectsPanelProps {
   onRefresh: () => void;
   currentProjectId: string | null;
   onNewProject: () => void;
+  customEquipment: any[];
 }
 
 export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
@@ -46,11 +137,34 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
   onRefresh,
   currentProjectId,
   onNewProject,
+  customEquipment = [],
 }) => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [projectData, setProjectData] = useState<Record<string, any>>({});
+
+  const handleExpand = async (projectId: string) => {
+    if (expandedId === projectId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(projectId);
+    // Only fetch if not already loaded
+    if (!projectData[projectId]) {
+      try {
+        const res = await authFetch(`/api/projects/${projectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setProjectData((prev) => ({ ...prev, [projectId]: data.data }));
+        }
+      } catch {
+        console.error("Failed to load project data");
+      }
+    }
+  };
 
   const handleDelete = async (projectId: string, projectName: string) => {
     if (!confirm(`Delete "${projectName}"? This cannot be undone.`)) return;
@@ -121,6 +235,26 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
     return diff < 5 * 24 * 60 * 60 * 1000; // 5 days
   };
 
+  // Build merged equipment lookup — default + custom from DB
+  const equipmentLookup = React.useMemo(() => {
+    const lookup: Record<
+      string,
+      { name: string; width: number; depth: number; height: number }
+    > = {
+      ...DEFAULT_EQUIPMENT,
+    };
+    console.log("customEquipment received:", customEquipment);
+    (customEquipment || []).forEach((eq: any) => {
+      lookup[eq.id] = {
+        name: eq.name,
+        width: eq.width,
+        depth: eq.depth,
+        height: eq.height,
+      };
+    });
+    return lookup;
+  }, [customEquipment]);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -188,38 +322,183 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
                   </p>
                 </div>
               ) : (
+                // projects.map((project) => (
+                //   <div
+                //     key={project.id}
+                //     className="bg-white/5 border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all"
+                //   >
+                //     {/* Project name + active badge */}
+                //     <div className="flex items-start justify-between mb-3">
+                //       <div className="flex-1 min-w-0">
+                //         <div className="flex items-center gap-2">
+                //           <h3 className="text-sm font-semibold text-white truncate">
+                //             {project.name}
+                //           </h3>
+                //           {isActive(project) && (
+                //             <span className="flex-shrink-0 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded">
+                //               Active
+                //             </span>
+                //           )}
+                //         </div>
+                //         <div className="flex items-center gap-1 mt-1 text-[11px] opacity-30">
+                //           <Clock className="w-3 h-3" />
+                //           <span>
+                //             {project.updated_at
+                //               ? `Updated ${formatDate(project.updated_at)}`
+                //               : `Created ${formatDate(project.created_at)}`}
+                //           </span>
+                //         </div>
+                //       </div>
+                //     </div>
+
+                //     {/* Share URL input — shown when sharing */}
+                //     {sharingId === project.id && shareUrls[project.id] && (
+                //       <div className="mb-3 flex items-center gap-2 bg-black/30 border border-white/10 rounded-lg p-2">
+                //         <input
+                //           type="text"
+                //           readOnly
+                //           value={shareUrls[project.id]}
+                //           className="flex-1 bg-transparent text-xs text-white/60 outline-none truncate"
+                //         />
+                //         <button
+                //           onClick={() => handleCopy(project.id)}
+                //           className="flex-shrink-0 flex items-center gap-1 px-2 py-1 bg-brand-teal/20 hover:bg-brand-teal/30 text-brand-teal rounded text-[10px] font-bold transition-colors"
+                //         >
+                //           {copiedId === project.id ? (
+                //             <>
+                //               <Check className="w-3 h-3" /> Copied
+                //             </>
+                //           ) : (
+                //             <>
+                //               <Copy className="w-3 h-3" /> Copy
+                //             </>
+                //           )}
+                //         </button>
+                //       </div>
+                //     )}
+
+                //     {/* Action buttons */}
+                //     <div className="flex items-center gap-2">
+                //       <button
+                //         onClick={() => {
+                //           onOpenProject(project.id);
+                //           onClose();
+                //         }}
+                //         className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-brand-teal/10 hover:bg-brand-teal/20 text-brand-teal rounded-lg text-xs font-semibold transition-colors border border-brand-teal/20"
+                //       >
+                //         <FolderOpen className="w-3.5 h-3.5" />
+                //         Open
+                //       </button>
+                //       <button
+                //         onClick={() => handleShare(project.id)}
+                //         className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors border border-white/10"
+                //         title="Share project"
+                //       >
+                //         <Share2 className="w-3.5 h-3.5" />
+                //         Share
+                //       </button>
+                //       <button
+                //         onClick={() => handleDelete(project.id, project.name)}
+                //         disabled={deletingId === project.id}
+                //         className="flex items-center justify-center px-3 py-1.5 bg-white/5 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 rounded-lg text-xs transition-colors border border-white/10 disabled:opacity-40"
+                //         title="Delete project"
+                //       >
+                //         <Trash2 className="w-3.5 h-3.5" />
+                //       </button>
+                //     </div>
+                //   </div>
+                // ))
                 projects.map((project) => (
                   <div
                     key={project.id}
-                    className="bg-white/5 border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all"
+                    className="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-all"
                   >
-                    {/* Project name + active badge */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-white truncate">
-                            {project.name}
-                          </h3>
-                          {isActive(project) && (
-                            <span className="flex-shrink-0 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded">
-                              Active
-                            </span>
+                    {/* Card header — clickable to expand */}
+                    <div
+                      className="p-4 cursor-pointer"
+                      onClick={() => handleExpand(project.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-white truncate">
+                              {project.name}
+                            </h3>
+                            {isActive(project) && (
+                              <span className="flex-shrink-0 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          {/* Company name */}
+                          {project.client_name && (
+                            <div className="flex items-center gap-1 mt-1 text-[11px] text-brand-teal/70">
+                              <Building2 className="w-3 h-3" />
+                              <span>{project.client_name}</span>
+                            </div>
                           )}
+                          <div className="flex items-center gap-1 mt-1 text-[11px] opacity-30">
+                            <Clock className="w-3 h-3" />
+                            <span>
+                              {project.updated_at
+                                ? `Updated ${formatDate(project.updated_at)}`
+                                : `Created ${formatDate(project.created_at)}`}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 mt-1 text-[11px] opacity-30">
-                          <Clock className="w-3 h-3" />
-                          <span>
-                            {project.updated_at
-                              ? `Updated ${formatDate(project.updated_at)}`
-                              : `Created ${formatDate(project.created_at)}`}
-                          </span>
-                        </div>
+                        {/* Expand chevron */}
+                        <ChevronDown
+                          className={`w-4 h-4 opacity-40 transition-transform flex-shrink-0 ml-2 mt-0.5 ${expandedId === project.id ? "rotate-180" : ""}`}
+                        />
                       </div>
                     </div>
 
-                    {/* Share URL input — shown when sharing */}
+                    {/* Expanded equipment list */}
+                    {expandedId === project.id && (
+                      <div className="border-t border-white/10 px-4 pb-4">
+                        <p className="text-[10px] uppercase tracking-widest opacity-30 mt-3 mb-2">
+                          Equipment Used
+                        </p>
+                        {!projectData[project.id] ? (
+                          <p className="text-xs opacity-30">Loading...</p>
+                        ) : getEquipmentList(
+                            projectData[project.id],
+                            equipmentLookup,
+                          ).length === 0 ? (
+                          <p className="text-xs opacity-30">
+                            No equipment placed
+                          </p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {getEquipmentList(
+                              projectData[project.id],
+                              equipmentLookup,
+                            ).map((eq) => (
+                              <div
+                                key={eq.type}
+                                className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2"
+                              >
+                                <div>
+                                  <span className="text-xs font-medium text-white">
+                                    {eq.name}
+                                  </span>
+                                  <span className="text-[10px] opacity-30 ml-1">
+                                    ({eq.width}m×{eq.depth}m×{eq.height}m)
+                                  </span>
+                                </div>
+                                <span className="text-xs font-bold text-brand-teal">
+                                  ×{eq.count}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Share URL input */}
                     {sharingId === project.id && shareUrls[project.id] && (
-                      <div className="mb-3 flex items-center gap-2 bg-black/30 border border-white/10 rounded-lg p-2">
+                      <div className="mx-4 mb-3 flex items-center gap-2 bg-black/30 border border-white/10 rounded-lg p-2">
                         <input
                           type="text"
                           readOnly
@@ -244,7 +523,7 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
                     )}
 
                     {/* Action buttons */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 px-4 pb-4">
                       <button
                         onClick={() => {
                           onOpenProject(project.id);

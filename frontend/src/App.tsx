@@ -65,6 +65,7 @@ export default function App() {
 
   const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [customEquipment, setCustomEquipment] = useState<any[]>([]);
 
   const handleLogin = async (email: string, password: string) => {
     // const res = await fetch('/api/auth/login', {
@@ -153,7 +154,7 @@ export default function App() {
 
           setCustomLibrary(filtered);
 
-          setCustomLibrary(mapped);
+          // setCustomLibrary(mapped);
         }
       } else {
         setCustomLibrary([]);
@@ -343,6 +344,7 @@ export default function App() {
       // Create new project
       const projectName =
         prompt("Enter project name:", "New Project") || "Untitled Project";
+      const clientName = prompt("Enter company/client name:", "") || "";
       const newId = uuidv4();
       const res = await authFetch("/api/projects", {
         method: "POST",
@@ -352,6 +354,7 @@ export default function App() {
           tenant_id: tenant.id,
           user_id: user.id,
           name: projectName,
+          client_name: clientName,
           data,
         }),
       });
@@ -590,6 +593,7 @@ export default function App() {
             onRefresh={() => fetchProjects(tenant)}
             currentProjectId={currentProjectId}
             onNewProject={handleNewProject}
+            customEquipment={state.customLibrary || []}
           />
 
           {/* Top Overlays */}
