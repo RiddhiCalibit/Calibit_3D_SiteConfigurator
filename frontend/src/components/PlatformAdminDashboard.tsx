@@ -1072,7 +1072,9 @@ function TenantsTab({
                 <p className="text-[10px] opacity-40 uppercase tracking-widest">
                   Projects
                 </p>
-                <p className="text-sm font-bold">--</p>
+                <p className="text-sm font-bold">
+                  {(tenant as any).project_count ?? 0}
+                </p>
               </div>
               <div className="flex gap-2">
                 <button

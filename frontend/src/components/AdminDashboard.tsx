@@ -31,6 +31,7 @@ import {
   Eye,
   EyeOff,
   FolderOpen,
+  ChevronDown,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { clsx } from "clsx";
@@ -600,7 +601,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
           />
         )}
         {activeTab === "projects" && (
-          <ProjectStatsTab projectStats={projectStats} />
+          <ProjectStatsTab projectStats={projectStats} tenant={tenant} />
         )}
         {activeTab === "settings" && (
           <SettingsTab theme={theme} onThemeChange={setTheme} />
@@ -2240,11 +2241,200 @@ function SettingsTab({
   );
 }
 
-function ProjectStatsTab({ projectStats }: { projectStats: any[] }) {
+// function ProjectStatsTab({ projectStats }: { projectStats: any[] }) {
+//   const totalProjects = projectStats.reduce(
+//     (sum, s) => sum + parseInt(s.project_count),
+//     0,
+//   );
+
+//   return (
+//     <div className="space-y-6">
+//       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+//         <StatCard
+//           label="Total Projects"
+//           value={totalProjects.toString()}
+//           trend="across all reps"
+//           icon={<FolderOpen className="w-5 h-5" />}
+//         />
+//         <StatCard
+//           label="Sales Reps"
+//           value={projectStats.length.toString()}
+//           trend="in your team"
+//           icon={<Users className="w-5 h-5" />}
+//         />
+//       </div>
+
+//       <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
+//         <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">
+//           Projects per Sales Rep
+//         </h3>
+//         {projectStats.length === 0 ? (
+//           <p className="text-sm opacity-30 text-center py-8">
+//             No sales reps found
+//           </p>
+//         ) : (
+//           <div className="space-y-3">
+//             {projectStats.map((rep) => (
+//               <div
+//                 key={rep.user_id}
+//                 className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border hover:border-white/20 transition-all"
+//               >
+//                 <div className="flex items-center gap-3">
+//                   <div className="w-9 h-9 rounded-lg bg-brand-teal/10 flex items-center justify-center text-brand-teal font-bold text-sm">
+//                     {rep.user_name?.charAt(0).toUpperCase()}
+//                   </div>
+//                   <div>
+//                     <p className="text-sm font-medium">{rep.user_name}</p>
+//                     <p className="text-[11px] opacity-30">{rep.email}</p>
+//                   </div>
+//                 </div>
+//                 <div className="text-right">
+//                   <p className="text-lg font-bold text-brand-teal">
+//                     {rep.project_count}
+//                   </p>
+//                   <p className="text-[10px] opacity-30 uppercase tracking-wider">
+//                     projects
+//                   </p>
+//                 </div>
+//               </div>
+//             ))}
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// }
+
+function ProjectStatsTab({
+  projectStats,
+  tenant,
+}: {
+  projectStats: any[];
+  tenant: Tenant;
+}) {
   const totalProjects = projectStats.reduce(
     (sum, s) => sum + parseInt(s.project_count),
     0,
   );
+
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [userProjects, setUserProjects] = useState<Record<string, any[]>>({});
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(
+    null,
+  );
+  const [projectData, setProjectData] = useState<Record<string, any>>({});
+
+  // const DEFAULT_EQUIPMENT: Record<
+  //   string,
+  //   { name: string; width: number; depth: number; height: number }
+  // > = {
+  //   slide_small: { name: "Small Slide", width: 4, depth: 2, height: 3 },
+  //   slide_large: { name: "Large Slide", width: 8, depth: 3, height: 6 },
+  //   tower_3d: { name: "Tower", width: 5, depth: 5, height: 10 },
+  //   duck_3d: { name: "Duck", width: 2, depth: 2, height: 2 },
+  //   wave_pool: { name: "Wave Pool", width: 20, depth: 15, height: 2 },
+  //   lazy_river: { name: "Lazy River", width: 30, depth: 5, height: 1.5 },
+  //   splash_pad: { name: "Splash Pad", width: 10, depth: 10, height: 0.5 },
+  //   pump_station: { name: "Pump Station", width: 5, depth: 5, height: 4 },
+  //   ticket_booth: { name: "Ticket Booth", width: 3, depth: 3, height: 3 },
+  //   locker_block: { name: "Locker Block", width: 10, depth: 4, height: 3 },
+  //   food_kiosk: { name: "Food Kiosk", width: 4, depth: 4, height: 3 },
+  //   seating_area: { name: "Seating Area", width: 6, depth: 6, height: 1 },
+  // };
+
+  const handleExpandUser = async (userId: string) => {
+    if (expandedUserId === userId) {
+      setExpandedUserId(null);
+      return;
+    }
+    setExpandedUserId(userId);
+    if (!userProjects[userId]) {
+      const res = await authFetch(
+        `/api/projects?tenantId=${tenant.id}&userId=${userId}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setUserProjects((prev) => ({ ...prev, [userId]: data }));
+      }
+    }
+  };
+
+  const handleExpandProject = async (projectId: string) => {
+    if (expandedProjectId === projectId) {
+      setExpandedProjectId(null);
+      return;
+    }
+    setExpandedProjectId(projectId);
+    if (!projectData[projectId]) {
+      const res = await authFetch(`/api/projects/${projectId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProjectData((prev) => ({ ...prev, [projectId]: data.data || data }));
+      }
+    }
+  };
+
+  const [customEquipment, setCustomEquipment] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchCustomEquipment = async () => {
+      const res = await authFetch(`/api/tenant/${tenant.id}/equipment`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomEquipment(data);
+      }
+    };
+    fetchCustomEquipment();
+  }, [tenant.id]);
+
+  const equipmentLookup = React.useMemo(() => {
+    const lookup: Record<
+      string,
+      { name: string; width: number; depth: number; height: number }
+    > = {
+      slide_small: { name: "Small Slide", width: 4, depth: 2, height: 3 },
+      slide_large: { name: "Large Slide", width: 8, depth: 3, height: 6 },
+      tower_3d: { name: "Tower", width: 5, depth: 5, height: 10 },
+      duck_3d: { name: "Duck", width: 2, depth: 2, height: 2 },
+      wave_pool: { name: "Wave Pool", width: 20, depth: 15, height: 2 },
+      lazy_river: { name: "Lazy River", width: 30, depth: 5, height: 1.5 },
+      splash_pad: { name: "Splash Pad", width: 10, depth: 10, height: 0.5 },
+      pump_station: { name: "Pump Station", width: 5, depth: 5, height: 4 },
+      ticket_booth: { name: "Ticket Booth", width: 3, depth: 3, height: 3 },
+      locker_block: { name: "Locker Block", width: 10, depth: 4, height: 3 },
+      food_kiosk: { name: "Food Kiosk", width: 4, depth: 4, height: 3 },
+      seating_area: { name: "Seating Area", width: 6, depth: 6, height: 1 },
+    };
+    // Merge custom equipment from DB
+    (customEquipment || []).forEach((eq: any) => {
+      lookup[eq.id] = {
+        name: eq.name,
+        width: eq.width,
+        depth: eq.depth,
+        height: eq.height,
+      };
+    });
+    return lookup;
+  }, [customEquipment]);
+
+  const getEquipmentList = (pd: any) => {
+    if (!pd?.objects) return [];
+    const counts: Record<string, number> = {};
+    pd.objects.forEach((obj: any) => {
+      counts[obj.type] = (counts[obj.type] || 0) + 1;
+    });
+    return Object.entries(counts).map(([type, count]) => {
+      const def = equipmentLookup[type];
+      return {
+        type,
+        name: def?.name || type,
+        count,
+        width: def?.width || 0,
+        depth: def?.depth || 0,
+        height: def?.height || 0,
+      };
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -2276,25 +2466,127 @@ function ProjectStatsTab({ projectStats }: { projectStats: any[] }) {
             {projectStats.map((rep) => (
               <div
                 key={rep.user_id}
-                className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border hover:border-white/20 transition-all"
+                className="bg-white/5 border border-theme-border rounded-xl overflow-hidden"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-brand-teal/10 flex items-center justify-center text-brand-teal font-bold text-sm">
-                    {rep.user_name?.charAt(0).toUpperCase()}
+                {/* Rep row — clickable */}
+                <div
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors"
+                  onClick={() => handleExpandUser(rep.user_id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-brand-teal/10 flex items-center justify-center text-brand-teal font-bold text-sm">
+                      {rep.user_name?.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{rep.user_name}</p>
+                      <p className="text-[11px] opacity-30">{rep.email}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{rep.user_name}</p>
-                    <p className="text-[11px] opacity-30">{rep.email}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-brand-teal">
+                        {rep.project_count}
+                      </p>
+                      <p className="text-[10px] opacity-30 uppercase tracking-wider">
+                        projects
+                      </p>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 opacity-30 transition-transform ${expandedUserId === rep.user_id ? "rotate-180" : ""}`}
+                    />
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-brand-teal">
-                    {rep.project_count}
-                  </p>
-                  <p className="text-[10px] opacity-30 uppercase tracking-wider">
-                    projects
-                  </p>
-                </div>
+
+                {/* Expanded projects */}
+                {expandedUserId === rep.user_id && (
+                  <div className="border-t border-white/10 px-4 pb-4">
+                    <p className="text-[10px] uppercase tracking-widest opacity-30 mt-3 mb-3">
+                      Projects
+                    </p>
+                    {!userProjects[rep.user_id] ? (
+                      <p className="text-xs opacity-30">Loading...</p>
+                    ) : userProjects[rep.user_id].length === 0 ? (
+                      <p className="text-xs opacity-30 italic">
+                        No projects yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {userProjects[rep.user_id].map((project: any) => (
+                          <div
+                            key={project.id}
+                            className="bg-white/5 border border-white/10 rounded-lg overflow-hidden"
+                          >
+                            <div
+                              className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/5 transition-colors"
+                              onClick={() => handleExpandProject(project.id)}
+                            >
+                              <div>
+                                <p className="text-xs font-semibold text-white">
+                                  {project.name}
+                                </p>
+                                {project.client_name && (
+                                  <p className="text-[10px] text-brand-teal/70 mt-0.5">
+                                    {project.client_name}
+                                  </p>
+                                )}
+                                <p className="text-[10px] opacity-30 mt-0.5">
+                                  {project.updated_at
+                                    ? `Updated ${new Date(project.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                                    : `Created ${new Date(project.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
+                                </p>
+                              </div>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 opacity-30 transition-transform shrink-0 ${expandedProjectId === project.id ? "rotate-180" : ""}`}
+                              />
+                            </div>
+
+                            {expandedProjectId === project.id && (
+                              <div className="border-t border-white/10 px-3 pb-3">
+                                <p className="text-[10px] uppercase tracking-widest opacity-30 mt-2 mb-2">
+                                  Equipment Used
+                                </p>
+                                {!projectData[project.id] ? (
+                                  <p className="text-xs opacity-30">
+                                    Loading...
+                                  </p>
+                                ) : getEquipmentList(projectData[project.id])
+                                    .length === 0 ? (
+                                  <p className="text-xs opacity-30">
+                                    No equipment placed.
+                                  </p>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {getEquipmentList(
+                                      projectData[project.id],
+                                    ).map((eq) => (
+                                      <div
+                                        key={eq.type}
+                                        className="flex items-center justify-between bg-white/5 rounded px-2 py-1.5"
+                                      >
+                                        <div>
+                                          <span className="text-xs font-medium text-white">
+                                            {eq.name}
+                                          </span>
+                                          <span className="text-[10px] opacity-30 ml-1">
+                                            ({eq.width}m×{eq.depth}m×{eq.height}
+                                            m)
+                                          </span>
+                                        </div>
+                                        <span className="text-xs font-bold text-brand-teal">
+                                          ×{eq.count}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

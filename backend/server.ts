@@ -872,9 +872,17 @@ async function startServer() {
     authenticate,
     requireRole("platform_admin"),
     async (req, res) => {
-      const { rows } = await pool.query(
-        "SELECT * FROM tenants ORDER BY created_at DESC",
-      );
+      // const { rows } = await pool.query(
+      //   "SELECT * FROM tenants ORDER BY created_at DESC",
+      // );
+      const { rows } = await pool.query(`
+       SELECT t.*, 
+       CAST (COUNT(p.id) AS INTEGER) AS project_count
+       FROM tenants t
+       LEFT JOIN projects p ON p.tenant_id = t.id
+       GROUP BY t.id
+       ORDER BY t.created_at DESC
+      `);
       res.json(rows);
     },
   );
