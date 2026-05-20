@@ -1,5 +1,8 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import multer from "multer";
+
+import fs from "fs";
 dotenv.config();
 
 declare global {
@@ -156,8 +159,8 @@ async function startServer() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "5mb" }));
-  app.use(express.urlencoded({ limit: "5mb", extended: true }));
+  app.use(express.json({ limit: "25mb" }));
+  app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
   app.use((req, res, next) => {
     console.log("👉 Incoming request:", req.method, req.url);
@@ -796,6 +799,34 @@ async function startServer() {
       res.json({ success: true });
     },
   );
+
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, "public/models");
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      cb(null, `${Date.now()}-${file.originalname}`);
+    },
+  });
+  const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+
+  app.use("/models", express.static(path.join(__dirname, "public/models")));
+
+  app.post(
+    "/api/upload/model",
+    authenticate,
+    upload.single("file"),
+    (req: any, res: any) => {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      // const url = `/public/models/${req.file.filename}`;
+      // res.json({ url });
+      res.json({ url: `/models/${req.file.filename}` });
+    },
+  );
+
+  app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
   // ══════════════════════════════════════════════════════════════════════════
   // DISABLED DEFAULTS ROUTES
@@ -1520,7 +1551,9 @@ async function startServer() {
         Return a structured JSON report.
       `;
 
-      const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genai.getGenerativeModel({
+        model: "gemini-3-flash-preview",
+      });
 
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],

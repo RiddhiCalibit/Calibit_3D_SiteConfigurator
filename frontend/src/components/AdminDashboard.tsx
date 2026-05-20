@@ -189,7 +189,6 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
     const interval = setInterval(() => {
       fetchResetRequests();
     }, 30000);
-
     return () => clearInterval(interval);
   }, [tenant.id]);
 
@@ -235,6 +234,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
       body: JSON.stringify({
         ...newEquipment,
         id,
+        model_url: newEquipment.modelUrl || null,
         image_url: newEquipment.imageUrl || null,
         is_active: newEquipment.isActive !== false ? 1 : 0,
       }),
@@ -267,6 +267,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...editingEquipment,
+          model_url: editingEquipment.modelUrl || null,
           image_url: editingEquipment.imageUrl || null,
           is_active: editingEquipment.isActive !== false ? 1 : 0,
         }),
@@ -1437,7 +1438,7 @@ function EquipmentTab({
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
                     Equipment URL (Optional)
                   </label>
@@ -1462,6 +1463,118 @@ function EquipmentTab({
                     className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
                     placeholder="/models/..."
                   />
+                </div>
+              </div> */}
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+                    3D Model (.glb)
+                  </label>
+
+                  {/* Show current file status */}
+                  {(
+                    isAdding ? newEquipment.modelUrl : editingItem?.modelUrl
+                  ) ? (
+                    <div className="flex items-center justify-between bg-white/5 border border-theme-border rounded-lg px-4 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Box className="w-4 h-4 text-brand-teal shrink-0" />
+                        <span className="text-xs text-brand-teal truncate">
+                          GLB model loaded
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          isAdding
+                            ? setNewEquipment({ ...newEquipment, modelUrl: "" })
+                            : setEditingItem({ ...editingItem!, modelUrl: "" })
+                        }
+                        className="p-1 hover:bg-red-500/20 text-red-400 rounded transition-colors shrink-0"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center justify-center gap-2 w-full border border-dashed border-theme-border rounded-lg px-4 py-3 cursor-pointer hover:border-brand-teal/50 transition-colors"
+                      onClick={() =>
+                        document.getElementById("glb-upload")?.click()
+                      }
+                    >
+                      <Upload className="w-4 h-4 opacity-30" />
+                      <span className="text-xs opacity-40">
+                        Upload .glb file
+                      </span>
+                    </div>
+                  )}
+
+                  <input
+                    id="glb-upload"
+                    type="file"
+                    accept=".glb"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      const MAX_GLB_SIZE = 25 * 1024 * 1024; // 25MB
+                      if (file.size > MAX_GLB_SIZE) {
+                        alert("GLB file must be under 25MB.");
+                        e.target.value = "";
+                        return;
+                      }
+
+                      const formData = new FormData();
+                      formData.append("file", file);
+
+                      const token =
+                        localStorage.getItem("authToken") ||
+                        sessionStorage.getItem("authToken");
+                      // const res = await authFetch("/api/upload/model", {
+                      //   method: "POST",
+                      //   body: formData,
+                      // });
+                      // Show uploading state
+                      if (isAdding) {
+                        setNewEquipment({
+                          ...newEquipment,
+                          modelUrl: "uploading...",
+                        });
+                      } else {
+                        setEditingItem({
+                          ...editingItem!,
+                          modelUrl: "uploading...",
+                        });
+                      }
+                      const res = await fetch(
+                        `${import.meta.env.VITE_API_URL}/api/upload/model`,
+                        {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}` },
+                          body: formData,
+                        },
+                      );
+
+                      if (res.ok) {
+                        const { url } = await res.json();
+                        if (isAdding) {
+                          setNewEquipment({ ...newEquipment, modelUrl: url });
+                        } else {
+                          setEditingItem({ ...editingItem!, modelUrl: url });
+                        }
+                      } else {
+                        alert("Failed to upload GLB file.");
+                        if (isAdding) {
+                          setNewEquipment({ ...newEquipment, modelUrl: "" });
+                        } else {
+                          setEditingItem({ ...editingItem!, modelUrl: "" });
+                        }
+                      }
+                    }}
+                  />
+                  <p className="text-[10px] opacity-30">
+                    Max 25MB · Used for 3D rendering
+                  </p>
                 </div>
               </div>
 
@@ -1671,6 +1784,37 @@ function EquipmentTab({
           </div>
         )}
       </div>
+
+      {/* onChange={async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const MAX_GLB_SIZE = 25 * 1024 * 1024; // 25MB
+  if (file.size > MAX_GLB_SIZE) {
+    alert("GLB file must be under 25MB.");
+    e.target.value = "";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await authFetch("/api/upload/model", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (res.ok) {
+    const { url } = await res.json();
+    if (isAdding) {
+      setNewEquipment({ ...newEquipment, modelUrl: url });
+    } else {
+      setEditingItem({ ...editingItem!, modelUrl: url });
+    }
+  } else {
+    alert("Failed to upload GLB file.");
+  }
+}} */}
 
       {/* ── Default Equipment Section ────────────────────────────────────── */}
       <div className="space-y-3 pt-2">
@@ -2323,24 +2467,6 @@ function ProjectStatsTab({
     null,
   );
   const [projectData, setProjectData] = useState<Record<string, any>>({});
-
-  // const DEFAULT_EQUIPMENT: Record<
-  //   string,
-  //   { name: string; width: number; depth: number; height: number }
-  // > = {
-  //   slide_small: { name: "Small Slide", width: 4, depth: 2, height: 3 },
-  //   slide_large: { name: "Large Slide", width: 8, depth: 3, height: 6 },
-  //   tower_3d: { name: "Tower", width: 5, depth: 5, height: 10 },
-  //   duck_3d: { name: "Duck", width: 2, depth: 2, height: 2 },
-  //   wave_pool: { name: "Wave Pool", width: 20, depth: 15, height: 2 },
-  //   lazy_river: { name: "Lazy River", width: 30, depth: 5, height: 1.5 },
-  //   splash_pad: { name: "Splash Pad", width: 10, depth: 10, height: 0.5 },
-  //   pump_station: { name: "Pump Station", width: 5, depth: 5, height: 4 },
-  //   ticket_booth: { name: "Ticket Booth", width: 3, depth: 3, height: 3 },
-  //   locker_block: { name: "Locker Block", width: 10, depth: 4, height: 3 },
-  //   food_kiosk: { name: "Food Kiosk", width: 4, depth: 4, height: 3 },
-  //   seating_area: { name: "Seating Area", width: 6, depth: 6, height: 1 },
-  // };
 
   const handleExpandUser = async (userId: string) => {
     if (expandedUserId === userId) {

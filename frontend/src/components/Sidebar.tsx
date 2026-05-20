@@ -230,25 +230,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const handleModelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // const handleModelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const file = e.target.files?.[0];
+  //   if (!file) return;
 
-    const url = URL.createObjectURL(file);
-    const name = file.name.replace(".glb", "");
+  //   const url = URL.createObjectURL(file);
+  //   const name = file.name.replace(".glb", "");
 
-    // Now calls the DB-saving version above
-    handleAddCustomEquipment({
-      id: `custom_${Date.now()}`,
-      name: `${name} (Custom)`,
-      width: 2,
-      depth: 2,
-      height: 2,
-      color: "#9B59B6",
-      category: "custom",
-      modelUrl: url,
-    });
-  };
+  //   // Now calls the DB-saving version above
+  //   handleAddCustomEquipment({
+  //     id: `custom_${Date.now()}`,
+  //     name: `${name} (Custom)`,
+  //     width: 2,
+  //     depth: 2,
+  //     height: 2,
+  //     color: "#9B59B6",
+  //     category: "custom",
+  //     modelUrl: url,
+  //   });
+  // };
 
   const handleLoadProject = (project: any) => {
     const data =
@@ -463,7 +463,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
               Equipment Library Active: {fullLibrary.length}
             </label>
-            <label className="cursor-pointer group">
+            {/* <label className="cursor-pointer group">
               <input
                 type="file"
                 accept=".glb"
@@ -474,7 +474,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Upload className="w-3 h-3" />
                 <span>Add GLB</span>
               </div>
-            </label>
+            </label> */}
           </div>
           <div
             className={cn(
