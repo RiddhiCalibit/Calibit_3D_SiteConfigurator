@@ -498,12 +498,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     "ring-1 ring-brand-teal bg-brand-teal/10",
                 )}
               >
-                <div
+                {/* <div
                   className="w-8 h-8 rounded shrink-0 shadow-inner flex items-center justify-center overflow-hidden"
                   style={{ backgroundColor: item.color }}
                 >
                   {item.modelUrl && <Box className="w-4 h-4 text-white/20" />}
-                </div>
+                </div> */}
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="w-8 h-8 rounded-lg object-cover shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-lg shrink-0"
+                    style={{ backgroundColor: item.color }}
+                  />
+                )}
+
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate">{item.name}</p>
                   <p className="text-[10px] opacity-40 font-mono">
