@@ -1528,8 +1528,8 @@ function EquipmentTab({
                       formData.append("file", file);
 
                       const token =
-                        localStorage.getItem("authToken") ||
-                        sessionStorage.getItem("authToken");
+                        localStorage.getItem("auth_token") ||
+                        sessionStorage.getItem("auth_token");
                       // const res = await authFetch("/api/upload/model", {
                       //   method: "POST",
                       //   body: formData,

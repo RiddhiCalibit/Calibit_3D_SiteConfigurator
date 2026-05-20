@@ -144,7 +144,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
             <p className="text-[10px] opacity-40 uppercase tracking-widest">
               Secured by 3D_Site_Configurator Auth
             </p>
-            <p className="text-xs opacity-30 mt-1">Version v2.0.0</p>
+            <p className="text-xs opacity-30 mt-1">Version v1.3.0</p>
           </div>
         </form>
 

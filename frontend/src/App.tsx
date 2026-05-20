@@ -56,8 +56,24 @@ export default function App() {
   const [complianceOpen, setComplianceOpen] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<any>(null);
 
-  const [user, setUser] = useState<User | null>(null);
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  // const [user, setUser] = useState<User | null>(null);
+  // const [tenant, setTenant] = useState<Tenant | null>(null);
+  // const [token, setToken] = useState(null);
+
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem("auth_user");
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [token, setToken] = useState(() => {
+    return localStorage.getItem("auth_token") || null;
+  });
+
+  const [tenant, setTenant] = useState(() => {
+    const saved = localStorage.getItem("auth_tenant");
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [projects, setProjects] = useState<any[]>([]);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showContactAdmin, setShowContactAdmin] = useState(false);
@@ -66,6 +82,52 @@ export default function App() {
   const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [customEquipment, setCustomEquipment] = useState<any[]>([]);
+
+  // Add this useEffect after your useState declarations
+  useEffect(() => {
+    if (!user || !tenant) return;
+
+    // Re-fetch equipment and disabled defaults on page load/refresh
+    const restoreSession = async () => {
+      // Fetch disabled defaults
+      const ddRes = await authFetch(
+        `/api/tenant/${tenant.id}/disabled-defaults`,
+      );
+      if (ddRes.ok) {
+        const disabledIds = await ddRes.json();
+        setDisabledDefaults(disabledIds);
+      }
+
+      // Fetch custom equipment
+      const eqRes = await authFetch(`/api/tenant/${tenant.id}/equipment`);
+      if (eqRes.ok) {
+        const eqData = await eqRes.json();
+        const mapped = eqData.map((eq: any) => ({
+          id: eq.id,
+          name: eq.name,
+          category: eq.category,
+          width: eq.width,
+          depth: eq.depth,
+          height: eq.height,
+          color: eq.color,
+          modelUrl: eq.model_url,
+          animationsEnabled: !!eq.animations_enabled,
+          imageUrl: eq.image_url || null,
+          isActive: eq.is_active !== 0,
+        }));
+        const filtered =
+          user.role === "sales_rep"
+            ? mapped.filter((eq: any) => eq.isActive !== false)
+            : mapped;
+        setCustomLibrary(filtered);
+      }
+
+      // Fetch projects
+      fetchProjects(tenant);
+    };
+
+    restoreSession();
+  }, []); // ← empty array = runs once on mount
 
   const handleLogin = async (email: string, password: string) => {
     // const res = await fetch('/api/auth/login', {
@@ -79,16 +141,6 @@ export default function App() {
         },
       );
 
-      // const contentType = res.headers.get("content-type");
-
-      // if (!contentType || !contentType.includes("application/json")) {
-      //   const text = await res.text();
-      //   console.error("❌ BROKEN API:", res.url);
-      //   console.error("❌ RESPONSE:", text);
-      //   throw new Error("Invalid JSON response");
-      // }
-
-      // const data = await res.json();
       const data = await res.json();
       console.log("LOGIN RESPONSE:", data);
 
@@ -98,9 +150,12 @@ export default function App() {
 
       // if (res.ok) {
       //   const data = await res.json();
-      localStorage.setItem("authToken", data.token);
+      localStorage.setItem("auth_token", data.token);
+      localStorage.setItem("auth_user", JSON.stringify(data.user));
+      localStorage.setItem("auth_tenant", JSON.stringify(data.tenant));
       setUser(data.user);
       setTenant(data.tenant);
+      // setToken(data.token);
 
       //  Pass tenant directly — don't rely on state being updated yet
       fetchProjects(data.tenant);
@@ -166,9 +221,13 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("authToken"); // clear token
+    // localStorage.removeItem("authToken"); // clear token
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
+    localStorage.removeItem("auth_tenant");
     setUser(null);
     setTenant(null);
+    setToken(null);
   };
 
   const handleMapClick = useCallback(
