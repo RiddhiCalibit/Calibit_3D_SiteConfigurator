@@ -67,6 +67,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#FF5733",
     category: "slides",
+    modelUrl: "/models/small_slide.glb",
     isActive: true,
   },
   {
@@ -77,6 +78,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 6,
     color: "#C70039",
     category: "slides",
+    modelUrl: "/models/slide_large.glb",
     isActive: true,
   },
   {
@@ -87,7 +89,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 10,
     color: "#34495E",
     category: "facilities",
-    //modelUrl: "/models/tower.glb",
+    modelUrl: "/models/tower.glb",
     animationsEnabled: true,
     isActive: true,
   },
@@ -112,6 +114,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 2,
     color: "#3498DB",
     category: "pools",
+    modelUrl: "/models/wave_pool.glb",
     isActive: true,
   },
   {
@@ -122,6 +125,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 1.5,
     color: "#2980B9",
     category: "pools",
+    modelUrl: "/models/lazy_river.glb",
     isActive: true,
   },
   {
@@ -132,6 +136,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 0.5,
     color: "#1ABC9C",
     category: "pools",
+    //modelUrl: "/models/splash_pad.glb",
     isActive: true,
   },
   {
@@ -142,6 +147,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 4,
     color: "#7F8C8D",
     category: "facilities",
+    modelUrl: "/models/pump_station.glb",
     isActive: true,
   },
   {
@@ -152,6 +158,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#F1C40F",
     category: "facilities",
+    modelUrl: "/models/ticket_booth.glb",
     isActive: true,
   },
   {
@@ -162,6 +169,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#9B59B6",
     category: "facilities",
+    modelUrl: "/models/locker_block.glb",
     isActive: true,
   },
   {
@@ -172,6 +180,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#E67E22",
     category: "facilities",
+    modelUrl: "/models/food_kiosk.glb",
     isActive: true,
   },
   {
@@ -182,6 +191,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 1,
     color: "#2ECC71",
     category: "amenities",
+    modelUrl: "/models/seating area.glb",
     isActive: true,
   },
 ];
