@@ -8,7 +8,18 @@ export default function SharedProject() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = window.location.pathname.split("/shared/")[1];
+    // const token = window.location.pathname.split("/shared/")[1];
+
+    const fullPath = window.location.pathname + window.location.href;
+    const match = (
+      window.location.pathname +
+      window.location.search +
+      window.location.hash
+    ).match(/\/shared\/([a-f0-9]+)/);
+    const token = match
+      ? match[1]
+      : window.location.href.match(/\/shared\/([a-f0-9]+)/)?.[1];
+
     if (!token) {
       setError("Invalid share link.");
       setLoading(false);

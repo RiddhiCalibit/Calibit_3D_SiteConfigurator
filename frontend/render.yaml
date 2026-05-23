@@ -1,0 +1,7 @@
+routes:
+  - type: rewrite
+    source: /shared/*
+    destination: /index.html
+  - type: rewrite
+    source: /*
+    destination: /index.html
