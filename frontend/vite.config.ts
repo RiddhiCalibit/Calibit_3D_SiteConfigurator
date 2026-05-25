@@ -4,14 +4,14 @@ import path from "path";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react({ jsxRuntime: "classic" }), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
     },
   },
   server: {
-    hmr: process.env.DISABLE_HMR !== "true",
+    hmr: false,
     proxy: {
       "/api": {
         target: "http://localhost:3000",

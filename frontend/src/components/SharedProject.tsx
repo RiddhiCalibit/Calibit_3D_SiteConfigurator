@@ -467,7 +467,19 @@ export default function SharedProject() {
   const mapInstanceRef = useRef<mapboxgl.Map | null>(null);
 
   useEffect(() => {
-    const match = window.location.href.match(/\/shared\/([a-f0-9]+)/);
+    // Try current URL first, then saved path
+    const pathToCheck =
+      window.location.href + (sessionStorage.getItem("sharedPath") || "");
+    const savedPath = sessionStorage.getItem("originalPath") || "";
+
+    // Get token from URL params (set by _redirects) or direct URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedParam = urlParams.get("shared");
+
+    const match = sharedParam
+      ? sharedParam.match(/^([a-f0-9]+)/)
+      : window.location.href.match(/\/shared\/([a-f0-9]+)/) ||
+        savedPath.match(/\/shared\/([a-f0-9]+)/);
     const token = match ? match[1] : null;
 
     if (!token) {
@@ -501,6 +513,12 @@ export default function SharedProject() {
       sessionStorage.getItem("originalPath") || window.location.href;
     const match = originalPath.match(/\/shared\/([a-f0-9]+)/);
     const token = match ? match[1] : null;
+
+    if (!token) {
+      setError("Invalid share link.");
+      setLoading(false);
+      return;
+    }
 
     const center: [number, number] = origin
       ? [origin[0], origin[1]]

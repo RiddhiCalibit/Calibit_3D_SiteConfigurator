@@ -1,2 +1,2 @@
-/shared/*    /index.html   200
-/*           /index.html   200
+/shared/*  /index.html?shared=:splat  200
+/*         /index.html                200

@@ -1,13 +1,38 @@
+<!-- <!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Site Configurator</title>
+    <script>
+      // Store the original path before any SPA redirect
+      sessionStorage.setItem(
+        "originalPath",
+        window.location.pathname + window.location.search,
+      );
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html> -->
+
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>3D Site Configurator</title>
+    <script>
+      // Save original path before SPA redirect changes it
+      if (window.location.pathname !== "/index.html") {
+        sessionStorage.setItem("originalPath", window.location.pathname);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
