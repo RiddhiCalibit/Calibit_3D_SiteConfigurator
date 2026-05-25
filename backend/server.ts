@@ -1324,6 +1324,7 @@ async function startServer() {
     res.json({
       id: project.id,
       name: project.name,
+      client_name: project.client_name,
       created_at: project.created_at,
       updated_at: project.updated_at,
       data: project.data,
