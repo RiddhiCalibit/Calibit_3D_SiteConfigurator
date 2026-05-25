@@ -497,6 +497,11 @@ export default function SharedProject() {
     const objects = project.data?.objects || [];
     const origin = project.data?.origin;
 
+    const originalPath =
+      sessionStorage.getItem("originalPath") || window.location.href;
+    const match = originalPath.match(/\/shared\/([a-f0-9]+)/);
+    const token = match ? match[1] : null;
+
     const center: [number, number] = origin
       ? [origin[0], origin[1]]
       : boundary.length > 0
@@ -603,7 +608,6 @@ export default function SharedProject() {
   const equipmentNames = buildEquipmentLookup(project.customEquipment || []);
 
   return (
-    // <div className="min-h-screen bg-[#0f1623] text-white">
     <div className="min-h-screen overflow-y-auto bg-[#0f1623] text-white">
       {/* Header */}
       <div className="p-6 border-b border-white/10">
@@ -632,7 +636,7 @@ export default function SharedProject() {
 
       {/* Main content */}
       {/* <div className="max-w-6xl mx-auto p-6 flex gap-6"> */}
-      <div className="max-w-6xl mx-auto p-6 flex gap-6 items-start overflow-y-auto">
+      <div className="max-w-6xl mx-auto p-6 flex gap-6 items-start overflow-y-auto items-start flex-wrap">
         {/* Map */}
         <div className="flex-1">
           <div
@@ -690,7 +694,8 @@ export default function SharedProject() {
         </div>
       </div>
 
-      <p className="text-center text-xs opacity-20 pb-8 uppercase tracking-widest">
+      {/* <p className="text-center text-xs opacity-20 pb-8 uppercase tracking-widest"> */}
+      <p className="text-center text-xs opacity-20 uppercase py-10">
         Powered by Calibit 3D Site Configurator
       </p>
     </div>
