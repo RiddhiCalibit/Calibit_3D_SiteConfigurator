@@ -2,8 +2,8 @@
 
 @theme {
   --color-brand-navy: var(--theme-bg);
-  --color-brand-teal: #2E8B7A;
-  --color-brand-paper: #F7F5F0;
+  --color-brand-teal: #2e8b7a;
+  --color-brand-paper: #f7f5f0;
   --color-theme-bg: var(--theme-bg);
   --color-theme-text: var(--theme-text);
   --color-theme-border: var(--theme-border);
@@ -12,15 +12,15 @@
 }
 
 :root {
-  --theme-bg: #0F172A; /* Darker navy for dark mode */
-  --theme-text: #FFFFFF;
+  --theme-bg: #0f172a; /* Darker navy for dark mode */
+  --theme-text: #ffffff;
   --theme-border: rgba(255, 255, 255, 0.1);
   --theme-card: rgba(255, 255, 255, 0.05);
 }
 
 :root.light {
-  --theme-bg: #FFFFFF;
-  --theme-text: #0F172A;
+  --theme-bg: #ffffff;
+  --theme-text: #0f172a;
   --theme-border: rgba(15, 23, 42, 0.1);
   --theme-card: rgba(15, 23, 42, 0.05);
 }
@@ -28,11 +28,23 @@
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  /* overflow: hidden; */
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif;
   background-color: var(--theme-bg);
   color: var(--theme-text);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .mapboxgl-canvas {
@@ -53,4 +65,3 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
-
