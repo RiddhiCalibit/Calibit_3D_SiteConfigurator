@@ -32,11 +32,13 @@ import {
   EyeOff,
   FolderOpen,
   ChevronDown,
+  Lock,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { clsx } from "clsx";
 import { v4 as uuidv4 } from "uuid";
 import { useTheme } from "../contexts/ThemeContext";
+import { LockedAccountsPanel } from "./LockedAccountsPanel";
 
 interface Props {
   user: User;
@@ -55,6 +57,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
     | "resets"
     | "logs"
     | "projects"
+    | "locked-accounts"
   >("overview");
   const [equipment, setEquipment] = useState<EquipmentDef[]>([]);
   const [isAddingEquipment, setIsAddingEquipment] = useState(false);
@@ -419,6 +422,12 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
             badge={ResetCount > 0 ? ResetCount : undefined}
           />
           <NavButton
+            active={activeTab === "locked-accounts"}
+            onClick={() => setActiveTab("locked-accounts")}
+            icon={<Lock className="w-4 h-4" />}
+            label="Locked Accounts"
+          />
+          <NavButton
             active={activeTab === "logs"}
             onClick={() => setActiveTab("logs")}
             icon={<Activity className="w-4 h-4" />}
@@ -475,6 +484,7 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
               {activeTab === "settings" && "Company Settings"}
               {activeTab === "profile" && "Profile"}
               {activeTab === "resets" && "Password Reset Requests"}
+              {activeTab === "locked-accounts" && "Locked Accounts"}
               {activeTab === "logs" && "Activity Logs"}
               {activeTab === "projects" && "Project Statistics"}
             </h2>
@@ -608,6 +618,10 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
           <SettingsTab theme={theme} onThemeChange={setTheme} />
         )}
         {activeTab === "profile" && <ProfileTab user={user} />}
+
+        {activeTab === "locked-accounts" && (
+          <LockedAccountsPanel userRole="tenant_admin" tenantId={tenant.id} />
+        )}
 
         {activeTab === "logs" &&
           (() => {

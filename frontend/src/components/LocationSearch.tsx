@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, X, Loader2 } from 'lucide-react';
-import { clsx } from 'clsx';
+import React, { useState, useEffect, useRef } from "react";
+import { Search, MapPin, X, Loader2 } from "lucide-react";
+import { clsx } from "clsx";
 
 interface LocationSearchProps {
   onSelectLocation: (lng: number, lat: number) => void;
@@ -12,8 +12,10 @@ interface Suggestion {
   center: [number, number];
 }
 
-export const LocationSearch: React.FC<LocationSearchProps> = ({ onSelectLocation }) => {
-  const [query, setQuery] = useState('');
+export const LocationSearch: React.FC<LocationSearchProps> = ({
+  onSelectLocation,
+}) => {
+  const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -21,12 +23,15 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({ onSelectLocation
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -40,13 +45,13 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({ onSelectLocation
       try {
         const token = import.meta.env.VITE_MAPBOX_TOKEN;
         const response = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&limit=5`
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&limit=5`,
         );
         const data = await response.json();
         setSuggestions(data.features || []);
         setIsOpen(true);
       } catch (error) {
-        console.error('Geocoding error:', error);
+        console.error("Geocoding error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -82,7 +87,7 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({ onSelectLocation
         />
         {query && (
           <button
-            onClick={() => setQuery('')}
+            onClick={() => setQuery("")}
             className="absolute inset-y-0 right-3 flex items-center text-white/40 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -99,7 +104,9 @@ export const LocationSearch: React.FC<LocationSearchProps> = ({ onSelectLocation
               className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 group"
             >
               <MapPin className="w-4 h-4 text-brand-teal/60 group-hover:text-brand-teal shrink-0 mt-0.5" />
-              <span className="text-xs text-white/80 group-hover:text-white line-clamp-2">{s.place_name}</span>
+              <span className="text-xs text-white/80 group-hover:text-white line-clamp-2">
+                {s.place_name}
+              </span>
             </button>
           ))}
         </div>

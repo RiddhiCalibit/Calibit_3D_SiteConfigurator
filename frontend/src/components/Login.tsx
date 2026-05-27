@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
+import {
+  Lock,
+  Mail,
+  ArrowRight,
+  Loader2,
+  Eye,
+  EyeOff,
+  AlertCircle,
+} from "lucide-react";
 import { motion } from "motion/react";
 import logo from "../assets/logo.png";
 
@@ -15,15 +23,35 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [accountLocked, setAccountLocked] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setAccountLocked(false);
+    setFailedAttempts(0);
     try {
       await onLogin(email, password);
-    } catch (err) {
-      setError("Invalid email or password");
+    } catch (err: any) {
+      if (err.accountLocked) {
+        setAccountLocked(true);
+        setError(
+          `Account locked. Please contact your ${
+            err.canUnlockByRoles === "tenant_admin"
+              ? "Tenant Admin"
+              : "Platform Admin"
+          } to unlock it.`,
+        );
+      } else if (err.failedAttempts) {
+        setFailedAttempts(err.failedAttempts);
+        setError(
+          `Invalid email or password (${err.failedAttempts}/3 failed attempts)`,
+        );
+      } else {
+        setError("Invalid email or password");
+      }
     } finally {
       setLoading(false);
     }
@@ -64,8 +92,17 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
           className="bg-theme-card backdrop-blur-xl border border-theme-border p-8 rounded-3xl shadow-2xl space-y-6"
         >
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs font-medium text-center">
-              {error}
+            <div
+              className={`p-4 border rounded-xl text-sm font-medium flex gap-3 ${
+                accountLocked
+                  ? "bg-red-500/10 border-red-500/20 text-red-400"
+                  : failedAttempts >= 2
+                    ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                    : "bg-red-500/10 border-red-500/20 text-red-400"
+              }`}
+            >
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
@@ -82,7 +119,8 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
                   autoComplete="off"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all"
+                  disabled={accountLocked}
+                  className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all disabled:opacity-50"
                   placeholder="name@company.com"
                 />
               </div>
@@ -101,12 +139,14 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all"
+                  disabled={accountLocked}
+                  className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500 hover:text-white"
+                  disabled={accountLocked}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500 hover:text-white disabled:opacity-50"
                 >
                   {/* {showPassword ? "Hide" : "Show"} */}
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -117,7 +157,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || accountLocked}
             className="w-full py-4 bg-brand-teal hover:bg-brand-teal/90 text-white font-bold rounded-xl transition-all shadow-lg shadow-brand-teal/20 flex items-center justify-center gap-2 group disabled:opacity-50"
           >
             {loading ? (
@@ -134,11 +174,24 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
             <button
               type="button"
               onClick={onForgotPassword}
-              className="text-xs text-brand-teal hover:underline"
+              disabled={accountLocked}
+              className="text-xs text-brand-teal hover:underline disabled:opacity-50"
             >
               Forgot your password?
             </button>
           </div>
+
+          {accountLocked && (
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={onContactAdmin}
+                className="text-xs text-brand-teal hover:underline font-medium"
+              >
+                Contact your administrator
+              </button>
+            </div>
+          )}
 
           <div className="pt-4 text-center">
             <p className="text-[10px] opacity-40 uppercase tracking-widest">

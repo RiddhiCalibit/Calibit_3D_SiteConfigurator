@@ -21,11 +21,13 @@ import {
   Clock,
   Trash2,
   KeyRound,
+  Lock,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { clsx } from "clsx";
 import { v4 as uuidv4 } from "uuid";
 import { useTheme } from "../contexts/ThemeContext";
+import { LockedAccountsPanel } from "./LockedAccountsPanel";
 
 interface Props {
   user: User;
@@ -41,7 +43,13 @@ interface PlatformStats {
 export function PlatformAdminDashboard({ user, onLogout }: Props) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<
-    "overview" | "tenants" | "users" | "settings" | "logs" | "admin-resets"
+    | "overview"
+    | "tenants"
+    | "users"
+    | "settings"
+    | "logs"
+    | "admin-resets"
+    | "locked-accounts"
   >("overview");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -243,6 +251,12 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
             badge={adminResetCount > 0 ? adminResetCount : undefined}
           />
           <NavButton
+            active={activeTab === "locked-accounts"}
+            onClick={() => setActiveTab("locked-accounts")}
+            icon={<Lock className="w-4 h-4" />}
+            label="Locked Accounts"
+          />
+          <NavButton
             active={activeTab === "settings"}
             onClick={() => setActiveTab("settings")}
             icon={<Settings className="w-4 h-4" />}
@@ -272,6 +286,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
               {activeTab === "settings" && "Platform Settings"}
               {activeTab === "logs" && "Platform Activity Logs"}
               {activeTab === "admin-resets" && "Tenant Admin Reset Requests"}
+              {activeTab === "locked-accounts" && "Locked Accounts"}
             </h2>
             <p className="text-sm opacity-40">Super Admin: {user.name}</p>
           </div>
@@ -547,6 +562,9 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
               ))
             )}
           </div>
+        )}
+        {activeTab === "locked-accounts" && (
+          <LockedAccountsPanel userRole="platform_admin" />
         )}
       </main>
     </div>

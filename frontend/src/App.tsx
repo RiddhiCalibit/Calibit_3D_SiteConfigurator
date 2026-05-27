@@ -60,16 +60,16 @@ export default function App() {
   // const [tenant, setTenant] = useState<Tenant | null>(null);
   // const [token, setToken] = useState(null);
 
-  const [user, setUser] = useState(() => {
+  const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem("auth_user");
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [token, setToken] = useState(() => {
+  const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem("auth_token") || null;
   });
 
-  const [tenant, setTenant] = useState(() => {
+  const [tenant, setTenant] = useState<Tenant | null>(() => {
     const saved = localStorage.getItem("auth_tenant");
     return saved ? JSON.parse(saved) : null;
   });
@@ -145,6 +145,20 @@ export default function App() {
       console.log("LOGIN RESPONSE:", data);
 
       if (!res.ok) {
+        // Handle account locked (HTTP 423)
+        if (res.status === 423 && data.accountLocked) {
+          const error: any = new Error(data.error);
+          error.accountLocked = true;
+          error.canUnlockByRoles = data.canUnlockByRoles;
+          error.userRole = data.userRole;
+          throw error;
+        }
+        // Handle failed login with attempt count
+        if (data.failedAttempts) {
+          const error: any = new Error(data.error);
+          error.failedAttempts = data.failedAttempts;
+          throw error;
+        }
         throw new Error(data.error || "Login failed");
       }
 
@@ -216,7 +230,7 @@ export default function App() {
       }
     } catch (err) {
       console.error("LOGIN ERROR:", err);
-      throw new Error("Login failed");
+      throw err;
     }
   };
 

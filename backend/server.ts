@@ -54,6 +54,37 @@ function getISTString(): string {
   return istTime.toISOString().replace("T", " ").substring(0, 19);
 }
 
+async function ensureDatabaseSchema() {
+  const schemaPath = path.resolve(process.cwd(), "schema.sql");
+  if (!fs.existsSync(schemaPath)) {
+    throw new Error(`Database schema file missing: ${schemaPath}`);
+  }
+
+  const schemaSql = fs.readFileSync(schemaPath, "utf8");
+  const statements = schemaSql
+    .split(/;\s*(?:\r?\n|$)/)
+    .map((stmt) => stmt.trim())
+    .filter(Boolean);
+
+  console.log(`📋 Executing ${statements.length} schema statements...`);
+
+  for (const statement of statements) {
+    try {
+      await pool.query(statement);
+    } catch (err) {
+      console.error(
+        "❌ Schema statement failed:",
+        statement.substring(0, 50),
+        err,
+      );
+      throw err;
+    }
+  }
+  console.log(
+    `✅ All ${statements.length} schema statements executed successfully`,
+  );
+}
+
 async function logActivity(
   userId: string,
   userName: string,
@@ -135,6 +166,71 @@ function validatePassword(password: string) {
   return null;
 }
 
+// ─── Account Lockout Helpers ──────────────────────────────────────────────────
+
+async function checkAccountLocked(userId: string) {
+  const { rows } = await pool.query(
+    "SELECT * FROM locked_accounts WHERE user_id = $1",
+    [userId],
+  );
+  return rows[0] || null;
+}
+
+async function getLoginAttempts(userId: string) {
+  const { rows } = await pool.query(
+    "SELECT * FROM login_attempts WHERE user_id = $1",
+    [userId],
+  );
+  return rows[0] || null;
+}
+
+async function recordFailedLoginAttempt(
+  userId: string,
+  email: string,
+  userRole: string,
+  tenantId: string | null,
+) {
+  const attempts = await getLoginAttempts(userId);
+  const failedCount = (attempts?.failed_count || 0) + 1;
+
+  if (failedCount >= 3) {
+    // Lock the account
+    const canUnlockByRoles =
+      userRole === "sales_rep" ? "tenant_admin" : "platform_admin";
+    const lockId = uuidv4();
+
+    await pool.query(
+      `INSERT INTO locked_accounts (id, user_id, email, user_role, locked_at, can_unlock_by_roles)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id) DO UPDATE SET locked_at = $5`,
+      [lockId, userId, email, userRole, getISTString(), canUnlockByRoles],
+    );
+
+    // Clear login attempts
+    await pool.query("DELETE FROM login_attempts WHERE user_id = $1", [userId]);
+
+    return { isLocked: true, failedCount };
+  } else {
+    // Update login attempts
+    if (attempts) {
+      await pool.query(
+        "UPDATE login_attempts SET failed_count = $1, last_attempt_at = $2 WHERE user_id = $3",
+        [failedCount, getISTString(), userId],
+      );
+    } else {
+      await pool.query(
+        "INSERT INTO login_attempts (id, user_id, email, failed_count, last_attempt_at) VALUES ($1, $2, $3, $4, $5)",
+        [uuidv4(), userId, email, failedCount, getISTString()],
+      );
+    }
+    return { isLocked: false, failedCount };
+  }
+}
+
+async function clearLoginAttempts(userId: string) {
+  await pool.query("DELETE FROM login_attempts WHERE user_id = $1", [userId]);
+}
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -147,6 +243,10 @@ async function startServer() {
   // Verify DB connection
   await pool.query("SELECT 1");
   console.log("✅ PostgreSQL connected");
+
+  // Ensure database schema is created before handling requests
+  await ensureDatabaseSchema();
+  console.log("✅ Database schema verified");
 
   const app = express();
 
@@ -242,7 +342,26 @@ async function startServer() {
     ]);
     const user = rows[0];
 
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Check if account is locked
+    const lockedAccount = await checkAccountLocked(user.id);
+    if (lockedAccount) {
+      return res.status(423).json({
+        error: "Account is locked due to too many failed login attempts",
+        accountLocked: true,
+        canUnlockByRoles: lockedAccount.can_unlock_by_roles,
+        userRole: lockedAccount.user_role,
+        lockedAt: lockedAccount.locked_at,
+      });
+    }
+
     if (user && (await bcrypt.compare(password, user.password_hash))) {
+      // Clear login attempts on successful login
+      await clearLoginAttempts(user.id);
+
       let tenant = null;
       if (user.tenant_id) {
         const tenantResult = await pool.query(
@@ -275,7 +394,48 @@ async function startServer() {
         `Logged in as ${user.role}`,
       );
     } else {
-      res.status(401).json({ error: "Invalid credentials" });
+      // Record failed login attempt
+      const lockResult = await recordFailedLoginAttempt(
+        user.id,
+        email,
+        user.role,
+        user.tenant_id,
+      );
+
+      if (lockResult.isLocked) {
+        await logActivity(
+          user.id,
+          user.name,
+          user.tenant_id,
+          "LOGIN_FAILED",
+          "auth",
+          user.name,
+          `Account locked after ${lockResult.failedCount} failed attempts`,
+        );
+
+        return res.status(423).json({
+          error: "Account locked due to too many failed login attempts",
+          accountLocked: true,
+          canUnlockByRoles:
+            user.role === "sales_rep" ? "tenant_admin" : "platform_admin",
+          userRole: user.role,
+        });
+      } else {
+        await logActivity(
+          user.id,
+          user.name,
+          user.tenant_id,
+          "LOGIN_FAILED",
+          "auth",
+          user.name,
+          `Failed login attempt (${lockResult.failedCount}/3)`,
+        );
+
+        return res.status(401).json({
+          error: `Invalid credentials (${lockResult.failedCount}/3 failed attempts)`,
+          failedAttempts: lockResult.failedCount,
+        });
+      }
     }
   });
 
@@ -431,6 +591,139 @@ async function startServer() {
 
     res.json({ success: true });
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ACCOUNT LOCKOUT ROUTES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Get all locked accounts (tenant admin sees their users, platform admin sees all)
+  app.get(
+    "/api/locked-accounts",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        let query = "SELECT * FROM locked_accounts WHERE 1=1";
+        const params: any[] = [];
+
+        if (req.user?.role === "tenant_admin") {
+          query += ` AND user_id IN (SELECT id FROM users WHERE tenant_id = $1)`;
+          params.push(req.user.tenantId);
+        }
+
+        const { rows } = await pool.query(query, params);
+        res.json(rows);
+      } catch (err) {
+        res.status(500).json({ error: "Failed to fetch locked accounts" });
+      }
+    },
+  );
+
+  // Unlock an account (with role-based authorization)
+  app.post(
+    "/api/locked-accounts/:userId/unlock",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const { reason } = req.body;
+
+        // Get the locked account info
+        const { rows: lockedRows } = await pool.query(
+          "SELECT * FROM locked_accounts WHERE user_id = $1",
+          [userId],
+        );
+        const lockedAccount = lockedRows[0];
+
+        if (!lockedAccount) {
+          return res
+            .status(404)
+            .json({ error: "Account not found or not locked" });
+        }
+
+        // Check authorization
+        if (
+          req.user?.role === "tenant_admin" &&
+          lockedAccount.can_unlock_by_roles !== "tenant_admin"
+        ) {
+          return res.status(403).json({
+            error: "Only platform admin can unlock this account",
+          });
+        }
+
+        if (
+          req.user?.role === "platform_admin" &&
+          lockedAccount.can_unlock_by_roles !== "platform_admin"
+        ) {
+          return res.status(403).json({
+            error: "Only tenant admin can unlock this account",
+          });
+        }
+
+        // Verify tenant access for tenant_admin
+        if (req.user?.role === "tenant_admin") {
+          const { rows: userRows } = await pool.query(
+            "SELECT * FROM users WHERE id = $1",
+            [userId],
+          );
+          const targetUser = userRows[0];
+          if (targetUser.tenant_id !== req.user.tenantId) {
+            return res.status(403).json({ error: "Access denied" });
+          }
+        }
+
+        // Unlock the account
+        await pool.query("DELETE FROM locked_accounts WHERE user_id = $1", [
+          userId,
+        ]);
+
+        // Log the action
+        await logActivity(
+          req.user!.userId,
+          req.user!.userName,
+          req.user?.tenantId || null,
+          "UNLOCK",
+          "account_lockout",
+          lockedAccount.email,
+          `Account unlocked by ${req.user?.role} - ${reason || "Admin unlock"}`,
+        );
+
+        res.json({ success: true, message: "Account unlocked" });
+      } catch (err) {
+        console.error("❌ Unlock error:", err);
+        res.status(500).json({ error: "Failed to unlock account" });
+      }
+    },
+  );
+
+  // Get locked accounts that current user can unlock
+  app.get(
+    "/api/lockable-accounts",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        let query = "SELECT * FROM locked_accounts WHERE 1=1";
+        const params: any[] = [];
+
+        if (req.user?.role === "tenant_admin") {
+          // Tenant admin can unlock sales_rep accounts
+          query += ` AND user_role = 'sales_rep' AND can_unlock_by_roles = 'tenant_admin'
+                    AND user_id IN (SELECT id FROM users WHERE tenant_id = $1)`;
+          params.push(req.user.tenantId);
+        } else if (req.user?.role === "platform_admin") {
+          // Platform admin can unlock tenant_admin accounts
+          query += ` AND user_role = 'tenant_admin' AND can_unlock_by_roles = 'platform_admin'`;
+        }
+
+        const { rows } = await pool.query(query, params);
+        res.json(rows);
+      } catch (err) {
+        res.status(500).json({ error: "Failed to fetch lockable accounts" });
+      }
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // USER ROUTES
@@ -1321,6 +1614,13 @@ async function startServer() {
 
     if (typeof project.data === "string")
       project.data = JSON.parse(project.data);
+
+    // Fetch custom equipment for this tenant so shared view can show names
+    const { rows: equipmentRows } = await pool.query(
+      "SELECT id, name, color, width, depth, height FROM equipment WHERE tenant_id = $1",
+      [project.tenant_id],
+    );
+
     res.json({
       id: project.id,
       name: project.name,
@@ -1328,6 +1628,7 @@ async function startServer() {
       created_at: project.created_at,
       updated_at: project.updated_at,
       data: project.data,
+      customEquipment: equipmentRows,
     });
   });
 

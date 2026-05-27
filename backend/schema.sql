@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   subscription_tier TEXT DEFAULT 'basic',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   tenant_id TEXT REFERENCES tenants(id),
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT,
   force_password_change INTEGER DEFAULT 0
 );
+
 CREATE TABLE IF NOT EXISTS equipment (
   id TEXT PRIMARY KEY,
   tenant_id TEXT REFERENCES tenants(id),
@@ -30,6 +32,7 @@ CREATE TABLE IF NOT EXISTS equipment (
   image_url TEXT,
   is_active BOOLEAN DEFAULT TRUE
 );
+
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
   tenant_id TEXT REFERENCES tenants(id),
@@ -38,6 +41,7 @@ CREATE TABLE IF NOT EXISTS projects (
   data TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 CREATE TABLE IF NOT EXISTS password_reset_requests (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
@@ -45,6 +49,7 @@ CREATE TABLE IF NOT EXISTS password_reset_requests (
   status TEXT DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 CREATE TABLE IF NOT EXISTS activity_logs (
   id TEXT PRIMARY KEY,
   tenant_id TEXT,
@@ -56,11 +61,13 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   details TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 CREATE TABLE IF NOT EXISTS tenant_disabled_defaults (
   tenant_id TEXT NOT NULL REFERENCES tenants(id),
   equipment_id TEXT NOT NULL,
   PRIMARY KEY (tenant_id, equipment_id)
 );
+
 CREATE TABLE IF NOT EXISTS platform_admin_otps (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
@@ -68,5 +75,28 @@ CREATE TABLE IF NOT EXISTS platform_admin_otps (
   otp TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  email TEXT NOT NULL,
+  failed_count INTEGER DEFAULT 1,
+  last_attempt_at TIMESTAMPTZ DEFAULT NOW(),
+  is_locked BOOLEAN DEFAULT FALSE,
+  locked_at TIMESTAMPTZ,
+  locked_by_role TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS locked_accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+  email TEXT NOT NULL,
+  user_role TEXT NOT NULL,
+  locked_at TIMESTAMPTZ DEFAULT NOW(),
+  reason TEXT DEFAULT 'Too many failed login attempts',
+  can_unlock_by_roles TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
