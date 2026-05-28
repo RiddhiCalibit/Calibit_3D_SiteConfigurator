@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { authFetch } from "../utils/api";
 import {
   EquipmentDef,
@@ -57,7 +57,7 @@ interface SidebarProps {
   onSelectEquipment: (def: EquipmentDef) => void;
   onDeleteSelected: () => void;
   onUpdateObject: (id: string, updates: any) => void;
-  onExport: () => void;
+  onExport: (format: "json" | "pdf" | "dwg" | "excel") => void;
   onImport: () => void;
   onSave: () => void;
   onOpenProjects: () => void;
@@ -106,6 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [modalMode, setModalMode] = React.useState<
     "none" | "settings" | "profile"
   >("none");
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [disabledDefaults, setDisabledDefaults] = React.useState<Set<string>>(
     new Set(),
   );
@@ -692,13 +693,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={onExport}
-          className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors"
-        >
-          <Upload className="w-3 h-3" />
-          Export
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setExportMenuOpen((open) => !open)}
+            className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors w-full"
+          >
+            <Upload className="w-3 h-3" />
+            Export
+            <ChevronDown className="w-3 h-3" />
+          </button>
+
+          {exportMenuOpen && (
+            <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
+              <button
+                onClick={() => {
+                  onExport("pdf");
+                  setExportMenuOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+              >
+                <span>Export as PDF</span>
+                <span className="text-[10px] opacity-50">.pdf</span>
+              </button>
+              <button
+                onClick={() => {
+                  onExport("dwg");
+                  setExportMenuOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+              >
+                <span>Export as DWG</span>
+                <span className="text-[10px] opacity-50">.dwg</span>
+              </button>
+              <button
+                onClick={() => {
+                  onExport("excel");
+                  setExportMenuOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+              >
+                <span>Export as Excel</span>
+                <span className="text-[10px] opacity-50">.xls</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={onImport}
           className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors"

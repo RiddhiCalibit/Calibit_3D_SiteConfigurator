@@ -90,6 +90,7 @@ export function AdminDashboard({
     {},
   );
   const [ResetCount, setResetCount] = useState(0);
+  const [isFetchingResetRequests, setIsFetchingResetRequests] = useState(false);
 
   const [logs, setLogs] = useState<any[]>([]);
   const [logFilter, setLogFilter] = useState("all");
@@ -107,11 +108,16 @@ export function AdminDashboard({
   };
 
   const fetchResetRequests = useCallback(async () => {
-    const res = await authFetch(`/api/admin/reset-requests`);
-    if (res.ok) {
-      const data = await res.json();
-      setResetRequests(data);
-      setResetCount(data.length);
+    setIsFetchingResetRequests(true);
+    try {
+      const res = await authFetch(`/api/admin/reset-requests`);
+      if (res.ok) {
+        const data = await res.json();
+        setResetRequests(data);
+        setResetCount(data.length);
+      }
+    } finally {
+      setIsFetchingResetRequests(false);
     }
   }, [tenant.id]);
 
@@ -191,16 +197,11 @@ export function AdminDashboard({
     fetchEquipment();
     fetchEquipmentStats();
     // fetchDisabledDefaults();
-    fetchResetRequests();
+    // fetchResetRequests();
     //fetchSalesRepCount();
     fetchLogs();
     fetchActiveProjects();
     fetchProjectStats();
-
-    const interval = setInterval(() => {
-      fetchResetRequests();
-    }, 30000);
-    return () => clearInterval(interval);
   }, [tenant.id]);
 
   useEffect(() => {
@@ -430,7 +431,10 @@ export function AdminDashboard({
           />
           <NavButton
             active={activeTab === "resets"}
-            onClick={() => setActiveTab("resets")}
+            onClick={() => {
+              setActiveTab("resets");
+              fetchResetRequests();
+            }}
             icon={<KeyRound className="w-4 h-4" />}
             label="Password Resets"
             badge={ResetCount > 0 ? ResetCount : undefined}
@@ -796,6 +800,16 @@ export function AdminDashboard({
 
         {activeTab === "resets" && (
           <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-lg font-bold">Password Reset Requests</h3>
+              <button
+                onClick={fetchResetRequests}
+                className="inline-flex items-center gap-2 rounded-full border border-theme-border bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-widest transition hover:bg-white/10"
+                disabled={isFetchingResetRequests}
+              >
+                {isFetchingResetRequests ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
             {resetRequests.length === 0 ? (
               <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
                 <p className="text-sm opacity-40 italic">
