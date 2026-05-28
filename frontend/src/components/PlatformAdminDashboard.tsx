@@ -78,6 +78,14 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
 
   const [platformLogs, setPlatformLogs] = useState<any[]>([]);
   const [platformLogFilter, setPlatformLogFilter] = useState("all");
+  const [platformLogDateFilter, setPlatformLogDateFilter] = useState<{
+    startDate: string;
+    endDate: string;
+  }>(() => {
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0];
+    return { startDate: dateStr, endDate: dateStr };
+  });
 
   const fetchPlatformLogs = async () => {
     const res = await authFetch("/api/admin/logs?limit=100");
@@ -86,6 +94,32 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
       setPlatformLogs(data);
     }
   };
+
+  const getFilteredPlatformLogs = (logsToFilter: any[]) => {
+    let filtered = logsToFilter;
+
+    // Filter by entity type
+    if (platformLogFilter !== "all") {
+      filtered = filtered.filter((l) => l.entity_type === platformLogFilter);
+    }
+
+    // Filter by date range
+    const startDate = new Date(
+      `${platformLogDateFilter.startDate}T00:00:00`,
+    ).getTime();
+    const endDate = new Date(
+      `${platformLogDateFilter.endDate}T23:59:59`,
+    ).getTime();
+
+    filtered = filtered.filter((log) => {
+      const logTime = new Date(log.created_at).getTime();
+      return logTime >= startDate && logTime <= endDate;
+    });
+
+    return filtered;
+  };
+
+  const filteredPlatformLogsForDisplay = getFilteredPlatformLogs(platformLogs);
 
   // Admin reset requests (tenant_admin resets)
   const [adminResetRequests, setAdminResetRequests] = useState<any[]>([]);
@@ -329,6 +363,60 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
         )}
         {activeTab === "logs" && (
           <div className="space-y-4">
+            {/* Date Range Filter */}
+            <div className="p-4 bg-theme-card border border-theme-border rounded-2xl space-y-3">
+              <h4 className="text-sm font-bold uppercase tracking-widest opacity-60">
+                Filter by Date
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40 block mb-2">
+                    From Date
+                  </label>
+                  <input
+                    type="date"
+                    value={platformLogDateFilter.startDate}
+                    onChange={(e) =>
+                      setPlatformLogDateFilter((prev) => ({
+                        ...prev,
+                        startDate: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 bg-white/5 border border-theme-border rounded-lg text-sm font-medium transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40 block mb-2">
+                    To Date
+                  </label>
+                  <input
+                    type="date"
+                    value={platformLogDateFilter.endDate}
+                    onChange={(e) =>
+                      setPlatformLogDateFilter((prev) => ({
+                        ...prev,
+                        endDate: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 bg-white/5 border border-theme-border rounded-lg text-sm font-medium transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  const today = new Date().toISOString().split("T")[0];
+                  setPlatformLogDateFilter({
+                    startDate: today,
+                    endDate: today,
+                  });
+                }}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 border border-theme-border rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
+              >
+                Reset to Today
+              </button>
+            </div>
+
+            {/* Type Filter bar */}
             <div className="flex items-center gap-2 flex-wrap">
               {[
                 "all",
@@ -358,12 +446,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
               ))}
             </div>
             <div className="space-y-2">
-              {(platformLogFilter === "all"
-                ? platformLogs
-                : platformLogs.filter(
-                    (l) => l.entity_type === platformLogFilter,
-                  )
-              ).length === 0 ? (
+              {filteredPlatformLogsForDisplay.length === 0 ? (
                 <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
                   <Activity className="w-12 h-12 opacity-10 mx-auto mb-4" />
                   <p className="text-sm opacity-40 italic">
@@ -371,12 +454,7 @@ export function PlatformAdminDashboard({ user, onLogout }: Props) {
                   </p>
                 </div>
               ) : (
-                (platformLogFilter === "all"
-                  ? platformLogs
-                  : platformLogs.filter(
-                      (l) => l.entity_type === platformLogFilter,
-                    )
-                ).map((log) => (
+                filteredPlatformLogsForDisplay.map((log) => (
                   <div
                     key={log.id}
                     className="flex items-start gap-4 p-4 bg-theme-card border border-theme-border rounded-xl hover:bg-white/5 transition-colors"

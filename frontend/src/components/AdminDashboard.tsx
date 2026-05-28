@@ -94,6 +94,22 @@ export function AdminDashboard({
 
   const [logs, setLogs] = useState<any[]>([]);
   const [logFilter, setLogFilter] = useState("all");
+  const [logDateFilter, setLogDateFilter] = useState<{
+    startDate: string;
+    endDate: string;
+  }>(() => {
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0];
+    return { startDate: dateStr, endDate: dateStr };
+  });
+  const overviewLogs = logs
+    .filter(
+      (log) =>
+        log.action !== "LOGIN" &&
+        log.entity_type !== "auth" &&
+        log.entity_type !== "login",
+    )
+    .slice(0, 3);
   //const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
   const [disabledDefaults, setDisabledDefaults] = useState<Set<string>>(
     new Set(),
@@ -106,6 +122,28 @@ export function AdminDashboard({
       setLogs(data);
     }
   };
+
+  const getFilteredLogs = (logsToFilter: any[]) => {
+    let filtered = logsToFilter;
+
+    // Filter by entity type
+    if (logFilter !== "all") {
+      filtered = filtered.filter((l) => l.entity_type === logFilter);
+    }
+
+    // Filter by date range
+    const startDate = new Date(`${logDateFilter.startDate}T00:00:00`).getTime();
+    const endDate = new Date(`${logDateFilter.endDate}T23:59:59`).getTime();
+
+    filtered = filtered.filter((log) => {
+      const logTime = new Date(log.created_at).getTime();
+      return logTime >= startDate && logTime <= endDate;
+    });
+
+    return filtered;
+  };
+
+  const filteredLogsForDisplay = getFilteredLogs(logs);
 
   const fetchResetRequests = useCallback(async () => {
     setIsFetchingResetRequests(true);
@@ -363,6 +401,9 @@ export function AdminDashboard({
   // Toggle a DEFAULT_LIBRARY item on/off for this tenant
   const handleToggleDefault = async (equipmentId: string) => {
     const isCurrentlyDisabled = disabledDefaults.has(equipmentId);
+    console.log(
+      `Toggling default equipment ${equipmentId}. Currently disabled: ${isCurrentlyDisabled}`,
+    );
     // Optimistic update
     setDisabledDefaults((prev) => {
       const next = new Set(prev);
@@ -583,6 +624,7 @@ export function AdminDashboard({
             equipmentStats={equipmentStats}
             activeProjectCount={activeProjectCount}
             projectStats={projectStats}
+            recentLogs={overviewLogs}
           />
         )}
         {activeTab === "equipment" && (
@@ -650,14 +692,59 @@ export function AdminDashboard({
 
         {activeTab === "logs" &&
           (() => {
-            const filteredLogs =
-              logFilter === "all"
-                ? logs
-                : logs.filter((l) => l.entity_type === logFilter);
-
             return (
               <div className="space-y-4">
-                {/* Filter bar */}
+                {/* Date Range Filter */}
+                <div className="p-4 bg-theme-card border border-theme-border rounded-2xl space-y-3">
+                  <h4 className="text-sm font-bold uppercase tracking-widest opacity-60">
+                    Filter by Date
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-40 block mb-2">
+                        From Date
+                      </label>
+                      <input
+                        type="date"
+                        value={logDateFilter.startDate}
+                        onChange={(e) =>
+                          setLogDateFilter((prev) => ({
+                            ...prev,
+                            startDate: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2 bg-white/5 border border-theme-border rounded-lg text-sm font-medium transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-40 block mb-2">
+                        To Date
+                      </label>
+                      <input
+                        type="date"
+                        value={logDateFilter.endDate}
+                        onChange={(e) =>
+                          setLogDateFilter((prev) => ({
+                            ...prev,
+                            endDate: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2 bg-white/5 border border-theme-border rounded-lg text-sm font-medium transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-brand-teal"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const today = new Date().toISOString().split("T")[0];
+                      setLogDateFilter({ startDate: today, endDate: today });
+                    }}
+                    className="w-full py-2 bg-white/5 hover:bg-white/10 border border-theme-border rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
+                  >
+                    Reset to Today
+                  </button>
+                </div>
+
+                {/* Type Filter bar */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {[
                     "all",
@@ -687,15 +774,15 @@ export function AdminDashboard({
 
                 {/* Log entries */}
                 <div className="space-y-2">
-                  {filteredLogs.length === 0 ? (
+                  {filteredLogsForDisplay.length === 0 ? (
                     <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
                       <Activity className="w-12 h-12 opacity-10 mx-auto mb-4" />
                       <p className="text-sm opacity-40 italic">
-                        No activity logs found.
+                        No activity logs found for the selected date range.
                       </p>
                     </div>
                   ) : (
-                    filteredLogs.map((log) => (
+                    filteredLogsForDisplay.map((log) => (
                       <div
                         key={log.id}
                         className="flex items-start gap-4 p-4 bg-theme-card border border-theme-border rounded-xl hover:bg-white/5 transition-colors"
@@ -917,11 +1004,13 @@ function OverviewTab({
   equipmentStats,
   activeProjectCount,
   projectStats,
+  recentLogs,
 }: {
   tenant: Tenant;
   equipmentStats: { total: number; active: number; inactive: number };
   activeProjectCount: number;
   projectStats: any[];
+  recentLogs: any[];
 }) {
   return (
     <div className="space-y-8">
@@ -960,27 +1049,38 @@ function OverviewTab({
           Recent Activity
         </h3>
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-brand-teal/10 rounded-lg flex items-center justify-center">
-                  <Box className="w-5 h-5 text-brand-teal" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">
-                    New Project: "Waterfront Resort"
-                  </p>
-                  <p className="text-[10px] opacity-40 uppercase tracking-widest">
-                    Created by John Sales · 2h ago
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 opacity-20" />
+          {recentLogs.length === 0 ? (
+            <div className="py-20 text-center border border-dashed border-theme-border rounded-2xl">
+              <p className="text-sm opacity-40 italic">
+                No recent activity yet.
+              </p>
             </div>
-          ))}
+          ) : (
+            recentLogs.map((log) => (
+              <div
+                key={log.id}
+                className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-brand-teal/10 rounded-lg flex items-center justify-center">
+                    <Box className="w-5 h-5 text-brand-teal" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {log.entity_name || log.details || log.action}
+                    </p>
+                    <p className="text-[10px] opacity-40 uppercase tracking-widest">
+                      {log.entity_type
+                        ? log.entity_type.replace("_", " ")
+                        : log.action}
+                      {log.user_name ? ` · by ${log.user_name}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 opacity-20" />
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
