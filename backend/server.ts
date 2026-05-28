@@ -818,6 +818,17 @@ async function startServer() {
         "UPDATE users SET name = $1, phone = $2, password_hash = $3, force_password_change = 0 WHERE id = $4",
         [name, phone, hashedPassword, req.params.id],
       );
+      if (req.user) {
+        await logActivity(
+          req.user.userId,
+          req.user.userName || "User",
+          req.user.tenantId || null,
+          "UPDATE",
+          "profile",
+          name,
+          "Profile updated with password change",
+        );
+      }
     } else {
       await pool.query("UPDATE users SET name = $1, phone = $2 WHERE id = $3", [
         name,

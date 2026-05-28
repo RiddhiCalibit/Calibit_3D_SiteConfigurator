@@ -68,6 +68,8 @@ interface SidebarProps {
   onSetUnitSystem: (unit: "metric" | "imperial") => void;
   onLogout: () => void;
   onLoadProject: (boundary: [number, number][], objects: any[]) => void;
+  onUserUpdate?: (user: User) => void;
+  onShowToast?: (message: string, type?: "success" | "error") => void;
   user: User | null;
   tenant: Tenant | null;
 }
@@ -88,6 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onImport,
   onSave,
   onOpenProjects,
+  onUserUpdate,
+  onShowToast,
   projects,
   currentProjectId,
   onAddCustomEquipment,
@@ -149,8 +153,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       });
 
       if (res.ok) {
-        alert("Profile updated successfully! Please refresh to see changes.");
-        // In a real app, we'd update the global user state here
+        const updatedUser: User = {
+          ...user,
+          name: profileData.name,
+          phone: profileData.phone || undefined,
+        };
+        onUserUpdate?.(updatedUser);
+        onShowToast?.("Profile updated successfully!");
       }
     } catch (error) {
       console.error("Failed to update profile:", error);

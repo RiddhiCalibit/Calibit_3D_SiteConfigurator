@@ -32,6 +32,8 @@ import { LockedAccountsPanel } from "./LockedAccountsPanel";
 interface Props {
   user: User;
   onLogout: () => void;
+  onUserUpdate?: (user: User) => void;
+  onShowToast?: (message: string, type?: "success" | "error") => void;
 }
 
 interface PlatformStats {

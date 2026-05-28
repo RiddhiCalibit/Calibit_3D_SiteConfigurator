@@ -44,9 +44,17 @@ interface Props {
   user: User;
   tenant: Tenant;
   onLogout: () => void;
+  onUserUpdate?: (user: User) => void;
+  onShowToast?: (message: string, type?: "success" | "error") => void;
 }
 
-export function AdminDashboard({ user, tenant, onLogout }: Props) {
+export function AdminDashboard({
+  user,
+  tenant,
+  onLogout,
+  onUserUpdate,
+  onShowToast,
+}: Props) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<
     | "overview"
@@ -194,6 +202,12 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
     }, 30000);
     return () => clearInterval(interval);
   }, [tenant.id]);
+
+  useEffect(() => {
+    if (activeTab === "logs") {
+      fetchLogs();
+    }
+  }, [activeTab, tenant.id]);
 
   //   // Toggle handler for active/inactive status
   //   const handleToggleDefault = async (equipmentId: string, currentlyDisabled: boolean) => {
@@ -617,7 +631,14 @@ export function AdminDashboard({ user, tenant, onLogout }: Props) {
         {activeTab === "settings" && (
           <SettingsTab theme={theme} onThemeChange={setTheme} />
         )}
-        {activeTab === "profile" && <ProfileTab user={user} />}
+        {activeTab === "profile" && (
+          <ProfileTab
+            user={user}
+            onUserUpdate={onUserUpdate}
+            onProfileSaved={fetchLogs}
+            onShowToast={onShowToast}
+          />
+        )}
 
         {activeTab === "locked-accounts" && (
           <LockedAccountsPanel userRole="tenant_admin" tenantId={tenant.id} />
@@ -1039,7 +1060,6 @@ function EquipmentTab({
     </label>
   </div>
 </div> */}
-
       {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-20" />
@@ -1051,7 +1071,6 @@ function EquipmentTab({
           className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
         />
       </div>
-
       {/* Add/Edit Form Overlay */}
       {(isAdding || editingItem) && (
         <motion.div
@@ -1700,7 +1719,6 @@ function EquipmentTab({
           </motion.div>
         </motion.div>
       )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
         {filteredEquipment.map((item) => (
           <div
@@ -1798,7 +1816,6 @@ function EquipmentTab({
           </div>
         )}
       </div>
-
       {/* onChange={async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -1829,8 +1846,7 @@ function EquipmentTab({
     alert("Failed to upload GLB file.");
   }
 }} */}
-
-      {/* ── Default Equipment Section ────────────────────────────────────── */}
+      ── Default Equipment Section ──────────────────────────────────────
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
           <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
@@ -2736,7 +2752,17 @@ function ProjectStatsTab({
   );
 }
 
-function ProfileTab({ user }: { user: User }) {
+function ProfileTab({
+  user,
+  onUserUpdate,
+  onProfileSaved,
+  onShowToast,
+}: {
+  user: User;
+  onUserUpdate?: (user: User) => void;
+  onProfileSaved?: () => void;
+  onShowToast?: (message: string, type?: "success" | "error") => void;
+}) {
   const [profileData, setProfileData] = useState({
     name: user.name,
     phone: user.phone || "",
@@ -2758,7 +2784,14 @@ function ProfileTab({ user }: { user: User }) {
         }),
       });
       if (res.ok) {
-        alert("Profile updated successfully! Please refresh to see changes.");
+        const updatedUser: User = {
+          ...user,
+          name: profileData.name,
+          phone: profileData.phone,
+        };
+        onUserUpdate?.(updatedUser);
+        onProfileSaved?.();
+        onShowToast?.("Profile updated successfully!");
       }
     } catch (err) {
       console.error(err);

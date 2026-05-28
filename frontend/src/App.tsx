@@ -78,10 +78,19 @@ export default function App() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showContactAdmin, setShowContactAdmin] = useState(false);
   const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
   const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [customEquipment, setCustomEquipment] = useState<any[]>([]);
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    window.setTimeout(() => setToast(null), 3800);
+  };
 
   // Add this useEffect after your useState declarations
   useEffect(() => {
@@ -232,6 +241,11 @@ export default function App() {
       console.error("LOGIN ERROR:", err);
       throw err;
     }
+  };
+
+  const handleUserUpdate = (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem("auth_user", JSON.stringify(updatedUser));
   };
 
   const handleLogout = () => {
@@ -588,12 +602,51 @@ export default function App() {
   }
 
   if (user.role === "platform_admin") {
-    return <PlatformAdminDashboard user={user} onLogout={handleLogout} />;
+    return (
+      <div className="relative h-screen">
+        <PlatformAdminDashboard
+          user={user}
+          onLogout={handleLogout}
+          onUserUpdate={handleUserUpdate}
+          onShowToast={showToast}
+        />
+        {toast && (
+          <div
+            className={`fixed right-6 top-6 z-50 rounded-2xl px-5 py-3 text-sm font-semibold shadow-xl shadow-black/10 transition-all ${
+              toast.type === "success"
+                ? "bg-emerald-500 text-white"
+                : "bg-rose-500 text-white"
+            }`}
+          >
+            {toast.message}
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (user.role === "tenant_admin" && !state.originLngLat) {
     return (
-      <AdminDashboard user={user} tenant={tenant!} onLogout={handleLogout} />
+      <div className="relative h-screen">
+        <AdminDashboard
+          user={user}
+          tenant={tenant!}
+          onLogout={handleLogout}
+          onUserUpdate={handleUserUpdate}
+          onShowToast={showToast}
+        />
+        {toast && (
+          <div
+            className={`fixed right-6 top-6 z-50 rounded-2xl px-5 py-3 text-sm font-semibold shadow-xl shadow-black/10 transition-all ${
+              toast.type === "success"
+                ? "bg-emerald-500 text-white"
+                : "bg-rose-500 text-white"
+            }`}
+          >
+            {toast.message}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -632,8 +685,21 @@ export default function App() {
         user={user}
         tenant={tenant}
         currentProjectId={currentProjectId}
+        onUserUpdate={handleUserUpdate}
+        onShowToast={showToast}
         // disabledDefaults={disabledDefaults}
       />
+      {toast && (
+        <div
+          className={`fixed right-6 top-6 z-50 rounded-2xl px-5 py-3 text-sm font-semibold shadow-xl shadow-black/10 transition-all ${
+            toast.type === "success"
+              ? "bg-emerald-500 text-white"
+              : "bg-rose-500 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
 
       <main className="flex-1 flex relative h-screen overflow-hidden">
         <div className="h-full w-full relative">
