@@ -231,7 +231,9 @@ export function AdminDashboard({
     const res = await authFetch(`/api/tenant/${tenant.id}/users`);
     if (res.ok) {
       const data = await res.json();
-      const count = data.filter((u: any) => u.role === "sales_rep").length;
+      const count = data.filter(
+        (u: any) => u.role === "sales_rep" && u.is_active !== false,
+      ).length;
       setSalesRepCount(count);
     }
   };
@@ -2168,7 +2170,9 @@ function UsersTab({
     const res = await authFetch(`/api/tenant/${tenant.id}/users`);
     if (res.ok) {
       const data = await res.json();
-      const count = data.filter((u: any) => u.role === "sales_rep").length;
+      const count = data.filter(
+        (u: any) => u.role === "sales_rep" && u.is_active !== false,
+      ).length;
       setSalesRepCount(count);
     }
   };
@@ -2178,7 +2182,10 @@ function UsersTab({
     if (res.ok) {
       const data = await res.json();
       setUsers(data);
-      setSalesRepCount(data.filter((u: any) => u.role === "sales_rep").length);
+      setSalesRepCount(
+        data.filter((u: any) => u.role === "sales_rep" && u.is_active !== false)
+          .length,
+      );
     }
   };
 
@@ -2263,12 +2270,14 @@ function UsersTab({
       : `Activate ${u.name}? They will be able to log in again.`;
     if (!confirm(confirmMsg)) return;
 
-    // Optimistic update
+    // Optimistic update — flip user state and adjust count immediately
+    const originalCount = salesRepCount;
     setUsers((prev) =>
       prev.map((usr) =>
         usr.id === u.id ? { ...usr, is_active: !currentlyActive } : usr,
       ),
     );
+    setSalesRepCount(salesRepCount + (currentlyActive ? -1 : 1));
 
     const res = await authFetch(`/api/users/${u.id}/toggle-active`, {
       method: "PATCH",
@@ -2281,6 +2290,7 @@ function UsersTab({
           usr.id === u.id ? { ...usr, is_active: currentlyActive } : usr,
         ),
       );
+      setSalesRepCount(originalCount);
       alert("Failed to update status");
     }
   };

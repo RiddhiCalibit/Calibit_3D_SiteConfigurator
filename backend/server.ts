@@ -761,7 +761,7 @@ async function startServer() {
       const { id, email, password, role, name, phone } = req.body;
 
       const { rows } = await pool.query(
-        "SELECT count(*) as count FROM users WHERE tenant_id = $1 AND role = 'sales_rep'",
+        "SELECT count(*) as count FROM users WHERE tenant_id = $1 AND role = 'sales_rep' AND is_active = TRUE",
         [req.params.id],
       );
       if (parseInt(rows[0].count) >= 10) {
