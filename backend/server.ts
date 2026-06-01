@@ -1085,6 +1085,11 @@ async function startServer() {
     requireRole("tenant_admin", "platform_admin"),
     async (req, res) => {
       const { is_active } = req.body;
+      const { rows: equipmentRows } = await pool.query(
+        "SELECT name FROM equipment WHERE id = $1 AND tenant_id = $2",
+        [req.params.id, req.params.tenantId],
+      );
+      const equipmentName = equipmentRows[0]?.name || req.params.id;
       await pool.query(
         "UPDATE equipment SET is_active = $1 WHERE id = $2 AND tenant_id = $3",
         [is_active, req.params.id, req.params.tenantId],
@@ -1096,7 +1101,7 @@ async function startServer() {
           req.params.tenantId,
           "UPDATE",
           "equipment",
-          req.params.id,
+          equipmentName,
           is_active ? "Equipment activated" : "Equipment deactivated",
         );
       }
@@ -1156,6 +1161,9 @@ async function startServer() {
     requireRole("tenant_admin", "platform_admin"),
     async (req, res) => {
       const { tenantId, equipmentId } = req.params;
+      const equipmentName =
+        DEFAULT_LIBRARY.find((item) => item.id === equipmentId)?.name ||
+        equipmentId;
 
       const { rows } = await pool.query(
         "SELECT 1 FROM tenant_disabled_defaults WHERE tenant_id = $1 AND equipment_id = $2",
@@ -1174,7 +1182,7 @@ async function startServer() {
           tenantId,
           "UPDATE",
           "equipment",
-          equipmentId,
+          equipmentName,
           "Default equipment re-enabled",
         );
         res.json({ disabled: false });
@@ -1190,7 +1198,7 @@ async function startServer() {
           tenantId,
           "UPDATE",
           "equipment",
-          equipmentId,
+          equipmentName,
           "Default equipment disabled",
         );
         res.json({ disabled: true });

@@ -36,6 +36,35 @@ import {
   X,
   FolderOpen,
 } from "lucide-react";
+
+const generateDefaultEquipmentImage = (item: EquipmentDef) => {
+  const label = item.name
+    .split(" ")
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
+  const fill = item.color || "#999";
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='${fill}'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, system-ui, sans-serif' font-size='28' fill='#ffffff' opacity='0.85'>${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
+
+const resolveImageUrl = (imageUrl?: string | null) => {
+  if (!imageUrl) return null;
+  if (
+    imageUrl.startsWith("data:") ||
+    imageUrl.startsWith("http://") ||
+    imageUrl.startsWith("https://")
+  ) {
+    return imageUrl;
+  }
+  return `${import.meta.env.VITE_API_URL}${imageUrl}`;
+};
+
+const getEquipmentThumbnail = (item: EquipmentDef) => {
+  const imageUrl = resolveImageUrl(item.imageUrl);
+  return imageUrl ? imageUrl : generateDefaultEquipmentImage(item);
+};
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useTheme } from "../contexts/ThemeContext";
@@ -514,18 +543,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   {item.modelUrl && <Box className="w-4 h-4 text-white/20" />}
                 </div> */}
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-8 h-8 rounded-lg object-cover shrink-0"
-                  />
-                ) : (
-                  <div
-                    className="w-8 h-8 rounded-lg shrink-0"
-                    style={{ backgroundColor: item.color }}
-                  />
-                )}
+                <img
+                  src={getEquipmentThumbnail(item)}
+                  alt={item.name}
+                  className="w-8 h-8 rounded-lg object-cover shrink-0"
+                />
 
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate">{item.name}</p>

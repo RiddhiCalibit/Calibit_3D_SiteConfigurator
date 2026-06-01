@@ -125,7 +125,7 @@ export default function App() {
           modelUrl: eq.model_url,
           animationsEnabled: !!eq.animations_enabled,
           imageUrl: eq.image_url || null,
-          isActive: eq.is_active !== 0,
+          isActive: Number(eq.is_active) !== 0,
         }));
         const filtered =
           user.role === "sales_rep"
@@ -225,7 +225,7 @@ export default function App() {
             modelUrl: eq.model_url,
             animationsEnabled: !!eq.animations_enabled,
             imageUrl: eq.image_url || null,
-            isActive: eq.is_active !== 0,
+            isActive: Number(eq.is_active) !== 0,
           }));
           //  Filter out inactive for sales reps
           const filtered =

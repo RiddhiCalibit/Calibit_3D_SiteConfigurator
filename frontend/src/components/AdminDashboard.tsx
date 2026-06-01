@@ -40,6 +40,74 @@ import { v4 as uuidv4 } from "uuid";
 import { useTheme } from "../contexts/ThemeContext";
 import { LockedAccountsPanel } from "./LockedAccountsPanel";
 
+const generateDefaultEquipmentImage = (item: EquipmentDef) => {
+  const label = item.name
+    .split(" ")
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
+  const fill = item.color || "#999";
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='${fill}'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, system-ui, sans-serif' font-size='28' fill='#ffffff' opacity='0.85'>${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
+
+const resolveImageUrl = (imageUrl?: string | null) => {
+  if (!imageUrl) return null;
+  if (
+    imageUrl.startsWith("data:") ||
+    imageUrl.startsWith("http://") ||
+    imageUrl.startsWith("https://")
+  ) {
+    return imageUrl;
+  }
+  return `${import.meta.env.VITE_API_URL}${imageUrl}`;
+};
+
+const getEquipmentThumbnail = (item: EquipmentDef) => {
+  const imageUrl = resolveImageUrl(item.imageUrl);
+  return imageUrl ? imageUrl : generateDefaultEquipmentImage(item);
+};
+
+const formatSnakeCaseToTitleCase = (str: string) => {
+  return str
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const getEquipmentNameByIdFromList = (
+  entityId: string,
+  equipment: EquipmentDef[],
+): string => {
+  const customEquip = equipment.find((e) => e.id === entityId);
+  if (customEquip) return customEquip.name;
+
+  const defaultEquip = DEFAULT_LIBRARY.find((e) => e.id === entityId);
+  if (defaultEquip) return defaultEquip.name;
+
+  return "";
+};
+
+const getLogEntityDisplayName = (
+  log: any,
+  equipment: EquipmentDef[],
+): string => {
+  const lookupId = log.entity_id || log.entity_name;
+  const equipmentName = lookupId
+    ? getEquipmentNameByIdFromList(lookupId, equipment)
+    : "";
+  if (equipmentName) return equipmentName;
+
+  if (log.entity_name) {
+    return log.entity_name.includes("_")
+      ? formatSnakeCaseToTitleCase(log.entity_name)
+      : log.entity_name;
+  }
+
+  return log.details || log.action;
+};
+
 interface Props {
   user: User;
   tenant: Tenant;
@@ -183,11 +251,14 @@ export function AdminDashboard({
         modelUrl: eq.model_url,
         animationsEnabled: !!eq.animations_enabled,
         imageUrl: eq.image_url || null,
-        isActive: eq.is_active !== 0,
+        isActive: Number(eq.is_active) !== 0,
       }));
       setEquipment(mapped);
     }
   };
+
+  const getEquipmentNameById = (id: string) =>
+    getEquipmentNameByIdFromList(id, equipment);
 
   // Add equipment stats state and fetch:
   const [equipmentStats, setEquipmentStats] = useState({
@@ -234,7 +305,7 @@ export function AdminDashboard({
   useEffect(() => {
     fetchEquipment();
     fetchEquipmentStats();
-    // fetchDisabledDefaults();
+    fetchDisabledDefaults();
     // fetchResetRequests();
     //fetchSalesRepCount();
     fetchLogs();
@@ -369,6 +440,21 @@ export function AdminDashboard({
   // };
 
   const handleToggleActive = async (id: string, currentlyActive: boolean) => {
+    // Optimistic UI: flip the equipment state immediately so counts and badges update
+    setEquipment((prev) =>
+      prev.map((eq) =>
+        eq.id === id ? { ...eq, isActive: !currentlyActive } : eq,
+      ),
+    );
+
+    // Optimistically adjust equipmentStats
+    const prevStats = { ...equipmentStats };
+    setEquipmentStats((s) => ({
+      ...s,
+      active: s.active + (currentlyActive ? -1 : 1),
+      inactive: s.inactive + (currentlyActive ? 1 : -1),
+    }));
+
     const res = await authFetch(
       `/api/tenant/${tenant.id}/equipment/${id}/toggle`,
       {
@@ -379,14 +465,16 @@ export function AdminDashboard({
     );
 
     if (res.ok) {
-      await fetchEquipment();
-      await fetchEquipmentStats();
+      // Confirm counts with server to avoid drift
+      fetchEquipmentStats();
     } else {
+      // Revert optimistic changes on failure
       setEquipment((prev) =>
         prev.map((eq) =>
           eq.id === id ? { ...eq, isActive: currentlyActive } : eq,
         ),
       );
+      setEquipmentStats(prevStats);
     }
   };
 
@@ -411,6 +499,14 @@ export function AdminDashboard({
       return next;
     });
 
+    // Optimistically adjust equipmentStats (DEFAULT library counts are included)
+    const prevStats = { ...equipmentStats };
+    setEquipmentStats((s) => ({
+      ...s,
+      active: s.active + (isCurrentlyDisabled ? 1 : -1),
+      inactive: s.inactive + (isCurrentlyDisabled ? -1 : 1),
+    }));
+
     const res = await authFetch(
       `/api/tenant/${tenant.id}/disabled-defaults/${equipmentId}`,
       {
@@ -418,13 +514,17 @@ export function AdminDashboard({
       },
     );
 
-    if (!res.ok) {
-      // Revert on failure
+    if (res.ok) {
+      // Refresh stats to ensure counts are accurate
+      await fetchEquipmentStats();
+    } else {
+      // Revert both disabledDefaults and stats on failure
       setDisabledDefaults((prev) => {
         const next = new Set(prev);
         isCurrentlyDisabled ? next.add(equipmentId) : next.delete(equipmentId);
         return next;
       });
+      setEquipmentStats(prevStats);
     }
   };
 
@@ -625,6 +725,8 @@ export function AdminDashboard({
             activeProjectCount={activeProjectCount}
             projectStats={projectStats}
             recentLogs={overviewLogs}
+            equipment={equipment}
+            getEquipmentNameById={getEquipmentNameById}
           />
         )}
         {activeTab === "equipment" && (
@@ -864,7 +966,7 @@ export function AdminDashboard({
                             </div>
                           </div>
                           <p className="text-sm font-medium mt-1 truncate">
-                            {log.entity_name || "—"}
+                            {getLogEntityDisplayName(log, equipment)}
                           </p>
                           <div className="flex items-center gap-3 mt-1 flex-wrap">
                             <span className="text-[10px] opacity-40">
@@ -1005,12 +1107,16 @@ function OverviewTab({
   activeProjectCount,
   projectStats,
   recentLogs,
+  equipment,
+  getEquipmentNameById,
 }: {
   tenant: Tenant;
   equipmentStats: { total: number; active: number; inactive: number };
   activeProjectCount: number;
   projectStats: any[];
   recentLogs: any[];
+  equipment: EquipmentDef[];
+  getEquipmentNameById: (id: string) => string;
 }) {
   return (
     <div className="space-y-8">
@@ -1067,7 +1173,7 @@ function OverviewTab({
                   </div>
                   <div>
                     <p className="text-sm font-medium">
-                      {log.entity_name || log.details || log.action}
+                      {getLogEntityDisplayName(log, equipment)}
                     </p>
                     <p className="text-[10px] opacity-40 uppercase tracking-widest">
                       {log.entity_type
@@ -1858,15 +1964,11 @@ function EquipmentTab({
                 item.isActive === false && "opacity-40",
               )}
             >
-              {item.imageUrl ? (
-                <img
-                  src={item.imageUrl}
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Box className="w-12 h-12 opacity-10" />
-              )}
+              <img
+                src={getEquipmentThumbnail(item)}
+                alt={item.name}
+                className="w-full h-full object-cover"
+              />
 
               {/* Category */}
               <div className="absolute top-3 right-3 px-2 py-1 bg-brand-teal/20 text-brand-teal text-[8px] font-bold uppercase rounded">
@@ -1960,7 +2062,7 @@ function EquipmentTab({
     alert("Failed to upload GLB file.");
   }
 }} */}
-      ── Default Equipment Section ──────────────────────────────────────
+      {/* ── Default Equipment Section ────────────────────────────────────── */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
           <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
@@ -1987,9 +2089,10 @@ function EquipmentTab({
                 )}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className="w-8 h-8 rounded-lg shrink-0"
-                    style={{ backgroundColor: item.color }}
+                  <img
+                    src={getEquipmentThumbnail(item)}
+                    alt={item.name}
+                    className="w-8 h-8 rounded-lg object-cover shrink-0"
                   />
                   <div className="min-w-0">
                     <p className="text-xs font-bold truncate">{item.name}</p>
@@ -1998,20 +2101,31 @@ function EquipmentTab({
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => onToggleDefault(item.id)}
-                  className={clsx(
-                    "w-10 h-5 rounded-full transition-colors relative shrink-0 ml-2",
-                    !isDisabled ? "bg-emerald-500" : "bg-white/20",
-                  )}
-                >
-                  <div
+                <div className="flex items-center gap-3 ml-2">
+                  <button
+                    onClick={() => onToggleDefault(item.id)}
+                    aria-pressed={!isDisabled}
+                    aria-label={
+                      !isDisabled
+                        ? `Deactivate ${item.name}`
+                        : `Activate ${item.name}`
+                    }
                     className={clsx(
-                      "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-                      !isDisabled ? "left-6" : "left-1",
+                      "w-10 h-5 rounded-full transition-colors relative shrink-0",
+                      !isDisabled ? "bg-emerald-500" : "bg-white/20",
                     )}
-                  />
-                </button>
+                  >
+                    <div
+                      className={clsx(
+                        "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                        !isDisabled ? "left-6" : "left-1",
+                      )}
+                    />
+                  </button>
+                  <span className="text-xs font-semibold select-none">
+                    {isDisabled ? "Activate" : "Deactivate"}
+                  </span>
+                </div>
               </div>
             );
           })}
