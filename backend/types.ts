@@ -18,6 +18,7 @@ export interface User {
   name: string;
   phone?: string;
   force_password_change?: number;
+  is_active?: boolean;
 }
 
 export interface EquipmentDef {

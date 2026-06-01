@@ -358,6 +358,15 @@ async function startServer() {
       });
     }
 
+    // Check if sales rep account is deactivated by tenant admin
+    if (user.role === "sales_rep" && user.is_active === false) {
+      return res.status(403).json({
+        error:
+          "Your account has been deactivated. Please contact your administrator.",
+        accountDeactivated: true,
+      });
+    }
+
     if (user && (await bcrypt.compare(password, user.password_hash))) {
       // Clear login attempts on successful login
       await clearLoginAttempts(user.id);
@@ -736,7 +745,7 @@ async function startServer() {
     requireTenantAccess,
     async (req, res) => {
       const { rows } = await pool.query(
-        "SELECT id, tenant_id, email, role, name, phone FROM users WHERE tenant_id = $1",
+        "SELECT id, tenant_id, email, role, name, phone, is_active FROM users WHERE tenant_id = $1",
         [req.params.id],
       );
       res.json(rows);
@@ -872,6 +881,57 @@ async function startServer() {
         );
       }
       res.json({ success: true });
+    },
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SALES REP ACTIVE / INACTIVE TOGGLE
+  // ══════════════════════════════════════════════════════════════════════════
+
+  app.patch(
+    "/api/users/:id/toggle-active",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [
+          req.params.id,
+        ]);
+        const targetUser = rows[0];
+        if (!targetUser) {
+          return res.status(404).json({ error: "User not found" });
+        }
+        if (targetUser.role !== "sales_rep") {
+          return res
+            .status(400)
+            .json({ error: "Can only toggle sales rep accounts" });
+        }
+
+        // Flip the current status (NULL / TRUE → FALSE, FALSE → TRUE)
+        const currentlyActive = targetUser.is_active !== false;
+        const newStatus = !currentlyActive;
+
+        await pool.query("UPDATE users SET is_active = $1 WHERE id = $2", [
+          newStatus,
+          req.params.id,
+        ]);
+
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName,
+            targetUser.tenant_id,
+            "UPDATE",
+            "sales_rep",
+            targetUser.name,
+            `Sales rep ${targetUser.name} ${newStatus ? "activated" : "deactivated"}`,
+          );
+        }
+
+        res.json({ success: true, is_active: newStatus });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
     },
   );
 

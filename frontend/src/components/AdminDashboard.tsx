@@ -2256,6 +2256,35 @@ function UsersTab({
     }
   };
 
+  const handleToggleActive = async (u: User) => {
+    const currentlyActive = u.is_active !== false;
+    const confirmMsg = currentlyActive
+      ? `Deactivate ${u.name}? They will not be able to log in.`
+      : `Activate ${u.name}? They will be able to log in again.`;
+    if (!confirm(confirmMsg)) return;
+
+    // Optimistic update
+    setUsers((prev) =>
+      prev.map((usr) =>
+        usr.id === u.id ? { ...usr, is_active: !currentlyActive } : usr,
+      ),
+    );
+
+    const res = await authFetch(`/api/users/${u.id}/toggle-active`, {
+      method: "PATCH",
+    });
+
+    if (!res.ok) {
+      // Revert on failure
+      setUsers((prev) =>
+        prev.map((usr) =>
+          usr.id === u.id ? { ...usr, is_active: currentlyActive } : usr,
+        ),
+      );
+      alert("Failed to update status");
+    }
+  };
+
   const startEditing = (user: User) => {
     setEditingUser(user);
     setEditFormData({
@@ -2483,54 +2512,104 @@ function UsersTab({
       )}
 
       <div className="grid grid-cols-1 gap-4">
-        {users.map((u) => (
-          <div
-            key={u.id}
-            className="p-3 lg:p-4 bg-theme-card border border-theme-border rounded-xl flex items-center justify-between gap-2 group"
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-brand-teal/10 rounded-full flex items-center justify-center text-brand-teal font-bold shrink-0">
-                {u.name.charAt(0)}
+        {users.map((u) => {
+          const isActive = u.is_active !== false;
+          return (
+            <div
+              key={u.id}
+              className={clsx(
+                "p-3 lg:p-4 bg-theme-card border rounded-xl flex items-center justify-between gap-2 group transition-all",
+                isActive
+                  ? "border-theme-border"
+                  : "border-red-500/20 opacity-70",
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div
+                  className={clsx(
+                    "w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center font-bold shrink-0 text-white",
+                    isActive
+                      ? "bg-brand-teal/10 text-brand-teal"
+                      : "bg-red-500/10 text-red-400",
+                  )}
+                >
+                  {u.name.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold text-sm truncate">
+                      Name: {u.name}
+                    </h4>
+                    <span
+                      className={clsx(
+                        "text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
+                        isActive
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-red-500/15 text-red-400",
+                      )}
+                    >
+                      {isActive ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 lg:gap-3 mt-1 flex-wrap">
+                    <span className="text-[10px] opacity-40 truncate max-w-[120px] lg:max-w-none">
+                      Email: {u.email}
+                    </span>
+                    <span className="text-[10px] opacity-40 hidden lg:inline">
+                      ·
+                    </span>
+                    <span className="text-[10px] opacity-40 hidden lg:inline">
+                      Phone: {u.phone || "No phone"}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <h4 className="font-bold text-sm truncate">Name: {u.name}</h4>
-                <div className="flex items-center gap-1 lg:gap-3 mt-1 flex-wrap">
-                  <span className="text-[10px] opacity-40 truncate max-w-[120px] lg:max-w-none">
-                    Email: {u.email}
-                  </span>
-                  <span className="text-[10px] opacity-40 hidden lg:inline">
-                    ·
-                  </span>
-                  <span className="text-[10px] opacity-40 hidden lg:inline">
-                    Phone: {u.phone || "No phone"}
-                  </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded whitespace-nowrap">
+                  {u.role}
+                </span>
+
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Active / Inactive toggle */}
+                  <button
+                    onClick={() => handleToggleActive(u)}
+                    className={clsx(
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border",
+                      isActive
+                        ? "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+                        : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20",
+                    )}
+                    title={isActive ? "Deactivate account" : "Activate account"}
+                  >
+                    {isActive ? (
+                      <EyeOff className="w-3.5 h-3.5" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {isActive ? "Deactivate" : "Activate"}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => startEditing(u)}
+                    className="p-2 hover:bg-brand-teal/10 text-brand-teal rounded-lg transition-colors"
+                    title="Edit User"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteUser(u.id)}
+                    className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
+                    title="Delete User"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded whitespace-nowrap">
-                {u.role}
-              </span>
-
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => startEditing(u)}
-                  className="p-2 hover:bg-brand-teal/10 text-brand-teal rounded-lg transition-colors"
-                  title="Edit User"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDeleteUser(u.id)}
-                  className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
-                  title="Delete User"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {users.length === 0 && (
           <div className="py-20 text-center">
             <Users className="w-12 h-12 opacity-10 mx-auto mb-4" />

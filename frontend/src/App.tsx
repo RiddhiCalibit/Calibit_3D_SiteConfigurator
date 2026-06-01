@@ -157,6 +157,12 @@ export default function App() {
       console.log("LOGIN RESPONSE:", data);
 
       if (!res.ok) {
+        // Handle account deactivated (HTTP 403)
+        if (res.status === 403 && data.accountDeactivated) {
+          const error: any = new Error(data.error);
+          error.accountDeactivated = true;
+          throw error;
+        }
         // Handle account locked (HTTP 423)
         if (res.status === 423 && data.accountLocked) {
           const error: any = new Error(data.error);

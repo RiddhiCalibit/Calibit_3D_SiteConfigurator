@@ -100,3 +100,5 @@ CREATE TABLE IF NOT EXISTS locked_accounts (
   can_unlock_by_roles TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Sales rep active/inactive status (added for activation feature)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;

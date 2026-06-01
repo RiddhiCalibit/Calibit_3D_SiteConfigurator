@@ -24,6 +24,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [accountLocked, setAccountLocked] = useState(false);
+  const [accountDeactivated, setAccountDeactivated] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,11 +32,17 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
     setLoading(true);
     setError(null);
     setAccountLocked(false);
+    setAccountDeactivated(false);
     setFailedAttempts(0);
     try {
       await onLogin(email, password);
     } catch (err: any) {
-      if (err.accountLocked) {
+      if (err.accountDeactivated) {
+        setAccountDeactivated(true);
+        setError(
+          "Your account has been deactivated. Please contact your administrator.",
+        );
+      } else if (err.accountLocked) {
         setAccountLocked(true);
         setError(
           `Account locked. Please contact your ${
@@ -94,7 +101,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
           {error && (
             <div
               className={`p-4 border rounded-xl text-sm font-medium flex gap-3 ${
-                accountLocked
+                accountLocked || accountDeactivated
                   ? "bg-red-500/10 border-red-500/20 text-red-400"
                   : failedAttempts >= 2
                     ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
@@ -119,7 +126,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
                   autoComplete="off"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={accountLocked}
+                  disabled={accountLocked || accountDeactivated}
                   className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all disabled:opacity-50"
                   placeholder="name@company.com"
                 />
@@ -139,16 +146,15 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={accountLocked}
+                  disabled={accountLocked || accountDeactivated}
                   className="w-full bg-white/5 border border-theme-border rounded-xl py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 transition-all disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={accountLocked}
+                  disabled={accountLocked || accountDeactivated}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500 hover:text-white disabled:opacity-50"
                 >
-                  {/* {showPassword ? "Hide" : "Show"} */}
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
@@ -157,7 +163,7 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
 
           <button
             type="submit"
-            disabled={loading || accountLocked}
+            disabled={loading || accountLocked || accountDeactivated}
             className="w-full py-4 bg-brand-teal hover:bg-brand-teal/90 text-white font-bold rounded-xl transition-all shadow-lg shadow-brand-teal/20 flex items-center justify-center gap-2 group disabled:opacity-50"
           >
             {loading ? (
@@ -174,14 +180,14 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
             <button
               type="button"
               onClick={onForgotPassword}
-              disabled={accountLocked}
+              disabled={accountLocked || accountDeactivated}
               className="text-xs text-brand-teal hover:underline disabled:opacity-50"
             >
               Forgot your password?
             </button>
           </div>
 
-          {accountLocked && (
+          {(accountLocked || accountDeactivated) && (
             <div className="pt-2 text-center">
               <button
                 type="button"
