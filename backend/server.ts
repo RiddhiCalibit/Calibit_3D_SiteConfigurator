@@ -322,34 +322,10 @@ async function startServer() {
     console.log("✅ Database seeded");
   }
 
-  // // ─── Health check ──────────────────────────────────────────────────────────
-  // app.get("/", (req, res) => {
-  //   res.send("Backend is running 🚀");
-  // });
-
-  // ─── Serve frontend static files ───────────────────────────────────────────
-  const frontendDist = path.join(__dirname, "../frontend/dist");
-  if (fs.existsSync(frontendDist)) {
-    app.use(express.static(frontendDist));
-    app.get("/", (req, res) => {
-      res.sendFile(path.join(frontendDist, "index.html"));
-    });
-    // Catch-all for client-side routing (React Router)
-    app.get("*", (req, res, next) => {
-      if (
-        req.path.startsWith("/api") ||
-        req.path.startsWith("/models") ||
-        req.path.startsWith("/uploads")
-      ) {
-        return next();
-      }
-      res.sendFile(path.join(frontendDist, "index.html"));
-    });
-  } else {
-    app.get("/", (req, res) => {
-      res.send("Backend is running 🚀");
-    });
-  }
+  // ─── Health check ──────────────────────────────────────────────────────────
+  app.get("/", (req, res) => {
+    res.send("Backend is running 🚀");
+  });
 
   // ══════════════════════════════════════════════════════════════════════════
   // AUTH ROUTES
@@ -1951,6 +1927,20 @@ async function startServer() {
       res.status(500).json({ error: err.message || "Compliance check failed" });
     }
   });
+
+  // ─── Serve frontend (must be AFTER all API routes) ────────────────────────
+  const frontendDist = path.join(__dirname, "../frontend/dist");
+  if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist));
+    // Catch-all: send index.html for any non-API route (React Router support)
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(frontendDist, "index.html"));
+    });
+    console.log("✅ Serving frontend from:", frontendDist);
+  } else {
+    console.warn("⚠️  Frontend dist not found at:", frontendDist);
+    console.warn("   Run: cd frontend && npm install && npm run build");
+  }
 
   // ─── Start Listening ───────────────────────────────────────────────────────
   app.listen(PORT, "0.0.0.0", () => {
