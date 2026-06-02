@@ -33,6 +33,7 @@ import {
   FolderOpen,
   ChevronDown,
   Lock,
+  Archive,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { clsx } from "clsx";
@@ -2137,6 +2138,223 @@ function EquipmentTab({
   );
 }
 
+// ─── Archive Modal ────────────────────────────────────────────────────────────
+interface ArchiveModalProps {
+  user: User;
+  allReps: User[];
+  onConfirm: (
+    assignments: Record<string, string>,
+    bulkTargetId?: string,
+  ) => void;
+  onCancel: () => void;
+}
+
+function ArchiveModal({
+  user,
+  allReps,
+  onConfirm,
+  onCancel,
+}: ArchiveModalProps) {
+  const [projects, setProjects] = React.useState<
+    { id: string; name: string }[]
+  >([]);
+  const [loading, setLoading] = React.useState(true);
+  const [bulkTargetId, setBulkTargetId] = React.useState("");
+  const [perProjectAssign, setPerProjectAssign] = React.useState<
+    Record<string, string>
+  >({});
+  const [mode, setMode] = React.useState<"bulk" | "individual">("bulk");
+
+  const otherActiveReps = allReps.filter(
+    (r) =>
+      r.id !== user.id && r.role === "sales_rep" && r.status !== "archived",
+  );
+
+  React.useEffect(() => {
+    authFetch(`/api/users/${user.id}/projects`)
+      .then((r) => r.json())
+      .then((data) => {
+        setProjects(data);
+        const init: Record<string, string> = {};
+        data.forEach((p: any) => (init[p.id] = ""));
+        setPerProjectAssign(init);
+      })
+      .finally(() => setLoading(false));
+  }, [user.id]);
+
+  const canConfirm =
+    projects.length === 0 ||
+    (mode === "bulk" && bulkTargetId !== "") ||
+    (mode === "individual" &&
+      Object.values(perProjectAssign).every((v) => v !== ""));
+
+  const handleConfirm = () => {
+    if (mode === "bulk") {
+      const assignments: Record<string, string> = {};
+      projects.forEach((p) => (assignments[p.id] = bulkTargetId));
+      onConfirm(assignments, bulkTargetId);
+    } else {
+      onConfirm(perProjectAssign);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-theme-card border border-theme-border rounded-2xl w-full max-w-lg shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-theme-border">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-500/10 rounded-full flex items-center justify-center">
+              <Archive className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="font-bold text-base">Archive Sales Rep</h2>
+              <p className="text-xs opacity-50">
+                {user.name} · {user.email}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onCancel}
+            className="p-2 hover:bg-white/5 rounded-lg"
+          >
+            <X className="w-4 h-4 opacity-50" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {loading ? (
+            <div className="py-8 text-center text-sm opacity-40">
+              Loading projects...
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-400">
+                  No projects assigned
+                </p>
+                <p className="text-xs opacity-60 mt-0.5">
+                  This rep has no projects. You can archive them immediately.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <FolderOpen className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-400">
+                    {projects.length} project{projects.length > 1 ? "s" : ""}{" "}
+                    must be reassigned
+                  </p>
+                  <p className="text-xs opacity-60 mt-0.5">
+                    Reassign all projects before archiving. Logs will be
+                    preserved.
+                  </p>
+                </div>
+              </div>
+
+              {/* Mode toggle */}
+              <div className="flex rounded-xl border border-theme-border overflow-hidden text-xs font-bold uppercase tracking-widest">
+                <button
+                  onClick={() => setMode("bulk")}
+                  className={clsx(
+                    "flex-1 py-2.5 transition-all",
+                    mode === "bulk"
+                      ? "bg-brand-teal text-white"
+                      : "opacity-40 hover:opacity-70",
+                  )}
+                >
+                  Bulk — assign all to one rep
+                </button>
+                <button
+                  onClick={() => setMode("individual")}
+                  className={clsx(
+                    "flex-1 py-2.5 transition-all",
+                    mode === "individual"
+                      ? "bg-brand-teal text-white"
+                      : "opacity-40 hover:opacity-70",
+                  )}
+                >
+                  Individual — assign each
+                </button>
+              </div>
+
+              {mode === "bulk" ? (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
+                    Reassign all {projects.length} projects to
+                  </label>
+                  <select
+                    value={bulkTargetId}
+                    onChange={(e) => setBulkTargetId(e.target.value)}
+                    className="w-full bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
+                  >
+                    <option value="">— Select a sales rep —</option>
+                    {otherActiveReps.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({r.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
+                  {projects.map((p) => (
+                    <div key={p.id} className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">
+                          {p.name}
+                        </p>
+                      </div>
+                      <select
+                        value={perProjectAssign[p.id] || ""}
+                        onChange={(e) =>
+                          setPerProjectAssign((prev) => ({
+                            ...prev,
+                            [p.id]: e.target.value,
+                          }))
+                        }
+                        className="w-48 bg-white/5 border border-theme-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
+                      >
+                        <option value="">— Select rep —</option>
+                        {otherActiveReps.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-border">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2.5 text-sm font-semibold opacity-50 hover:opacity-100 transition-opacity"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!canConfirm}
+            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-30 text-black font-bold text-sm rounded-xl transition-all flex items-center gap-2"
+          >
+            <Archive className="w-4 h-4" />
+            {projects.length > 0 ? "Reassign & Archive" : "Archive Rep"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UsersTab({
   tenant,
   isAdding,
@@ -2150,28 +2368,32 @@ function UsersTab({
   salesRepCount: number;
   setSalesRepCount: (count: number) => void;
 }) {
-  const [users, setUsers] = useState<User[]>([]);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUser, setNewUser] = useState({
+  const [users, setUsers] = React.useState<User[]>([]);
+  const [editingUser, setEditingUser] = React.useState<User | null>(null);
+  const [newUser, setNewUser] = React.useState({
     name: "",
     email: "",
     phone: "",
     password: "",
     companyName: tenant.name,
   });
-  const [editFormData, setEditFormData] = useState({
+  const [editFormData, setEditFormData] = React.useState({
     name: "",
     phone: "",
     password: "",
   });
+  const [archiveTarget, setArchiveTarget] = React.useState<User | null>(null);
+  const [showArchived, setShowArchived] = React.useState(false);
 
-  // Add to fetchUsers equivalent — create a new function
   const fetchSalesRepCount = async () => {
     const res = await authFetch(`/api/tenant/${tenant.id}/users`);
     if (res.ok) {
       const data = await res.json();
       const count = data.filter(
-        (u: any) => u.role === "sales_rep" && u.is_active !== false,
+        (u: any) =>
+          u.role === "sales_rep" &&
+          u.status !== "archived" &&
+          u.is_active !== false,
       ).length;
       setSalesRepCount(count);
     }
@@ -2183,98 +2405,82 @@ function UsersTab({
       const data = await res.json();
       setUsers(data);
       setSalesRepCount(
-        data.filter((u: any) => u.role === "sales_rep" && u.is_active !== false)
-          .length,
+        data.filter(
+          (u: any) =>
+            u.role === "sales_rep" &&
+            u.status !== "archived" &&
+            u.is_active !== false,
+        ).length,
       );
     }
   };
 
-  useEffect(() => {
+  React.useEffect(() => {
     fetchUsers();
   }, [tenant.id]);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const userId = uuidv4();
-
     const res = await authFetch(`/api/tenant/${tenant.id}/users`, {
       method: "POST",
       body: JSON.stringify({
         id: userId,
         email: newUser.email,
-        password: newUser.password, // server will hash this
+        password: newUser.password,
         role: "sales_rep",
         name: newUser.name,
         phone: newUser.phone,
       }),
     });
-
     if (res.ok) {
-      setIsAdding(false);
       setNewUser({
         name: "",
         email: "",
-        password: "",
         phone: "",
+        password: "",
         companyName: tenant.name,
       });
-      fetchUsers(); // refresh from DB
-      fetchSalesRepCount();
+      setIsAdding(false);
+      fetchUsers();
     } else {
-      const err = await res.json();
-      alert(err.error || "Failed to add user");
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Failed to add user");
     }
   };
 
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEditUser = async () => {
     if (!editingUser) return;
-
     const res = await authFetch(`/api/users/${editingUser.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: editFormData.name,
-        phone: editFormData.phone,
-        password: editFormData.password || undefined,
-      }),
+      body: JSON.stringify(editFormData),
     });
-
     if (res.ok) {
       setEditingUser(null);
       fetchUsers();
     } else {
-      alert("Failed to update user");
-    }
-  };
-
-  const handleDeleteUser = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this sales person?")) return;
-
-    const res = await authFetch(`/api/users/${id}`, {
-      method: "DELETE",
-    });
-
-    if (res.ok) {
-      fetchUsers();
-      fetchSalesRepCount();
-    } else {
-      alert("Failed to delete user");
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Failed to update user");
     }
   };
 
   const handleToggleActive = async (u: User) => {
-    const currentlyActive = u.is_active !== false;
+    const currentlyActive = u.status !== "inactive" && u.is_active !== false;
     const confirmMsg = currentlyActive
       ? `Deactivate ${u.name}? They will not be able to log in.`
       : `Activate ${u.name}? They will be able to log in again.`;
     if (!confirm(confirmMsg)) return;
 
-    // Optimistic update — flip user state and adjust count immediately
     const originalCount = salesRepCount;
     setUsers((prev) =>
       prev.map((usr) =>
-        usr.id === u.id ? { ...usr, is_active: !currentlyActive } : usr,
+        usr.id === u.id
+          ? {
+              ...usr,
+              is_active: !currentlyActive,
+              status: currentlyActive ? "inactive" : "active",
+            }
+          : usr,
       ),
     );
     setSalesRepCount(salesRepCount + (currentlyActive ? -1 : 1));
@@ -2282,12 +2488,16 @@ function UsersTab({
     const res = await authFetch(`/api/users/${u.id}/toggle-active`, {
       method: "PATCH",
     });
-
     if (!res.ok) {
-      // Revert on failure
       setUsers((prev) =>
         prev.map((usr) =>
-          usr.id === u.id ? { ...usr, is_active: currentlyActive } : usr,
+          usr.id === u.id
+            ? {
+                ...usr,
+                is_active: currentlyActive,
+                status: currentlyActive ? "active" : "inactive",
+              }
+            : usr,
         ),
       );
       setSalesRepCount(originalCount);
@@ -2295,292 +2505,273 @@ function UsersTab({
     }
   };
 
+  const handleArchive = async (assignments: Record<string, string>) => {
+    if (!archiveTarget) return;
+    try {
+      // Reassign each project
+      for (const [projectId, newUserId] of Object.entries(assignments)) {
+        if (newUserId) {
+          const r = await authFetch(`/api/projects/${projectId}/reassign`, {
+            method: "PATCH",
+            body: JSON.stringify({ newUserId }),
+          });
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            alert(
+              `Failed to reassign a project: ${d.error || "Unknown error"}`,
+            );
+            return;
+          }
+        }
+      }
+      // Archive the user
+      const res = await authFetch(`/api/users/${archiveTarget.id}/archive`, {
+        method: "PATCH",
+      });
+      if (res.ok) {
+        setArchiveTarget(null);
+        fetchUsers();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || "Failed to archive user");
+      }
+    } catch {
+      alert("An error occurred");
+    }
+  };
+
   const startEditing = (user: User) => {
     setEditingUser(user);
-    setEditFormData({
-      name: user.name,
-      phone: user.phone || "",
-      password: "",
-    });
+    setEditFormData({ name: user.name, phone: user.phone || "", password: "" });
   };
+
+  const activeReps = users.filter(
+    (u) => u.role === "sales_rep" && u.status !== "archived",
+  );
+  const archivedReps = users.filter(
+    (u) => u.role === "sales_rep" && u.status === "archived",
+  );
+  const admins = users.filter((u) => u.role !== "sales_rep");
 
   return (
     <div className="space-y-6">
-      {/* Add User Modal */}
-      {isAdding && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
-          >
-            <div className="p-6 border-b border-theme-border flex justify-between items-center">
-              <h3 className="text-lg font-bold">Add Sales Person</h3>
+      {/* Archive Modal */}
+      {archiveTarget && (
+        <ArchiveModal
+          user={archiveTarget}
+          allReps={users}
+          onConfirm={handleArchive}
+          onCancel={() => setArchiveTarget(null)}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-theme-card border border-theme-border rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-theme-border">
+              <h2 className="font-bold text-base">Edit Sales Rep</h2>
               <button
-                onClick={() => setIsAdding(false)}
-                className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                onClick={() => setEditingUser(null)}
+                className="p-2 hover:bg-white/5 rounded-lg"
               >
-                <X className="w-5 h-5 opacity-40" />
+                <X className="w-4 h-4 opacity-50" />
               </button>
             </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
+                  Name
+                </label>
+                <input
+                  className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
+                  value={editFormData.name}
+                  onChange={(e) =>
+                    setEditFormData((p) => ({ ...p, name: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
+                  Phone
+                </label>
+                <input
+                  className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
+                  value={editFormData.phone}
+                  onChange={(e) =>
+                    setEditFormData((p) => ({ ...p, phone: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
+                  New Password (optional)
+                </label>
+                <input
+                  type="password"
+                  className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
+                  placeholder="Leave blank to keep current"
+                  value={editFormData.password}
+                  onChange={(e) =>
+                    setEditFormData((p) => ({ ...p, password: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-6 border-t border-theme-border">
+              <button
+                onClick={() => setEditingUser(null)}
+                className="px-4 py-2.5 text-sm font-semibold opacity-50 hover:opacity-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditUser}
+                className="px-5 py-2.5 bg-brand-teal text-white font-bold text-sm rounded-xl hover:bg-brand-teal/90 transition-all"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-            <form onSubmit={handleAddUser} className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Full Name
+      {/* Add New Rep Form */}
+      {isAdding && (
+        <div className="bg-theme-card border border-brand-teal/30 rounded-2xl p-6 space-y-4">
+          <h3 className="font-bold text-sm">Add New Sales Rep</h3>
+          <form onSubmit={handleAddUser} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
+                  Name
                 </label>
                 <input
                   required
-                  type="text"
+                  className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={newUser.name}
                   onChange={(e) =>
-                    setNewUser({ ...newUser, name: e.target.value })
+                    setNewUser((p) => ({ ...p, name: e.target.value }))
                   }
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  placeholder="John Doe"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Company Name
-                </label>
-                <input
-                  disabled
-                  type="text"
-                  value={newUser.companyName}
-                  className="w-full bg-white/10 border border-theme-border rounded-lg px-4 py-2 text-sm opacity-60"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Email Address
+              <div>
+                <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
+                  Email
                 </label>
                 <input
                   required
                   type="email"
+                  className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={newUser.email}
                   onChange={(e) =>
-                    setNewUser({ ...newUser, email: e.target.value })
+                    setNewUser((p) => ({ ...p, email: e.target.value }))
                   }
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  placeholder="john@example.com"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Mobile Number
+              <div>
+                <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
+                  Phone
                 </label>
                 <input
-                  required
-                  type="tel"
+                  className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={newUser.phone}
                   onChange={(e) =>
-                    setNewUser({ ...newUser, phone: e.target.value })
+                    setNewUser((p) => ({ ...p, phone: e.target.value }))
                   }
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  placeholder="+1 234 567 890"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+              <div>
+                <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
                   Password
                 </label>
                 <input
                   required
                   type="password"
+                  className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={newUser.password}
                   onChange={(e) =>
-                    setNewUser({ ...newUser, password: e.target.value })
+                    setNewUser((p) => ({ ...p, password: e.target.value }))
                   }
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  placeholder="••••••••"
                 />
               </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
-                <button
-                  type="button"
-                  onClick={() => setIsAdding(false)}
-                  className="px-6 py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
-                >
-                  Create Account
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Edit User Modal */}
-      {editingUser && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
-          >
-            <div className="p-6 border-b border-theme-border flex justify-between items-center">
-              <h3 className="text-lg font-bold">Edit Sales Person</h3>
+            </div>
+            <div className="flex justify-end gap-3">
               <button
-                onClick={() => setEditingUser(null)}
-                className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                type="button"
+                onClick={() => setIsAdding(false)}
+                className="px-4 py-2.5 text-sm font-semibold opacity-50 hover:opacity-100"
               >
-                <X className="w-5 h-5 opacity-40" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-brand-teal text-white font-bold text-sm rounded-xl hover:bg-brand-teal/90 transition-all"
+              >
+                Add Rep
               </button>
             </div>
-
-            <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Full Name
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={editFormData.name}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, name: e.target.value })
-                  }
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Email Address
-                </label>
-                <input
-                  disabled
-                  type="email"
-                  value={editingUser.email}
-                  className="w-full bg-white/10 border border-theme-border rounded-lg px-4 py-2 text-sm opacity-60"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  Mobile Number
-                </label>
-                <input
-                  required
-                  type="tel"
-                  value={editFormData.phone}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, phone: e.target.value })
-                  }
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                  New Password (Optional)
-                </label>
-                <input
-                  type="password"
-                  value={editFormData.password}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      password: e.target.value,
-                    })
-                  }
-                  className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                  placeholder="Leave blank to keep current"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="px-6 py-2 text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </motion.div>
+          </form>
+        </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4">
-        {users.map((u) => {
-          const isActive = u.is_active !== false;
-          return (
-            <div
-              key={u.id}
-              className={clsx(
-                "p-3 lg:p-4 bg-theme-card border rounded-xl flex items-center justify-between gap-2 group transition-all",
-                isActive
-                  ? "border-theme-border"
-                  : "border-red-500/20 opacity-70",
-              )}
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div
-                  className={clsx(
-                    "w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center font-bold shrink-0 text-white",
-                    isActive
-                      ? "bg-brand-teal/10 text-brand-teal"
-                      : "bg-red-500/10 text-red-400",
-                  )}
-                >
-                  {u.name.charAt(0)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-bold text-sm truncate">
-                      Name: {u.name}
-                    </h4>
-                    <span
-                      className={clsx(
-                        "text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
-                        isActive
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-red-500/15 text-red-400",
-                      )}
-                    >
-                      {isActive ? "Active" : "Inactive"}
-                    </span>
+      {/* Active Reps */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-bold opacity-40 uppercase tracking-widest">
+          Sales Reps ({activeReps.length})
+        </h3>
+        <div className="grid grid-cols-1 gap-4">
+          {activeReps.map((u) => {
+            const isActive = u.status !== "inactive" && u.is_active !== false;
+            return (
+              <div
+                key={u.id}
+                className={clsx(
+                  "p-3 lg:p-4 bg-theme-card border rounded-xl flex items-center justify-between gap-2 group transition-all",
+                  isActive
+                    ? "border-theme-border"
+                    : "border-red-500/20 opacity-70",
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div
+                    className={clsx(
+                      "w-8 h-8 lg:w-10 lg:h-10 rounded-full flex items-center justify-center font-bold shrink-0 text-white",
+                      isActive
+                        ? "bg-brand-teal/10 text-brand-teal"
+                        : "bg-red-500/10 text-red-400",
+                    )}
+                  >
+                    {u.name.charAt(0)}
                   </div>
-                  <div className="flex items-center gap-1 lg:gap-3 mt-1 flex-wrap">
-                    <span className="text-[10px] opacity-40 truncate max-w-[120px] lg:max-w-none">
-                      Email: {u.email}
-                    </span>
-                    <span className="text-[10px] opacity-40 hidden lg:inline">
-                      ·
-                    </span>
-                    <span className="text-[10px] opacity-40 hidden lg:inline">
-                      Phone: {u.phone || "No phone"}
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-bold text-sm truncate">{u.name}</h4>
+                      <span
+                        className={clsx(
+                          "text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full",
+                          isActive
+                            ? "bg-emerald-500/15 text-emerald-400"
+                            : "bg-red-500/15 text-red-400",
+                        )}
+                      >
+                        {isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 lg:gap-3 mt-1 flex-wrap">
+                      <span className="text-[10px] opacity-40 truncate max-w-[120px] lg:max-w-none">
+                        {u.email}
+                      </span>
+                      <span className="text-[10px] opacity-40 hidden lg:inline">
+                        ·
+                      </span>
+                      <span className="text-[10px] opacity-40 hidden lg:inline">
+                        {u.phone || "No phone"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 bg-brand-teal/10 text-brand-teal rounded whitespace-nowrap">
-                  {u.role}
-                </span>
-
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {/* Active / Inactive toggle */}
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   <button
                     onClick={() => handleToggleActive(u)}
                     className={clsx(
@@ -2589,7 +2780,7 @@ function UsersTab({
                         ? "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
                         : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20",
                     )}
-                    title={isActive ? "Deactivate account" : "Activate account"}
+                    title={isActive ? "Deactivate" : "Activate"}
                   >
                     {isActive ? (
                       <EyeOff className="w-3.5 h-3.5" />
@@ -2600,35 +2791,76 @@ function UsersTab({
                       {isActive ? "Deactivate" : "Activate"}
                     </span>
                   </button>
-
+                  <button
+                    onClick={() => setArchiveTarget(u)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-all"
+                    title="Archive rep"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Archive</span>
+                  </button>
                   <button
                     onClick={() => startEditing(u)}
                     className="p-2 hover:bg-brand-teal/10 text-brand-teal rounded-lg transition-colors"
-                    title="Edit User"
+                    title="Edit"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={() => handleDeleteUser(u.id)}
-                    className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
-                    title="Delete User"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
+            );
+          })}
+          {activeReps.length === 0 && (
+            <div className="py-16 text-center">
+              <Users className="w-10 h-10 opacity-10 mx-auto mb-3" />
+              <p className="text-sm opacity-40 italic">No active sales reps.</p>
             </div>
-          );
-        })}
-        {users.length === 0 && (
-          <div className="py-20 text-center">
-            <Users className="w-12 h-12 opacity-10 mx-auto mb-4" />
-            <p className="text-sm opacity-40 italic">
-              No sales team members added yet.
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Archived Reps */}
+      {archivedReps.length > 0 && (
+        <div className="space-y-3">
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className="flex items-center gap-2 text-xs font-bold opacity-40 uppercase tracking-widest hover:opacity-70 transition-opacity"
+          >
+            <ChevronDown
+              className={clsx(
+                "w-4 h-4 transition-transform",
+                showArchived && "rotate-180",
+              )}
+            />
+            Archived ({archivedReps.length})
+          </button>
+          {showArchived && (
+            <div className="grid grid-cols-1 gap-3">
+              {archivedReps.map((u) => (
+                <div
+                  key={u.id}
+                  className="p-3 lg:p-4 bg-theme-card border border-dashed border-theme-border rounded-xl flex items-center gap-3 opacity-50"
+                >
+                  <div className="w-8 h-8 bg-gray-500/10 rounded-full flex items-center justify-center text-gray-400 font-bold shrink-0">
+                    {u.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm truncate">{u.name}</h4>
+                      <span className="text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400">
+                        Archived
+                      </span>
+                    </div>
+                    <p className="text-[10px] opacity-40 truncate mt-0.5">
+                      {u.email}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

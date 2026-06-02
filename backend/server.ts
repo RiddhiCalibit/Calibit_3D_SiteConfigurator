@@ -332,119 +332,135 @@ async function startServer() {
   // ══════════════════════════════════════════════════════════════════════════
 
   app.post("/api/auth/login", loginLimiter, async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-
-    const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [
-      email,
-    ]);
-    const user = rows[0];
-
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    // Check if account is locked
-    const lockedAccount = await checkAccountLocked(user.id);
-    if (lockedAccount) {
-      return res.status(423).json({
-        error: "Account is locked due to too many failed login attempts",
-        accountLocked: true,
-        canUnlockByRoles: lockedAccount.can_unlock_by_roles,
-        userRole: lockedAccount.user_role,
-        lockedAt: lockedAccount.locked_at,
-      });
-    }
-
-    // Check if sales rep account is deactivated by tenant admin
-    if (user.role === "sales_rep" && user.is_active === false) {
-      return res.status(403).json({
-        error:
-          "Your account has been deactivated. Please contact your administrator.",
-        accountDeactivated: true,
-      });
-    }
-
-    if (user && (await bcrypt.compare(password, user.password_hash))) {
-      // Clear login attempts on successful login
-      await clearLoginAttempts(user.id);
-
-      let tenant = null;
-      if (user.tenant_id) {
-        const tenantResult = await pool.query(
-          "SELECT * FROM tenants WHERE id = $1",
-          [user.tenant_id],
-        );
-        tenant = tenantResult.rows[0] || null;
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res
+          .status(400)
+          .json({ error: "Email and password are required" });
       }
 
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          role: user.role,
-          tenantId: user.tenant_id,
-          userName: user.name,
-        },
-        JWT_SECRET,
-        { expiresIn: "8h" },
+      const { rows } = await pool.query(
+        "SELECT * FROM users WHERE email = $1",
+        [email],
       );
+      const user = rows[0];
 
-      const { password_hash, ...safeUser } = user;
-      res.json({ user: safeUser, tenant, token });
-      await logActivity(
-        user.id,
-        user.name,
-        user.tenant_id,
-        "LOGIN",
-        "auth",
-        user.name,
-        `Logged in as ${user.role}`,
-      );
-    } else {
-      // Record failed login attempt
-      const lockResult = await recordFailedLoginAttempt(
-        user.id,
-        email,
-        user.role,
-        user.tenant_id,
-      );
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
 
-      if (lockResult.isLocked) {
-        await logActivity(
-          user.id,
-          user.name,
-          user.tenant_id,
-          "LOGIN_FAILED",
-          "auth",
-          user.name,
-          `Account locked after ${lockResult.failedCount} failed attempts`,
-        );
-
+      // Check if account is locked
+      const lockedAccount = await checkAccountLocked(user.id);
+      if (lockedAccount) {
         return res.status(423).json({
-          error: "Account locked due to too many failed login attempts",
+          error: "Account is locked due to too many failed login attempts",
           accountLocked: true,
-          canUnlockByRoles:
-            user.role === "sales_rep" ? "tenant_admin" : "platform_admin",
-          userRole: user.role,
+          canUnlockByRoles: lockedAccount.can_unlock_by_roles,
+          userRole: lockedAccount.user_role,
+          lockedAt: lockedAccount.locked_at,
         });
-      } else {
+      }
+
+      // Check if sales rep account is inactive or archived
+      // status column may not exist yet on older DBs — fall back to is_active
+      const repStatus =
+        user.status ?? (user.is_active === false ? "inactive" : "active");
+      if (
+        user.role === "sales_rep" &&
+        (repStatus === "inactive" || repStatus === "archived")
+      ) {
+        return res.status(403).json({
+          error:
+            repStatus === "archived"
+              ? "Your account has been archived. Please contact your administrator."
+              : "Your account has been deactivated. Please contact your administrator.",
+          accountDeactivated: true,
+        });
+      }
+
+      if (user && (await bcrypt.compare(password, user.password_hash))) {
+        // Clear login attempts on successful login
+        await clearLoginAttempts(user.id);
+
+        let tenant = null;
+        if (user.tenant_id) {
+          const tenantResult = await pool.query(
+            "SELECT * FROM tenants WHERE id = $1",
+            [user.tenant_id],
+          );
+          tenant = tenantResult.rows[0] || null;
+        }
+
+        const token = jwt.sign(
+          {
+            userId: user.id,
+            role: user.role,
+            tenantId: user.tenant_id,
+            userName: user.name,
+          },
+          JWT_SECRET,
+          { expiresIn: "8h" },
+        );
+
+        const { password_hash, ...safeUser } = user;
+        res.json({ user: safeUser, tenant, token });
         await logActivity(
           user.id,
           user.name,
           user.tenant_id,
-          "LOGIN_FAILED",
+          "LOGIN",
           "auth",
           user.name,
-          `Failed login attempt (${lockResult.failedCount}/3)`,
+          `Logged in as ${user.role}`,
+        );
+      } else {
+        // Record failed login attempt
+        const lockResult = await recordFailedLoginAttempt(
+          user.id,
+          email,
+          user.role,
+          user.tenant_id,
         );
 
-        return res.status(401).json({
-          error: `Invalid credentials (${lockResult.failedCount}/3 failed attempts)`,
-          failedAttempts: lockResult.failedCount,
-        });
+        if (lockResult.isLocked) {
+          await logActivity(
+            user.id,
+            user.name,
+            user.tenant_id,
+            "LOGIN_FAILED",
+            "auth",
+            user.name,
+            `Account locked after ${lockResult.failedCount} failed attempts`,
+          );
+
+          return res.status(423).json({
+            error: "Account locked due to too many failed login attempts",
+            accountLocked: true,
+            canUnlockByRoles:
+              user.role === "sales_rep" ? "tenant_admin" : "platform_admin",
+            userRole: user.role,
+          });
+        } else {
+          await logActivity(
+            user.id,
+            user.name,
+            user.tenant_id,
+            "LOGIN_FAILED",
+            "auth",
+            user.name,
+            `Failed login attempt (${lockResult.failedCount}/3)`,
+          );
+
+          return res.status(401).json({
+            error: `Invalid credentials (${lockResult.failedCount}/3 failed attempts)`,
+            failedAttempts: lockResult.failedCount,
+          });
+        }
       }
+    } catch (err: any) {
+      console.error("Login route error:", err);
+      return res.status(500).json({ error: "Login failed. Please try again." });
     }
   });
 
@@ -745,7 +761,7 @@ async function startServer() {
     requireTenantAccess,
     async (req, res) => {
       const { rows } = await pool.query(
-        "SELECT id, tenant_id, email, role, name, phone, is_active FROM users WHERE tenant_id = $1",
+        "SELECT id, tenant_id, email, role, name, phone, is_active, status FROM users WHERE tenant_id = $1",
         [req.params.id],
       );
       res.json(rows);
@@ -864,23 +880,62 @@ async function startServer() {
     authenticate,
     requireRole("tenant_admin", "platform_admin"),
     async (req, res) => {
-      const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [
-        req.params.id,
-      ]);
-      const userToDelete = rows[0];
-      await pool.query("DELETE FROM users WHERE id = $1", [req.params.id]);
-      if (req.user) {
-        await logActivity(
-          req.user.userId,
-          req.user.userName || "Admin",
-          req.user.tenantId || null,
-          "DELETE",
-          "sales_rep",
-          userToDelete?.name,
-          `Deleted: ${userToDelete?.email}`,
+      try {
+        const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [
+          req.params.id,
+        ]);
+        const userToDelete = rows[0];
+
+        if (!userToDelete) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        // Prevent deleting tenant_admin or platform_admin accounts
+        if (
+          userToDelete.role === "tenant_admin" ||
+          userToDelete.role === "platform_admin"
+        ) {
+          return res
+            .status(403)
+            .json({ error: "Cannot delete admin accounts" });
+        }
+
+        // Nullify user_id on all related tables before deleting
+        // so FK constraints don't block the delete
+        await pool.query(
+          "UPDATE projects SET user_id = NULL WHERE user_id = $1",
+          [req.params.id],
         );
+        await pool
+          .query(
+            "UPDATE shared_configurations SET user_id = NULL WHERE user_id = $1",
+            [req.params.id],
+          )
+          .catch(() => {});
+        await pool
+          .query("UPDATE activity_logs SET user_id = NULL WHERE user_id = $1", [
+            req.params.id,
+          ])
+          .catch(() => {});
+
+        await pool.query("DELETE FROM users WHERE id = $1", [req.params.id]);
+
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName || "Admin",
+            req.user.tenantId || null,
+            "DELETE",
+            "sales_rep",
+            userToDelete?.name,
+            `Deleted: ${userToDelete?.email}`,
+          );
+        }
+        res.json({ success: true });
+      } catch (err: any) {
+        console.error("Delete user error:", err);
+        res.status(500).json({ error: err.message || "Failed to delete user" });
       }
-      res.json({ success: true });
     },
   );
 
@@ -911,10 +966,10 @@ async function startServer() {
         const currentlyActive = targetUser.is_active !== false;
         const newStatus = !currentlyActive;
 
-        await pool.query("UPDATE users SET is_active = $1 WHERE id = $2", [
-          newStatus,
-          req.params.id,
-        ]);
+        await pool.query(
+          "UPDATE users SET is_active = $1, status = $2 WHERE id = $3",
+          [newStatus, newStatus ? "active" : "inactive", req.params.id],
+        );
 
         if (req.user) {
           await logActivity(
@@ -929,6 +984,195 @@ async function startServer() {
         }
 
         res.json({ success: true, is_active: newStatus });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // REASSIGN PROJECTS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // GET projects for a sales rep
+  app.get(
+    "/api/users/:id/projects",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        const { rows } = await pool.query(
+          "SELECT id, name, created_at, user_id FROM projects WHERE user_id = $1",
+          [req.params.id],
+        );
+        res.json(rows);
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
+  // PATCH reassign a single project to another sales rep
+  app.patch(
+    "/api/projects/:projectId/reassign",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        const { newUserId } = req.body;
+        if (!newUserId)
+          return res.status(400).json({ error: "newUserId required" });
+
+        // Get project + old user info
+        const { rows: pRows } = await pool.query(
+          "SELECT p.*, u.name as old_user_name FROM projects p LEFT JOIN users u ON p.user_id = u.id WHERE p.id = $1",
+          [req.params.projectId],
+        );
+        const project = pRows[0];
+        if (!project)
+          return res.status(404).json({ error: "Project not found" });
+
+        // Get new user info
+        const { rows: uRows } = await pool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [newUserId],
+        );
+        const newUser = uRows[0];
+        if (!newUser)
+          return res.status(404).json({ error: "New user not found" });
+
+        // Reassign
+        await pool.query("UPDATE projects SET user_id = $1 WHERE id = $2", [
+          newUserId,
+          req.params.projectId,
+        ]);
+
+        // Log the reassignment
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName,
+            project.tenant_id,
+            "UPDATE",
+            "project",
+            project.name,
+            `Project reassigned from "${project.old_user_name || "Unassigned"}" to "${newUser.name}" by admin`,
+          );
+        }
+        res.json({ success: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
+  // PATCH bulk reassign all projects from one rep to another
+  app.patch(
+    "/api/users/:id/reassign-all-projects",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        const { newUserId } = req.body;
+        if (!newUserId)
+          return res.status(400).json({ error: "newUserId required" });
+
+        const { rows: fromUser } = await pool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [req.params.id],
+        );
+        const { rows: toUser } = await pool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [newUserId],
+        );
+        if (!fromUser[0] || !toUser[0])
+          return res.status(404).json({ error: "User not found" });
+
+        const { rows: projects } = await pool.query(
+          "SELECT id, name, tenant_id FROM projects WHERE user_id = $1",
+          [req.params.id],
+        );
+
+        // Reassign all
+        await pool.query(
+          "UPDATE projects SET user_id = $1 WHERE user_id = $2",
+          [newUserId, req.params.id],
+        );
+
+        // Log each reassignment
+        if (req.user) {
+          for (const project of projects) {
+            await logActivity(
+              req.user.userId,
+              req.user.userName,
+              project.tenant_id,
+              "UPDATE",
+              "project",
+              project.name,
+              `Project reassigned from "${fromUser[0].name}" to "${toUser[0].name}" by admin (bulk)`,
+            );
+          }
+        }
+        res.json({ success: true, count: projects.length });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ARCHIVE SALES REP
+  // ══════════════════════════════════════════════════════════════════════════
+
+  app.patch(
+    "/api/users/:id/archive",
+    authenticate,
+    requireRole("tenant_admin", "platform_admin"),
+    async (req, res) => {
+      try {
+        const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [
+          req.params.id,
+        ]);
+        const targetUser = rows[0];
+        if (!targetUser)
+          return res.status(404).json({ error: "User not found" });
+        if (targetUser.role !== "sales_rep")
+          return res
+            .status(400)
+            .json({ error: "Can only archive sales rep accounts" });
+        if (targetUser.status === "archived")
+          return res.status(400).json({ error: "User is already archived" });
+
+        // Check if they still have projects
+        const { rows: projectRows } = await pool.query(
+          "SELECT COUNT(*) as count FROM projects WHERE user_id = $1",
+          [req.params.id],
+        );
+        const projectCount = parseInt(projectRows[0].count);
+        if (projectCount > 0) {
+          return res.status(409).json({
+            error: "Cannot archive: this rep still has projects assigned.",
+            projectCount,
+          });
+        }
+
+        await pool.query(
+          "UPDATE users SET status = 'archived', is_active = FALSE WHERE id = $1",
+          [req.params.id],
+        );
+
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName,
+            targetUser.tenant_id,
+            "UPDATE",
+            "sales_rep",
+            targetUser.name,
+            `Sales rep ${targetUser.name} archived by admin`,
+          );
+        }
+        res.json({ success: true });
       } catch (err: any) {
         res.status(500).json({ error: err.message });
       }

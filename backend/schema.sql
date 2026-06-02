@@ -100,5 +100,13 @@ CREATE TABLE IF NOT EXISTS locked_accounts (
   can_unlock_by_roles TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
--- Sales rep active/inactive status (added for activation feature)
+-- User status: active | inactive | archived
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+-- Migrate existing is_active values into status (safe to run multiple times)
+UPDATE users SET status = 'inactive' WHERE is_active = FALSE AND (status IS NULL OR status = 'active');
+UPDATE users SET status = 'active' WHERE status IS NULL;
+
+-- Fix FK constraints to allow user deletion without breaking projects
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_user_id_fkey;
+ALTER TABLE projects ADD CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
