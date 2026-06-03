@@ -34,6 +34,8 @@ import {
   ChevronDown,
   Lock,
   Archive,
+  Share2,
+  ShieldAlert,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { clsx } from "clsx";
@@ -898,30 +900,50 @@ export function AdminDashboard({
                             log.action === "CREATE" &&
                               "bg-emerald-500/20 text-emerald-400",
                             log.action === "UPDATE" &&
+                              !log.details
+                                ?.toLowerCase()
+                                .includes("archived") &&
                               "bg-blue-500/20 text-blue-400",
+                            log.action === "UPDATE" &&
+                              log.details?.toLowerCase().includes("archived") &&
+                              "bg-amber-500/20 text-amber-400",
                             log.action === "DELETE" &&
                               "bg-red-500/20 text-red-400",
                             log.action === "LOGIN" &&
                               "bg-brand-teal/20 text-brand-teal",
+                            log.action === "LOGIN_FAILED" &&
+                              "bg-red-500/20 text-red-400",
                             log.action === "SAVE" &&
                               "bg-purple-500/20 text-purple-400",
                             log.action === "REQUEST" &&
                               "bg-amber-500/20 text-amber-400",
                             log.action === "RESOLVE" &&
                               "bg-emerald-500/20 text-emerald-400",
+                            log.action === "SHARE" &&
+                              "bg-sky-500/20 text-sky-400",
                           )}
                         >
                           {log.action === "CREATE" && (
                             <Plus className="w-4 h-4" />
                           )}
-                          {log.action === "UPDATE" && (
-                            <Pencil className="w-4 h-4" />
-                          )}
+                          {log.action === "UPDATE" &&
+                            !log.details
+                              ?.toLowerCase()
+                              .includes("archived") && (
+                              <Pencil className="w-4 h-4" />
+                            )}
+                          {log.action === "UPDATE" &&
+                            log.details?.toLowerCase().includes("archived") && (
+                              <Archive className="w-4 h-4" />
+                            )}
                           {log.action === "DELETE" && (
                             <Trash2 className="w-4 h-4" />
                           )}
                           {log.action === "LOGIN" && (
                             <UserIcon className="w-4 h-4" />
+                          )}
+                          {log.action === "LOGIN_FAILED" && (
+                            <ShieldAlert className="w-4 h-4" />
                           )}
                           {log.action === "SAVE" && (
                             <ShieldCheck className="w-4 h-4" />
@@ -931,6 +953,9 @@ export function AdminDashboard({
                           )}
                           {log.action === "RESOLVE" && (
                             <ShieldCheck className="w-4 h-4" />
+                          )}
+                          {log.action === "SHARE" && (
+                            <Share2 className="w-4 h-4" />
                           )}
                         </div>
 
@@ -943,20 +968,37 @@ export function AdminDashboard({
                                   log.action === "CREATE" &&
                                     "bg-emerald-500/20 text-emerald-400",
                                   log.action === "UPDATE" &&
+                                    !log.details
+                                      ?.toLowerCase()
+                                      .includes("archived") &&
                                     "bg-blue-500/20 text-blue-400",
+                                  log.action === "UPDATE" &&
+                                    log.details
+                                      ?.toLowerCase()
+                                      .includes("archived") &&
+                                    "bg-amber-500/20 text-amber-400",
                                   log.action === "DELETE" &&
                                     "bg-red-500/20 text-red-400",
                                   log.action === "LOGIN" &&
                                     "bg-brand-teal/20 text-brand-teal",
+                                  log.action === "LOGIN_FAILED" &&
+                                    "bg-red-500/20 text-red-400",
                                   log.action === "SAVE" &&
                                     "bg-purple-500/20 text-purple-400",
                                   log.action === "REQUEST" &&
                                     "bg-amber-500/20 text-amber-400",
                                   log.action === "RESOLVE" &&
                                     "bg-emerald-500/20 text-emerald-400",
+                                  log.action === "SHARE" &&
+                                    "bg-sky-500/20 text-sky-400",
                                 )}
                               >
-                                {log.action}
+                                {log.action === "UPDATE" &&
+                                log.details?.toLowerCase().includes("archived")
+                                  ? "ARCHIVE"
+                                  : log.action === "LOGIN_FAILED"
+                                    ? "FAILED LOGIN"
+                                    : log.action}
                               </span>
                               <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/5 text-white/40">
                                 {log.entity_type.replace("_", " ")}
@@ -1165,30 +1207,78 @@ function OverviewTab({
               </p>
             </div>
           ) : (
-            recentLogs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-brand-teal/10 rounded-lg flex items-center justify-center">
-                    <Box className="w-5 h-5 text-brand-teal" />
+            recentLogs.map((log) => {
+              const isArchive =
+                log.action === "UPDATE" &&
+                log.details?.toLowerCase().includes("archived");
+              const iconBg = clsx(
+                "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                log.action === "CREATE" && "bg-emerald-500/20 text-emerald-400",
+                log.action === "UPDATE" &&
+                  !isArchive &&
+                  "bg-blue-500/20 text-blue-400",
+                isArchive && "bg-amber-500/20 text-amber-400",
+                log.action === "DELETE" && "bg-red-500/20 text-red-400",
+                log.action === "LOGIN" && "bg-brand-teal/20 text-brand-teal",
+                log.action === "LOGIN_FAILED" && "bg-red-500/20 text-red-400",
+                log.action === "SAVE" && "bg-purple-500/20 text-purple-400",
+                log.action === "REQUEST" && "bg-amber-500/20 text-amber-400",
+                log.action === "RESOLVE" &&
+                  "bg-emerald-500/20 text-emerald-400",
+                log.action === "SHARE" && "bg-sky-500/20 text-sky-400",
+              );
+              return (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={iconBg}>
+                      {log.action === "CREATE" && <Plus className="w-5 h-5" />}
+                      {log.action === "UPDATE" && !isArchive && (
+                        <Pencil className="w-5 h-5" />
+                      )}
+                      {isArchive && <Archive className="w-5 h-5" />}
+                      {log.action === "DELETE" && (
+                        <Trash2 className="w-5 h-5" />
+                      )}
+                      {log.action === "LOGIN" && (
+                        <UserIcon className="w-5 h-5" />
+                      )}
+                      {log.action === "LOGIN_FAILED" && (
+                        <ShieldAlert className="w-5 h-5" />
+                      )}
+                      {log.action === "SAVE" && (
+                        <ShieldCheck className="w-5 h-5" />
+                      )}
+                      {log.action === "REQUEST" && (
+                        <KeyRound className="w-5 h-5" />
+                      )}
+                      {log.action === "RESOLVE" && (
+                        <ShieldCheck className="w-5 h-5" />
+                      )}
+                      {log.action === "SHARE" && <Share2 className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        {getLogEntityDisplayName(log, equipment)}
+                      </p>
+                      <p className="text-[10px] opacity-40 uppercase tracking-widest">
+                        {isArchive
+                          ? "ARCHIVE"
+                          : log.action === "LOGIN_FAILED"
+                            ? "FAILED LOGIN"
+                            : log.entity_type
+                              ? log.entity_type.replace("_", " ")
+                              : log.action}
+                        {log.user_name ? ` · by ${log.user_name}` : ""}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">
-                      {getLogEntityDisplayName(log, equipment)}
-                    </p>
-                    <p className="text-[10px] opacity-40 uppercase tracking-widest">
-                      {log.entity_type
-                        ? log.entity_type.replace("_", " ")
-                        : log.action}
-                      {log.user_name ? ` · by ${log.user_name}` : ""}
-                    </p>
-                  </div>
+                  <ChevronRight className="w-4 h-4 opacity-20" />
                 </div>
-                <ChevronRight className="w-4 h-4 opacity-20" />
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
