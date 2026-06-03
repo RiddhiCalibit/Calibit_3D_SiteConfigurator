@@ -22,6 +22,7 @@ import {
   Trash2,
   KeyRound,
   Lock,
+  Archive,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { clsx } from "clsx";
@@ -715,19 +716,19 @@ function OverviewTab({
         <StatCard
           label="Total Organizations"
           value={stats.tenants.toString()}
-          trend="+2 this month"
+          trend={`+${stats.tenants.toString()} this month`}
           icon={<Building2 className="w-5 h-5" />}
         />
         <StatCard
           label="Active Users"
           value={stats.users.toString()}
-          trend="+14% vs LY"
+          trend={`+${stats.users.toString()} vs LY`}
           icon={<Users className="w-5 h-5" />}
         />
         <StatCard
           label="Global Projects"
           value={stats.projects.toString()}
-          trend="+45 new"
+          trend={`+${stats.projects.toString()} new projects`}
           icon={<Activity className="w-5 h-5" />}
         />
       </div>
@@ -1257,10 +1258,31 @@ function UsersTab({ tenants, users }: { tenants: Tenant[]; users: any[] }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded text-[8px] font-bold uppercase tracking-widest">
-                        <div className="w-1 h-1 bg-emerald-500 rounded-full" />
-                        Active
-                      </div>
+                      {(() => {
+                        const status =
+                          u.status ??
+                          (u.is_active === false ? "inactive" : "active");
+                        if (status === "archived")
+                          return (
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-[8px] font-bold uppercase tracking-widest">
+                              <Archive className="w-3 h-3" />
+                              Archived
+                            </div>
+                          );
+                        if (status === "inactive")
+                          return (
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 text-red-400 rounded text-[8px] font-bold uppercase tracking-widest">
+                              <div className="w-1 h-1 bg-red-400 rounded-full" />
+                              Inactive
+                            </div>
+                          );
+                        return (
+                          <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded text-[8px] font-bold uppercase tracking-widest">
+                            <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+                            Active
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))

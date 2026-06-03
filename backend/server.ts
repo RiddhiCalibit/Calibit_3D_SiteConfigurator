@@ -1613,7 +1613,9 @@ async function startServer() {
     async (req, res) => {
       const [tenantRes, userRes, projectRes] = await Promise.all([
         pool.query("SELECT count(*) as count FROM tenants"),
-        pool.query("SELECT count(*) as count FROM users"),
+        pool.query(
+          "SELECT count(*) as count FROM users WHERE status != 'archived' OR status IS NULL",
+        ),
         pool.query("SELECT count(*) as count FROM projects"),
       ]);
       res.json({
@@ -1630,7 +1632,8 @@ async function startServer() {
     requireRole("platform_admin"),
     async (req, res) => {
       const { rows } = await pool.query(`
-      SELECT u.id, u.tenant_id, u.email, u.role, u.name, u.phone, t.name as tenant_name
+      SELECT u.id, u.tenant_id, u.email, u.role, u.name, u.phone,
+             u.is_active, u.status, t.name as tenant_name
       FROM users u
       LEFT JOIN tenants t ON u.tenant_id = t.id
     `);
@@ -1656,6 +1659,50 @@ async function startServer() {
   // ══════════════════════════════════════════════════════════════════════════
   // PROJECT ROUTES
   // ══════════════════════════════════════════════════════════════════════════
+
+  // app.get('/api/projects', authenticate, async (req, res) => {
+  //   if (!req.user || (req.user.tenantId !== req.query.tenantId && req.user.role !== 'platform_admin')) {
+  //     return res.status(403).json({ error: 'Access denied' });
+  //   }
+  //   const { rows } = await pool.query(
+  //     'SELECT * FROM projects WHERE tenant_id = $1 ORDER BY created_at DESC',
+  //     [req.query.tenantId]
+  //   );
+  //   res.json(rows);
+  // });
+
+  // app.post('/api/projects', authenticate, async (req, res) => {
+  //   const { id, tenant_id, user_id, name, data } = req.body;
+  //   await pool.query(
+  //     'INSERT INTO projects (id, tenant_id, user_id, name, data) VALUES ($1, $2, $3, $4, $5)',
+  //     [id, tenant_id, user_id, name, JSON.stringify(data)]
+  //   );
+  //   if (req.user) {
+  //     await logActivity(req.user.userId, req.user.userName || 'User', tenant_id, 'SAVE', 'project', name, 'Project saved');
+  //   }
+  //   res.json({ success: true });
+  // });
+
+  // // 1. Get projects for a specific sales rep (for their own list)
+  // //GET /api/projects?tenantId=x&userId=x
+
+  // // 2. Update existing project (for edit/re-save)
+  // //PUT /api/projects/:id
+
+  // // 3. Delete a project
+  // //DELETE /api/projects/:id
+
+  // // 4. Generate share token for a project
+  // //POST /api/projects/:id/share
+
+  // // 5. Load a project via share token (public, no auth)
+  // //GET /api/projects/shared/:token
+
+  // // 6. Project stats per sales rep (for Tenant Admin)
+  // //GET /api/tenant/:tenantId/project-stats
+
+  // // 7. Active projects count (modified in last 5 days)
+  // //GET /api/tenant/:tenantId/active-projects
 
   // GET all projects for a tenant (sales rep sees only their own)
   app.get("/api/projects", authenticate, async (req, res) => {
