@@ -554,6 +554,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <p className="text-[10px] opacity-40 font-mono">
                     {formatDimensions(item.width, item.depth, item.height)}
                   </p>
+                  <p className="text-[10px] text-amber-400/70 font-mono">
+                    ⚠ zone {item.width + 3}×{item.depth + 3}m
+                  </p>
                 </div>
               </button>
             ))}
@@ -584,6 +587,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   °
                 </div>
               </div>
+              {selectedDef && (
+                <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                  <span className="text-amber-400 text-[10px]">⚠</span>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    Safe zone: {selectedDef.width + 3} × {selectedDef.depth + 3}{" "}
+                    × {selectedDef.height + 3} m
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Color Picker */}

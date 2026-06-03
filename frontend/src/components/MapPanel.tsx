@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import MapboxDraw from '@mapbox/mapbox-gl-draw';
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
-import { AppState, DEFAULT_LIBRARY } from '../../../backend/types';
-import * as turf from '@turf/turf';
-import { metresToLngLat, lngLatToMetres } from '../utils/geo';
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
+import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
+import { AppState, DEFAULT_LIBRARY } from "../../../backend/types";
+import * as turf from "@turf/turf";
+import { metresToLngLat, lngLatToMetres } from "../utils/geo";
 
 interface MapPanelProps {
   state: AppState;
@@ -61,46 +61,56 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   });
 
   const setupLayers = useCallback((map: mapboxgl.Map) => {
-    if (!map.getSource('measure-line')) {
-      map.addSource('measure-line', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
+    if (!map.getSource("measure-line")) {
+      map.addSource("measure-line", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
       });
       map.addLayer({
-        id: 'measure-line-layer',
-        type: 'line',
-        source: 'measure-line',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#2E8B7A', 'line-width': 3, 'line-dasharray': [2, 1] }
+        id: "measure-line-layer",
+        type: "line",
+        source: "measure-line",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#2E8B7A",
+          "line-width": 3,
+          "line-dasharray": [2, 1],
+        },
       });
     }
 
-    if (!map.getSource('boundary-readonly')) {
-      map.addSource('boundary-readonly', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
+    if (!map.getSource("boundary-readonly")) {
+      map.addSource("boundary-readonly", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
       });
       map.addLayer({
-        id: 'boundary-readonly-fill',
-        type: 'fill',
-        source: 'boundary-readonly',
-        paint: { 'fill-color': '#2E8B7A', 'fill-opacity': 0.1 }
+        id: "boundary-readonly-fill",
+        type: "fill",
+        source: "boundary-readonly",
+        paint: { "fill-color": "#2E8B7A", "fill-opacity": 0.1 },
       });
       map.addLayer({
-        id: 'boundary-readonly-stroke',
-        type: 'line',
-        source: 'boundary-readonly',
-        paint: { 'line-color': '#2E8B7A', 'line-width': 2 }
+        id: "boundary-readonly-stroke",
+        type: "line",
+        source: "boundary-readonly",
+        paint: { "line-color": "#2E8B7A", "line-width": 2 },
       });
     }
 
     // Add 3D buildings layer
-    if (!map.getLayer('3d-buildings') && callbacks.current.state.mapStyle === 'streets') {
+    if (
+      !map.getLayer("3d-buildings") &&
+      callbacks.current.state.mapStyle === "streets"
+    ) {
       const layers = map.getStyle().layers;
       let labelLayerId;
       if (layers) {
         for (let i = 0; i < layers.length; i++) {
-          if (layers[i].type === 'symbol' && (layers[i].layout as any)?.['text-field']) {
+          if (
+            layers[i].type === "symbol" &&
+            (layers[i].layout as any)?.["text-field"]
+          ) {
             labelLayerId = layers[i].id;
             break;
           }
@@ -109,125 +119,183 @@ export const MapPanel: React.FC<MapPanelProps> = ({
 
       map.addLayer(
         {
-          'id': '3d-buildings',
-          'source': 'composite',
-          'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'],
-          'type': 'fill-extrusion',
-          'minzoom': 15,
-          'paint': {
-            'fill-extrusion-color': '#aaa',
-            'fill-extrusion-height': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
+          id: "3d-buildings",
+          source: "composite",
+          "source-layer": "building",
+          filter: ["==", "extrude", "true"],
+          type: "fill-extrusion",
+          minzoom: 15,
+          paint: {
+            "fill-extrusion-color": "#aaa",
+            "fill-extrusion-height": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
               15,
               0,
               15.05,
-              ['get', 'height']
+              ["get", "height"],
             ],
-            'fill-extrusion-base': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
+            "fill-extrusion-base": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
               15,
               0,
               15.05,
-              ['get', 'min_height']
+              ["get", "min_height"],
             ],
-            'fill-extrusion-opacity': 0.6
-          }
+            "fill-extrusion-opacity": 0.6,
+          },
         },
-        labelLayerId
+        labelLayerId,
       );
     }
 
-    if (!map.getSource('equipment')) {
-      map.addSource('equipment', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-        promoteId: 'id'
+    if (!map.getSource("equipment")) {
+      map.addSource("equipment", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+        promoteId: "id",
       });
       map.addLayer({
-        id: 'equipment-layer',
-        type: 'fill-extrusion',
-        source: 'equipment',
-        filter: ['!', ['has', 'model-uri']],
+        id: "equipment-layer",
+        type: "fill-extrusion",
+        source: "equipment",
+        filter: ["!", ["has", "model-uri"]],
         paint: {
-          'fill-extrusion-color': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            '#ffffff',
-            ['get', 'color']
+          "fill-extrusion-color": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false],
+            "#ffffff",
+            ["get", "color"],
           ],
-          'fill-extrusion-height': ['get', 'height'],
-          'fill-extrusion-base': 0,
-          'fill-extrusion-opacity': 0.8
-        }
+          "fill-extrusion-height": ["get", "height"],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 0.8,
+        },
       });
 
       // Model layer
       map.addLayer({
-        id: 'equipment-model-layer',
-        type: 'model',
-        source: 'equipment',
-        filter: ['has', 'model-uri'],
+        id: "equipment-model-layer",
+        type: "model",
+        source: "equipment",
+        filter: ["has", "model-uri"],
         layout: {
-          'model-id': ['get', 'model-uri']
+          "model-id": ["get", "model-uri"],
         },
         paint: {
-          'model-rotation': [0, 0, ['get', 'rotation']],
-          'model-scale': [1, 1, 1],
-          'model-type': 'common-3d',
-          'model-animations': [
-            'case',
-            ['has', 'animations'],
-            ['get', 'animations'],
-            ['literal', []]
-          ]
-        } as any
+          "model-rotation": [0, 0, ["get", "rotation"]],
+          "model-scale": [1, 1, 1],
+          "model-type": "common-3d",
+          "model-animations": [
+            "case",
+            ["has", "animations"],
+            ["get", "animations"],
+            ["literal", []],
+          ],
+        } as any,
       });
     }
 
-    if (!map.getSource('ghost-box')) {
-      map.addSource('ghost-box', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
+    if (!map.getSource("ghost-box")) {
+      map.addSource("ghost-box", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
       });
       map.addLayer({
-        id: 'ghost-box-layer',
-        type: 'fill-extrusion',
-        source: 'ghost-box',
-        filter: ['!', ['has', 'model-uri']],
+        id: "ghost-box-layer",
+        type: "fill-extrusion",
+        source: "ghost-box",
+        filter: ["!", ["has", "model-uri"]],
         paint: {
-          'fill-extrusion-color': ['get', 'color'],
-          'fill-extrusion-height': ['get', 'height'],
-          'fill-extrusion-base': 0,
-          'fill-extrusion-opacity': 0.4
-        }
+          "fill-extrusion-color": ["get", "color"],
+          "fill-extrusion-height": ["get", "height"],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 0.4,
+        },
       });
 
       // Ghost model layer
       map.addLayer({
-        id: 'ghost-model-layer',
-        type: 'model',
-        source: 'ghost-box',
-        filter: ['has', 'model-uri'],
+        id: "ghost-model-layer",
+        type: "model",
+        source: "ghost-box",
+        filter: ["has", "model-uri"],
         layout: {
-          'model-id': ['get', 'model-uri']
+          "model-id": ["get", "model-uri"],
         },
         paint: {
-          'model-rotation': [0, 0, 0],
-          'model-scale': [1, 1, 1],
-          'model-type': 'common-3d',
-          'model-opacity': 0.4,
-          'model-animations': [
-            'case',
-            ['has', 'animations'],
-            ['get', 'animations'],
-            ['literal', []]
-          ]
-        } as any
+          "model-rotation": [0, 0, 0],
+          "model-scale": [1, 1, 1],
+          "model-type": "common-3d",
+          "model-opacity": 0.4,
+          "model-animations": [
+            "case",
+            ["has", "animations"],
+            ["get", "animations"],
+            ["literal", []],
+          ],
+        } as any,
+      });
+    }
+
+    // ── Safe zone layers (shown only while placing equipment) ──────────────
+    if (!map.getSource("safe-zones")) {
+      map.addSource("safe-zones", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      // Amber fill — safe zone area of each placed equipment
+      map.addLayer({
+        id: "safe-zone-fill",
+        type: "fill",
+        source: "safe-zones",
+        paint: {
+          "fill-color": "#f59e0b",
+          "fill-opacity": 0.08,
+        },
+      });
+      // Amber dashed outline
+      map.addLayer({
+        id: "safe-zone-outline",
+        type: "line",
+        source: "safe-zones",
+        paint: {
+          "line-color": "#f59e0b",
+          "line-width": 1.5,
+          "line-dasharray": [3, 2],
+          "line-opacity": 0.6,
+        },
+      });
+    }
+
+    if (!map.getSource("safe-zone-violations")) {
+      map.addSource("safe-zone-violations", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      // Red fill for violated safe zones
+      map.addLayer({
+        id: "safe-zone-violation-fill",
+        type: "fill",
+        source: "safe-zone-violations",
+        paint: {
+          "fill-color": "#ef4444",
+          "fill-opacity": 0.18,
+        },
+      });
+      // Bold red outline for violated safe zones
+      map.addLayer({
+        id: "safe-zone-violation-outline",
+        type: "line",
+        source: "safe-zone-violations",
+        paint: {
+          "line-color": "#ef4444",
+          "line-width": 3,
+          "line-opacity": 1,
+        },
       });
     }
   }, []);
@@ -237,7 +305,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       mapRef.current.flyTo({
         center: [targetLocation.lng, targetLocation.lat],
         zoom: targetLocation.zoom || 18,
-        essential: true
+        essential: true,
       });
     }
   }, [targetLocation]);
@@ -255,7 +323,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
+      style: "mapbox://styles/mapbox/streets-v12",
       center: [73.8567, 18.5204], // Pune, India
       zoom: 16,
       pitch: 0,
@@ -267,69 +335,83 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       displayControlsDefault: false,
       controls: {
         polygon: true,
-        trash: true
+        trash: true,
       },
-      defaultMode: 'simple_select'
+      defaultMode: "simple_select",
     });
 
     map.addControl(draw);
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
-    map.on('style.load', () => {
+    map.on("style.load", () => {
       setupLayers(map);
     });
 
-    map.on('load', () => {
+    map.on("load", () => {
       mapRef.current = map;
       drawRef.current = draw;
       setupLayers(map);
     });
 
-    map.on('draw.create', (e: any) => {
+    map.on("draw.create", (e: any) => {
       const feature = e.features[0];
-      if (feature.geometry.type === 'Polygon') {
-        callbacks.current.onBoundaryChange(feature.geometry.coordinates[0] as [number, number][]);
+      if (feature.geometry.type === "Polygon") {
+        callbacks.current.onBoundaryChange(
+          feature.geometry.coordinates[0] as [number, number][],
+        );
       }
     });
 
-    map.on('draw.update', (e: any) => {
+    map.on("draw.update", (e: any) => {
       const feature = e.features[0];
-      if (feature.geometry.type === 'Polygon') {
-        callbacks.current.onBoundaryChange(feature.geometry.coordinates[0] as [number, number][]);
+      if (feature.geometry.type === "Polygon") {
+        callbacks.current.onBoundaryChange(
+          feature.geometry.coordinates[0] as [number, number][],
+        );
       }
     });
 
-    map.on('draw.delete', () => {
+    map.on("draw.delete", () => {
       callbacks.current.onBoundaryChange([]);
     });
 
-    map.on('mousemove', (e) => {
+    map.on("mousemove", (e) => {
       setHoverCoords([e.lngLat.lng, e.lngLat.lat]);
       callbacks.current.onMapMove(e);
-      
-      if (!map.getLayer('equipment-layer')) return;
 
-      const features = map.queryRenderedFeatures(e.point, { layers: ['equipment-layer', 'equipment-model-layer'] });
-      map.getCanvas().style.cursor = features.length > 0 ? 'pointer' : '';
+      if (!map.getLayer("equipment-layer")) return;
+
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["equipment-layer", "equipment-model-layer"],
+      });
+      map.getCanvas().style.cursor = features.length > 0 ? "pointer" : "";
 
       if (draggingIdRef.current && callbacks.current.state.originLngLat) {
-        const { x, z } = lngLatToMetres([e.lngLat.lng, e.lngLat.lat], callbacks.current.state.originLngLat);
+        const { x, z } = lngLatToMetres(
+          [e.lngLat.lng, e.lngLat.lat],
+          callbacks.current.state.originLngLat,
+        );
         const snappedX = Math.round(x * 2) / 2;
         const snappedZ = Math.round(z * 2) / 2;
-        callbacks.current.onObjectUpdate(draggingIdRef.current, { x: snappedX, z: snappedZ });
+        callbacks.current.onObjectUpdate(draggingIdRef.current, {
+          x: snappedX,
+          z: snappedZ,
+        });
       }
     });
-    
+
     // Use mousedown instead of click for more reliable placement and dragging
-    map.on('mousedown', (e) => {
-      if (!map.getLayer('equipment-layer')) {
+    map.on("mousedown", (e) => {
+      if (!map.getLayer("equipment-layer")) {
         callbacks.current.onMapClick(e);
         return;
       }
 
-      const features = map.queryRenderedFeatures(e.point, { layers: ['equipment-layer', 'equipment-model-layer'] });
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["equipment-layer", "equipment-model-layer"],
+      });
       if (features.length > 0) {
-        const id = features[0].id as string || features[0].properties?.id;
+        const id = (features[0].id as string) || features[0].properties?.id;
         callbacks.current.onObjectSelect(id);
         draggingIdRef.current = id;
         map.dragPan.disable();
@@ -341,19 +423,19 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       }
     });
 
-    map.on('mouseup', () => {
+    map.on("mouseup", () => {
       draggingIdRef.current = null;
       map.dragPan.enable();
     });
-    
+
     const updateCamera = () => {
       if (!mapRef.current) return;
     };
 
-    map.on('move', updateCamera);
-    map.on('zoom', updateCamera);
-    map.on('pitch', updateCamera);
-    map.on('rotate', updateCamera);
+    map.on("move", updateCamera);
+    map.on("zoom", updateCamera);
+    map.on("pitch", updateCamera);
+    map.on("rotate", updateCamera);
 
     return () => {
       map.remove();
@@ -364,99 +446,228 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   useEffect(() => {
     if (!mapRef.current || !state.originLngLat) return;
     const map = mapRef.current;
-    const source = map.getSource('equipment') as mapboxgl.GeoJSONSource;
+    const source = map.getSource("equipment") as mapboxgl.GeoJSONSource;
     if (!source) return;
 
-    const features = state.objects.map(obj => {
-      const def = DEFAULT_LIBRARY.find(d => d.id === obj.type) ?? state.customLibrary.find(d => d.id === obj.type);
-      if (!def) return null;
+    const features = state.objects
+      .map((obj) => {
+        const def =
+          DEFAULT_LIBRARY.find((d) => d.id === obj.type) ??
+          state.customLibrary.find((d) => d.id === obj.type);
+        if (!def) return null;
 
-      const lngLat = metresToLngLat(obj.x, obj.z, state.originLngLat!);
+        const lngLat = metresToLngLat(obj.x, obj.z, state.originLngLat!);
 
-      // If model is available, use point geometry for model layer
-      if (def.modelUrl) {
-        // Register model if not already registered
-        if (!map.hasModel(def.modelUrl)) {
-          map.addModel(def.modelUrl, def.modelUrl);
+        // If model is available, use point geometry for model layer
+        if (def.modelUrl) {
+          // Register model if not already registered
+          if (!map.hasModel(def.modelUrl)) {
+            map.addModel(def.modelUrl, def.modelUrl);
+          }
+
+          return {
+            type: "Feature",
+            id: obj.id,
+            geometry: {
+              type: "Point",
+              coordinates: [lngLat[0], lngLat[1]],
+            },
+            properties: {
+              id: obj.id,
+              color: obj.color || def.color,
+              height: def.height,
+              "model-uri": def.modelUrl,
+              rotation: (obj.rotationY * 180) / Math.PI, // Mapbox model rotation is in degrees
+              animations: def.animationsEnabled
+                ? [{ name: "*", state: "play" }]
+                : [],
+            },
+          };
         }
 
+        // Fallback to box polygon for fill-extrusion
+        const halfW = def.width / 2;
+        const halfD = def.depth / 2;
+
+        const cornersMetres = [
+          { x: -halfW, z: -halfD },
+          { x: halfW, z: -halfD },
+          { x: halfW, z: halfD },
+          { x: -halfW, z: halfD },
+          { x: -halfW, z: -halfD },
+        ];
+
+        const rotatedCorners = cornersMetres.map((c) => {
+          const rx =
+            c.x * Math.cos(obj.rotationY) - c.z * Math.sin(obj.rotationY);
+          const rz =
+            c.x * Math.sin(obj.rotationY) + c.z * Math.cos(obj.rotationY);
+          return metresToLngLat(obj.x + rx, obj.z + rz, state.originLngLat!);
+        });
+
         return {
-          type: 'Feature',
+          type: "Feature",
           id: obj.id,
           geometry: {
-            type: 'Point',
-            coordinates: [lngLat[0], lngLat[1]]
+            type: "Polygon",
+            coordinates: [rotatedCorners],
           },
           properties: {
             id: obj.id,
             color: obj.color || def.color,
             height: def.height,
-            'model-uri': def.modelUrl,
-            rotation: (obj.rotationY * 180 / Math.PI), // Mapbox model rotation is in degrees
-            animations: def.animationsEnabled ? [{ name: '*', state: 'play' }] : []
-          }
+          },
         };
-      }
-
-      // Fallback to box polygon for fill-extrusion
-      const halfW = def.width / 2;
-      const halfD = def.depth / 2;
-      
-      const cornersMetres = [
-        { x: -halfW, z: -halfD },
-        { x: halfW, z: -halfD },
-        { x: halfW, z: halfD },
-        { x: -halfW, z: halfD },
-        { x: -halfW, z: -halfD }
-      ];
-
-      const rotatedCorners = cornersMetres.map(c => {
-        const rx = c.x * Math.cos(obj.rotationY) - c.z * Math.sin(obj.rotationY);
-        const rz = c.x * Math.sin(obj.rotationY) + c.z * Math.cos(obj.rotationY);
-        return metresToLngLat(obj.x + rx, obj.z + rz, state.originLngLat!);
-      });
-
-      return {
-        type: 'Feature',
-        id: obj.id,
-        geometry: {
-          type: 'Polygon',
-          coordinates: [rotatedCorners]
-        },
-        properties: {
-          id: obj.id,
-          color: obj.color || def.color,
-          height: def.height
-        }
-      };
-    }).filter(f => f !== null);
+      })
+      .filter((f) => f !== null);
 
     source.setData({
-      type: 'FeatureCollection',
-      features: features as any
+      type: "FeatureCollection",
+      features: features as any,
     });
 
     // Update feature state for selection highlight
-    state.objects.forEach(obj => {
+    state.objects.forEach((obj) => {
       map.setFeatureState(
-        { source: 'equipment', id: obj.id },
-        { selected: state.selectedId === obj.id }
+        { source: "equipment", id: obj.id },
+        { selected: state.selectedId === obj.id },
       );
     });
   }, [state.objects, state.originLngLat, state.selectedId, state.mapStyle]);
 
+  // ── Helper: build a safe-zone polygon for an equipment at (cx, cz) ──────
+  const buildSafeZonePolygon = (
+    cx: number,
+    cz: number,
+    width: number,
+    depth: number,
+    rotationY: number,
+    origin: [number, number],
+  ) => {
+    const SAFE = 1.5; // 1.5m each side = +3m total per dimension
+    const hw = (width + SAFE * 2) / 2;
+    const hd = (depth + SAFE * 2) / 2;
+    const corners = [
+      { x: -hw, z: -hd },
+      { x: hw, z: -hd },
+      { x: hw, z: hd },
+      { x: -hw, z: hd },
+      { x: -hw, z: -hd },
+    ].map((c) => {
+      const rx = c.x * Math.cos(rotationY) - c.z * Math.sin(rotationY);
+      const rz = c.x * Math.sin(rotationY) + c.z * Math.cos(rotationY);
+      return metresToLngLat(cx + rx, cz + rz, origin);
+    });
+    return corners;
+  };
+
+  // ── Sync safe-zone layers whenever pendingPlacement or hoverCoords changes ──
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    const safeSource = map.getSource("safe-zones") as mapboxgl.GeoJSONSource;
+    const violSource = map.getSource(
+      "safe-zone-violations",
+    ) as mapboxgl.GeoJSONSource;
+    if (!safeSource || !violSource) return;
+
+    // Clear both layers when nothing is being placed
+    if (!state.pendingPlacement || !state.originLngLat || !hoverCoords) {
+      safeSource.setData({ type: "FeatureCollection", features: [] });
+      violSource.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+
+    const origin = state.originLngLat;
+    const allDefs = [...DEFAULT_LIBRARY, ...(state.customLibrary || [])];
+
+    // Build safe-zone polygon for every already-placed equipment
+    const safeFeatures = state.objects
+      .map((obj) => {
+        const def = allDefs.find((d) => d.id === obj.type);
+        if (!def) return null;
+        const ring = buildSafeZonePolygon(
+          obj.x,
+          obj.z,
+          def.width,
+          def.depth,
+          obj.rotationY,
+          origin,
+        );
+        return {
+          type: "Feature" as const,
+          geometry: { type: "Polygon" as const, coordinates: [ring] },
+          properties: { id: obj.id },
+        };
+      })
+      .filter(Boolean);
+
+    safeSource.setData({
+      type: "FeatureCollection",
+      features: safeFeatures as any,
+    });
+
+    // Ghost footprint of the equipment being placed
+    const { x, z } = lngLatToMetres(hoverCoords, origin);
+    const ghostX = Math.round(x * 2) / 2;
+    const ghostZ = Math.round(z * 2) / 2;
+    const def = state.pendingPlacement;
+    const ghw = def.width / 2;
+    const ghd = def.depth / 2;
+    const ghostCorners = [
+      { x: -ghw, z: -ghd },
+      { x: ghw, z: -ghd },
+      { x: ghw, z: ghd },
+      { x: -ghw, z: ghd },
+      { x: -ghw, z: -ghd },
+    ].map((c) => metresToLngLat(ghostX + c.x, ghostZ + c.z, origin));
+
+    const ghostPolygon = turf.polygon([ghostCorners]);
+
+    // Find any safe zone that the ghost footprint overlaps
+    const violations = safeFeatures.filter((f) => {
+      if (!f) return false;
+      try {
+        return turf.booleanIntersects(
+          ghostPolygon,
+          turf.polygon([(f as any).geometry.coordinates[0]]),
+        );
+      } catch {
+        return false;
+      }
+    });
+
+    violSource.setData({
+      type: "FeatureCollection",
+      features: violations as any,
+    });
+  }, [
+    state.pendingPlacement,
+    hoverCoords,
+    state.originLngLat,
+    state.objects,
+    state.customLibrary,
+  ]);
+
   // Sync ghost box
   useEffect(() => {
-    if (!mapRef.current || !state.originLngLat || !state.pendingPlacement || !hoverCoords) {
+    if (
+      !mapRef.current ||
+      !state.originLngLat ||
+      !state.pendingPlacement ||
+      !hoverCoords
+    ) {
       if (mapRef.current) {
-        const source = mapRef.current.getSource('ghost-box') as mapboxgl.GeoJSONSource;
-        if (source) source.setData({ type: 'FeatureCollection', features: [] });
+        const source = mapRef.current.getSource(
+          "ghost-box",
+        ) as mapboxgl.GeoJSONSource;
+        if (source) source.setData({ type: "FeatureCollection", features: [] });
       }
       return;
     }
 
     const map = mapRef.current;
-    const source = map.getSource('ghost-box') as mapboxgl.GeoJSONSource;
+    const source = map.getSource("ghost-box") as mapboxgl.GeoJSONSource;
     if (!source) return;
 
     const def = state.pendingPlacement;
@@ -471,20 +682,24 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       }
 
       source.setData({
-        type: 'FeatureCollection',
-        features: [{
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [lngLat[0], lngLat[1]]
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [lngLat[0], lngLat[1]],
+            },
+            properties: {
+              color: def.color,
+              height: def.height,
+              "model-uri": def.modelUrl,
+              animations: def.animationsEnabled
+                ? [{ name: "*", state: "play" }]
+                : [],
+            },
           },
-          properties: {
-            color: def.color,
-            height: def.height,
-            'model-uri': def.modelUrl,
-            animations: def.animationsEnabled ? [{ name: '*', state: 'play' }] : []
-          }
-        }] as any
+        ] as any,
       });
       return;
     }
@@ -496,24 +711,28 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       { x: halfW, z: -halfD },
       { x: halfW, z: halfD },
       { x: -halfW, z: halfD },
-      { x: -halfW, z: -halfD }
+      { x: -halfW, z: -halfD },
     ];
 
-    const cornersLngLat = cornersMetres.map(c => metresToLngLat(snappedX + c.x, snappedZ + c.z, state.originLngLat!));
+    const cornersLngLat = cornersMetres.map((c) =>
+      metresToLngLat(snappedX + c.x, snappedZ + c.z, state.originLngLat!),
+    );
 
     source.setData({
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [cornersLngLat]
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [cornersLngLat],
+          },
+          properties: {
+            color: def.color,
+            height: def.height,
+          },
         },
-        properties: {
-          color: def.color,
-          height: def.height
-        }
-      }] as any
+      ] as any,
     });
   }, [state.pendingPlacement, hoverCoords, state.originLngLat, state.mapStyle]);
 
@@ -523,20 +742,21 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     const map = mapRef.current;
 
     // Clear old markers
-    measureMarkersRef.current.forEach(m => m.remove());
+    measureMarkersRef.current.forEach((m) => m.remove());
     measureMarkersRef.current = [];
     if (measureLineRef.current) measureLineRef.current.remove();
     measureLineRef.current = null;
 
     if (state.measurePoints.length === 0) {
-      const source = map.getSource('measure-line') as mapboxgl.GeoJSONSource;
-      if (source) source.setData({ type: 'FeatureCollection', features: [] });
+      const source = map.getSource("measure-line") as mapboxgl.GeoJSONSource;
+      if (source) source.setData({ type: "FeatureCollection", features: [] });
       return;
     }
 
     state.measurePoints.forEach((pt, i) => {
-      const el = document.createElement('div');
-      el.className = 'w-3 h-3 bg-brand-teal border-2 border-white rounded-full shadow-lg';
+      const el = document.createElement("div");
+      el.className =
+        "w-3 h-3 bg-brand-teal border-2 border-white rounded-full shadow-lg";
       const marker = new mapboxgl.Marker(el).setLngLat(pt).addTo(map);
       measureMarkersRef.current.push(marker);
     });
@@ -544,32 +764,40 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     if (state.measurePoints.length === 2) {
       const p1 = state.measurePoints[0];
       const p2 = state.measurePoints[1];
-      const distMeters = turf.distance(turf.point(p1), turf.point(p2), { units: 'meters' });
-      const midpoint = turf.midpoint(turf.point(p1), turf.point(p2)).geometry.coordinates as [number, number];
+      const distMeters = turf.distance(turf.point(p1), turf.point(p2), {
+        units: "meters",
+      });
+      const midpoint = turf.midpoint(turf.point(p1), turf.point(p2)).geometry
+        .coordinates as [number, number];
 
-      const source = map.getSource('measure-line') as mapboxgl.GeoJSONSource;
+      const source = map.getSource("measure-line") as mapboxgl.GeoJSONSource;
       if (source) {
         source.setData({
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: [p1, p2] },
-            properties: {}
-          }]
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: { type: "LineString", coordinates: [p1, p2] },
+              properties: {},
+            },
+          ],
         });
       }
 
-      const label = document.createElement('div');
-      label.className = 'bg-white text-brand-navy px-2 py-1 rounded shadow-lg text-[10px] font-bold border border-brand-teal';
-      
-      if (state.unitSystem === 'imperial') {
+      const label = document.createElement("div");
+      label.className =
+        "bg-white text-brand-navy px-2 py-1 rounded shadow-lg text-[10px] font-bold border border-brand-teal";
+
+      if (state.unitSystem === "imperial") {
         const distFeet = distMeters * 3.28084;
-        label.innerText = distFeet.toFixed(1) + 'ft';
+        label.innerText = distFeet.toFixed(1) + "ft";
       } else {
-        label.innerText = distMeters.toFixed(1) + 'm';
+        label.innerText = distMeters.toFixed(1) + "m";
       }
-      
-      const labelMarker = new mapboxgl.Marker(label).setLngLat(midpoint).addTo(map);
+
+      const labelMarker = new mapboxgl.Marker(label)
+        .setLngLat(midpoint)
+        .addTo(map);
       measureLineRef.current = labelMarker;
     }
   }, [state.measurePoints, state.unitSystem]);
@@ -577,7 +805,10 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   // Sync style
   useEffect(() => {
     if (!mapRef.current) return;
-    const style = state.mapStyle === 'streets' ? 'mapbox://styles/mapbox/streets-v12' : 'mapbox://styles/mapbox/satellite-v9';
+    const style =
+      state.mapStyle === "streets"
+        ? "mapbox://styles/mapbox/streets-v12"
+        : "mapbox://styles/mapbox/satellite-v9";
     mapRef.current.setStyle(style);
   }, [state.mapStyle]);
 
@@ -589,15 +820,15 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     const handleStyleLoad = () => {
       // Terrain
       if (state.terrainEnabled) {
-        if (!map.getSource('mapbox-dem')) {
-          map.addSource('mapbox-dem', {
-            type: 'raster-dem',
-            url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+        if (!map.getSource("mapbox-dem")) {
+          map.addSource("mapbox-dem", {
+            type: "raster-dem",
+            url: "mapbox://mapbox.mapbox-terrain-dem-v1",
             tileSize: 512,
-            maxzoom: 14
+            maxzoom: 14,
           });
         }
-        map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
+        map.setTerrain({ source: "mapbox-dem", exaggeration: 1.2 });
         map.easeTo({ pitch: 60 });
       } else {
         map.setTerrain(null);
@@ -605,9 +836,13 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       }
 
       // Buildings
-      if (map.getLayer('3d-buildings')) {
-        map.setLayoutProperty('3d-buildings', 'visibility', state.buildingsEnabled ? 'visible' : 'none');
-      } else if (state.buildingsEnabled && state.mapStyle === 'streets') {
+      if (map.getLayer("3d-buildings")) {
+        map.setLayoutProperty(
+          "3d-buildings",
+          "visibility",
+          state.buildingsEnabled ? "visible" : "none",
+        );
+      } else if (state.buildingsEnabled && state.mapStyle === "streets") {
         // If layer missing but enabled, re-run setup
         setupLayers(map);
       }
@@ -616,7 +851,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     if (map.isStyleLoaded()) {
       handleStyleLoad();
     } else {
-      map.once('style.load', handleStyleLoad);
+      map.once("style.load", handleStyleLoad);
     }
   }, [state.terrainEnabled, state.buildingsEnabled, state.mapStyle]);
 
@@ -628,12 +863,14 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     // Origin Marker
     if (originMarkerRef.current) originMarkerRef.current.remove();
     if (state.originLngLat) {
-      const el = document.createElement('div');
-      el.className = 'w-6 h-6 flex items-center justify-center bg-brand-teal rounded-full border-2 border-white shadow-xl animate-pulse';
+      const el = document.createElement("div");
+      el.className =
+        "w-6 h-6 flex items-center justify-center bg-brand-teal rounded-full border-2 border-white shadow-xl animate-pulse";
       el.innerHTML = '<div class="w-2 h-2 bg-white rounded-full"></div>';
-      
-      const popup = new mapboxgl.Popup({ offset: 25 })
-        .setHTML('<div class="text-[10px] font-bold text-brand-navy p-1">BENCHMARK ORIGIN</div>');
+
+      const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(
+        '<div class="text-[10px] font-bold text-brand-navy p-1">BENCHMARK ORIGIN</div>',
+      );
 
       originMarkerRef.current = new mapboxgl.Marker(el)
         .setLngLat(state.originLngLat)
@@ -642,27 +879,32 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     }
 
     if (state.siteBoundary.length < 3) {
-      const source = map.getSource('boundary-readonly') as mapboxgl.GeoJSONSource;
-      if (source) source.setData({ type: 'FeatureCollection', features: [] });
+      const source = map.getSource(
+        "boundary-readonly",
+      ) as mapboxgl.GeoJSONSource;
+      if (source) source.setData({ type: "FeatureCollection", features: [] });
       return;
     }
-    
-    const source = map.getSource('boundary-readonly') as mapboxgl.GeoJSONSource;
+
+    const source = map.getSource("boundary-readonly") as mapboxgl.GeoJSONSource;
     if (!source) return;
 
     // Ensure closed
     const coords = [...state.siteBoundary];
-    if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
+    if (
+      coords[0][0] !== coords[coords.length - 1][0] ||
+      coords[0][1] !== coords[coords.length - 1][1]
+    ) {
       coords.push(coords[0]);
     }
 
     source.setData({
-      type: 'Feature',
+      type: "Feature",
       geometry: {
-        type: 'Polygon',
-        coordinates: [coords]
+        type: "Polygon",
+        coordinates: [coords],
       },
-      properties: {}
+      properties: {},
     } as any);
   }, [state.siteBoundary, state.originLngLat]);
 
@@ -670,31 +912,48 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   useEffect(() => {
     if (!mapRef.current || !drawRef.current) return;
     const map = mapRef.current;
-    const isLocked = !!state.pendingPlacement || isMeasuring || state.isBoundaryLocked;
+    const isLocked =
+      !!state.pendingPlacement || isMeasuring || state.isBoundaryLocked;
 
     if (isLocked) {
-      drawRef.current.changeMode('simple_select');
+      drawRef.current.changeMode("simple_select");
     }
 
     // Toggle visibility of draw layers vs readonly boundary
     const layers = map.getStyle().layers;
     if (layers) {
-      layers.forEach(layer => {
-        if (layer.id.startsWith('gl-draw-')) {
-          map.setLayoutProperty(layer.id, 'visibility', isLocked ? 'none' : 'visible');
+      layers.forEach((layer) => {
+        if (layer.id.startsWith("gl-draw-")) {
+          map.setLayoutProperty(
+            layer.id,
+            "visibility",
+            isLocked ? "none" : "visible",
+          );
         }
       });
     }
 
-    map.setLayoutProperty('boundary-readonly-fill', 'visibility', isLocked ? 'visible' : 'none');
-    map.setLayoutProperty('boundary-readonly-stroke', 'visibility', isLocked ? 'visible' : 'none');
-
-  }, [state.pendingPlacement, isMeasuring, state.isBoundaryLocked, state.siteBoundary]);
+    map.setLayoutProperty(
+      "boundary-readonly-fill",
+      "visibility",
+      isLocked ? "visible" : "none",
+    );
+    map.setLayoutProperty(
+      "boundary-readonly-stroke",
+      "visibility",
+      isLocked ? "visible" : "none",
+    );
+  }, [
+    state.pendingPlacement,
+    isMeasuring,
+    state.isBoundaryLocked,
+    state.siteBoundary,
+  ]);
 
   // Trigger draw mode
   useEffect(() => {
     if (drawTrigger > 0 && drawRef.current) {
-      drawRef.current.changeMode('draw_polygon');
+      drawRef.current.changeMode("draw_polygon");
     }
   }, [drawTrigger]);
 
@@ -704,7 +963,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       mapRef.current.easeTo({
         center: state.originLngLat,
         zoom: 18,
-        duration: 1000
+        duration: 1000,
       });
     }
   }, [state.originLngLat]);
@@ -712,24 +971,29 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   // Sync boundary to Mapbox Draw (for import)
   useEffect(() => {
     if (!drawRef.current || state.siteBoundary.length < 3) return;
-    
+
     const currentFeatures = drawRef.current.getAll().features;
-    const hasPolygon = currentFeatures.some(f => f.geometry.type === 'Polygon');
-    
+    const hasPolygon = currentFeatures.some(
+      (f) => f.geometry.type === "Polygon",
+    );
+
     // Only update if draw tool doesn't have the polygon (e.g. after import)
     if (!hasPolygon) {
       const coords = [...state.siteBoundary];
-      if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
+      if (
+        coords[0][0] !== coords[coords.length - 1][0] ||
+        coords[0][1] !== coords[coords.length - 1][1]
+      ) {
         coords.push(coords[0]);
       }
 
       drawRef.current.add({
-        type: 'Feature',
+        type: "Feature",
         geometry: {
-          type: 'Polygon',
-          coordinates: [coords]
+          type: "Polygon",
+          coordinates: [coords],
         },
-        properties: {}
+        properties: {},
       });
     }
   }, [state.siteBoundary]);
