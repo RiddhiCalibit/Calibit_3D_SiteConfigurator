@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
 
 import fs from "fs";
 dotenv.config();
@@ -267,7 +269,8 @@ async function startServer() {
     next();
   });
 
-  const PORT = 3000;
+  // const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || "3000", 10);
 
   // ─── Seed initial data if DB is empty ─────────────────────────────────────
   const { rows: tenantRows } = await pool.query(
@@ -1413,18 +1416,29 @@ async function startServer() {
     },
   );
 
-  const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      const dir = path.join(__dirname, "public/models");
-      fs.mkdirSync(dir, { recursive: true });
-      cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-      cb(null, `${Date.now()}-${file.originalname}`);
-    },
+  // Configure Cloudinary
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
   });
-  const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 
+  // Cloudinary storage for GLB uploads
+  const cloudinaryStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: "calibit-models",
+      resource_type: "raw", // required for non-image files like .glb
+      allowed_formats: ["glb", "gltf"],
+    } as any,
+  });
+
+  const upload = multer({
+    storage: cloudinaryStorage,
+    limits: { fileSize: 25 * 1024 * 1024 },
+  });
+
+  // Still serve bundled/local models (duck.glb, tower.glb, etc.)
   app.use("/models", express.static(path.join(__dirname, "public/models")));
 
   app.post(
@@ -1433,9 +1447,8 @@ async function startServer() {
     upload.single("file"),
     (req: any, res: any) => {
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-      // const url = `/public/models/${req.file.filename}`;
-      // res.json({ url });
-      res.json({ url: `/models/${req.file.filename}` });
+      // req.file.path is the full Cloudinary HTTPS URL
+      res.json({ url: (req.file as any).path });
     },
   );
 
