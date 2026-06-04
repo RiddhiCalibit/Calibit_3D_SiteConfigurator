@@ -57,7 +57,8 @@ function getISTString(): string {
 }
 
 async function ensureDatabaseSchema() {
-  const schemaPath = path.resolve(process.cwd(), "schema.sql");
+  // const schemaPath = path.resolve(process.cwd(), "schema.sql");
+  const schemaPath = path.resolve(__dirname, "../schema.sql");
   if (!fs.existsSync(schemaPath)) {
     throw new Error(`Database schema file missing: ${schemaPath}`);
   }
