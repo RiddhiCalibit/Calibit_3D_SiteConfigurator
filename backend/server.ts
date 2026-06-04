@@ -2249,7 +2249,7 @@ async function startServer() {
   });
 
   // ─── Serve frontend (must be AFTER all API routes) ────────────────────────
-  const frontendDist = path.join(__dirname, "../frontend/dist");
+  const frontendDist = path.join(__dirname, "../../frontend/dist");
   if (fs.existsSync(frontendDist)) {
     app.use(express.static(frontendDist));
     // Catch-all: send index.html for any non-API route (React Router support)
