@@ -326,7 +326,7 @@ async function startServer() {
   }
 
   // ─── Health check ──────────────────────────────────────────────────────────
-  app.get("/", (req, res) => {
+  app.get("/api/health", (req, res) => {
     res.send("Backend is running 🚀");
   });
 
