@@ -2253,8 +2253,13 @@ async function startServer() {
   const frontendDist = path.join(__dirname, "../../frontend/dist");
   if (fs.existsSync(frontendDist)) {
     app.use(express.static(frontendDist));
-    // Catch-all: send index.html for any non-API route (React Router support)
+    // Catch-all: send index.html for React Router — but NOT for static assets
     app.get("*", (req, res) => {
+      // If request is for a file with an extension, let it 404 naturally
+      if (req.path.includes(".")) {
+        res.status(404).send("Not found");
+        return;
+      }
       res.sendFile(path.join(frontendDist, "index.html"));
     });
     console.log("✅ Serving frontend from:", frontendDist);
