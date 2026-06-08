@@ -20,7 +20,12 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+// const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("❌ FATAL: JWT_SECRET env var is not set. Refusing to start.");
+  process.exit(1);
+}
 
 import express from "express";
 import cors from "cors";
@@ -56,11 +61,26 @@ function getISTString(): string {
   return istTime.toISOString().replace("T", " ").substring(0, 19);
 }
 
+// ── Safe error message — never expose internals in production ──────────────
+function safeError(err: any, fallback = "An error occurred"): string {
+  if (process.env.NODE_ENV === "production") return fallback;
+  return err?.message || fallback;
+}
+
 async function ensureDatabaseSchema() {
-  // const schemaPath = path.resolve(process.cwd(), "schema.sql");
-  const schemaPath = path.resolve(__dirname, "../schema.sql");
-  if (!fs.existsSync(schemaPath)) {
-    throw new Error(`Database schema file missing: ${schemaPath}`);
+  // Try several likely locations for schema.sql so this works in dev and when compiled
+  const candidates = [
+    path.resolve(__dirname, "../schema.sql"), // backend/schema.sql (ts-node / dev)
+    path.resolve(__dirname, "../../schema.sql"), // project-root/schema.sql (compiled under dist)
+    path.resolve(process.cwd(), "backend/schema.sql"), // explicit backend path from cwd
+    path.resolve(process.cwd(), "schema.sql"), // project root fallback
+  ];
+
+  const schemaPath = candidates.find((p) => fs.existsSync(p));
+  if (!schemaPath) {
+    throw new Error(
+      `Database schema file missing. Checked paths:\n  ${candidates.join("\n  ")}`,
+    );
   }
 
   const schemaSql = fs.readFileSync(schemaPath, "utf8");
@@ -238,6 +258,22 @@ const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: "Too many login attempts. Try again in 15 minutes." },
+});
+
+// Max 5 password reset requests per IP per hour
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many password reset requests. Try again in 1 hour." },
+});
+
+// Max 10 OTP verify attempts per IP per 15 minutes
+const otpVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: {
+    error: "Too many verification attempts. Try again in 15 minutes.",
+  },
 });
 
 // ─── Server Bootstrap ─────────────────────────────────────────────────────────
@@ -468,158 +504,167 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/forgot-password", async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email is required" });
+  app.post(
+    "/api/auth/forgot-password",
+    forgotPasswordLimiter,
+    async (req, res) => {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: "Email is required" });
 
-    const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [
-      email,
-    ]);
-    const user = rows[0];
+      const { rows } = await pool.query(
+        "SELECT * FROM users WHERE email = $1",
+        [email],
+      );
+      const user = rows[0];
 
-    if (!user) {
-      return res.json({
-        message: "If this email exists, a request has been submitted.",
-      });
-    }
+      if (!user) {
+        return res.json({
+          message: "If this email exists, a request has been submitted.",
+        });
+      }
 
-    const istString = getISTString();
+      const istString = getISTString();
 
-    // Platform admin: self-reset via OTP
-    if (user.role === "platform_admin") {
-      try {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAtStr = new Date(
-          Date.now() + 10 * 60 * 1000,
-        ).toISOString();
+      // Platform admin: self-reset via OTP
+      if (user.role === "platform_admin") {
+        try {
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+          const expiresAtStr = new Date(
+            Date.now() + 10 * 60 * 1000,
+          ).toISOString();
 
-        // Invalidate existing unused OTPs
-        await pool.query(
-          "UPDATE platform_admin_otps SET used = TRUE WHERE email = $1 AND used = FALSE",
-          [email],
-        );
-        await pool.query(
-          `INSERT INTO platform_admin_otps (id, user_id, email, otp, expires_at, created_at)
+          // Invalidate existing unused OTPs
+          await pool.query(
+            "UPDATE platform_admin_otps SET used = TRUE WHERE email = $1 AND used = FALSE",
+            [email],
+          );
+          await pool.query(
+            `INSERT INTO platform_admin_otps (id, user_id, email, otp, expires_at, created_at)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [uuidv4(), user.id, email, otp, expiresAtStr, istString],
-        );
+            [uuidv4(), user.id, email, otp, expiresAtStr, istString],
+          );
 
-        console.log(`\n╔══════════════════════════════════════╗`);
-        console.log(`║  PLATFORM ADMIN PASSWORD RESET OTP   ║`);
-        console.log(`║  Email : ${email.padEnd(28)}║`);
-        console.log(`║  OTP   : ${otp.padEnd(28)}║`);
-        console.log(`║  Expires in 10 minutes               ║`);
-        console.log(`╚══════════════════════════════════════╝\n`);
+          console.log(`\n╔══════════════════════════════════════╗`);
+          console.log(`║  PLATFORM ADMIN PASSWORD RESET OTP   ║`);
+          console.log(`║  Email : ${email.padEnd(28)}║`);
+          console.log(`║  OTP   : ${otp.padEnd(28)}║`);
+          console.log(`║  Expires in 10 minutes               ║`);
+          console.log(`╚══════════════════════════════════════╝\n`);
 
+          await logActivity(
+            user.id,
+            user.name,
+            null,
+            "REQUEST",
+            "platform_admin_reset",
+            user.email,
+            "OTP generated for self-reset",
+          );
+          return res.json({ requiresOtp: true, otp });
+        } catch (err) {
+          console.error("❌ OTP generation error:", err);
+          return res
+            .status(500)
+            .json({ error: "Failed to generate OTP. Please try again." });
+        }
+      }
+
+      // Tenant admin or sales rep: escalate reset request
+      const id = uuidv4();
+      await pool.query(
+        `INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
+       VALUES ($1, $2, $3, 'pending', $4)`,
+        [id, user.id, email, istString],
+      );
+
+      if (user.role === "tenant_admin") {
         await logActivity(
           user.id,
           user.name,
           null,
           "REQUEST",
-          "platform_admin_reset",
+          "tenant_admin_reset",
           user.email,
-          "OTP generated for self-reset",
+          "Tenant admin password reset requested — awaiting platform admin",
         );
-        return res.json({ requiresOtp: true, otp });
-      } catch (err) {
-        console.error("❌ OTP generation error:", err);
-        return res
-          .status(500)
-          .json({ error: "Failed to generate OTP. Please try again." });
+      } else {
+        await logActivity(
+          user.id,
+          user.name,
+          user.tenant_id,
+          "REQUEST",
+          "password_reset",
+          user.email,
+          "Password reset requested",
+        );
       }
-    }
 
-    // Tenant admin or sales rep: escalate reset request
-    const id = uuidv4();
-    await pool.query(
-      `INSERT INTO password_reset_requests (id, user_id, email, status, created_at)
-       VALUES ($1, $2, $3, 'pending', $4)`,
-      [id, user.id, email, istString],
-    );
+      res.json({
+        message: "If this email exists, a request has been submitted.",
+      });
+    },
+  );
 
-    if (user.role === "tenant_admin") {
-      await logActivity(
-        user.id,
-        user.name,
-        null,
-        "REQUEST",
-        "tenant_admin_reset",
-        user.email,
-        "Tenant admin password reset requested — awaiting platform admin",
-      );
-    } else {
-      await logActivity(
-        user.id,
-        user.name,
-        user.tenant_id,
-        "REQUEST",
-        "password_reset",
-        user.email,
-        "Password reset requested",
-      );
-    }
+  app.post(
+    "/api/auth/platform-reset-verify",
+    otpVerifyLimiter,
+    async (req, res) => {
+      const { email, otp, new_password } = req.body;
+      if (!email || !otp || !new_password) {
+        return res
+          .status(400)
+          .json({ error: "Email, OTP, and new password are required" });
+      }
 
-    res.json({
-      message: "If this email exists, a request has been submitted.",
-    });
-  });
-
-  app.post("/api/auth/platform-reset-verify", async (req, res) => {
-    const { email, otp, new_password } = req.body;
-    if (!email || !otp || !new_password) {
-      return res
-        .status(400)
-        .json({ error: "Email, OTP, and new password are required" });
-    }
-
-    const { rows } = await pool.query(
-      `SELECT * FROM platform_admin_otps
+      const { rows } = await pool.query(
+        `SELECT * FROM platform_admin_otps
        WHERE email = $1 AND otp = $2 AND used = FALSE
        ORDER BY created_at DESC LIMIT 1`,
-      [email, otp],
-    );
-    const record = rows[0];
+        [email, otp],
+      );
+      const record = rows[0];
 
-    if (!record) {
-      return res
-        .status(400)
-        .json({ error: "Invalid OTP. Please check the code and try again." });
-    }
-    if (new Date() > new Date(record.expires_at)) {
-      return res
-        .status(400)
-        .json({ error: "OTP has expired. Please request a new one." });
-    }
+      if (!record) {
+        return res
+          .status(400)
+          .json({ error: "Invalid OTP. Please check the code and try again." });
+      }
+      if (new Date() > new Date(record.expires_at)) {
+        return res
+          .status(400)
+          .json({ error: "OTP has expired. Please request a new one." });
+      }
 
-    const pwError = validatePassword(new_password);
-    if (pwError) return res.status(400).json({ error: pwError });
+      const pwError = validatePassword(new_password);
+      if (pwError) return res.status(400).json({ error: pwError });
 
-    const hashedPassword = await bcrypt.hash(new_password, 10);
-    await pool.query(
-      "UPDATE users SET password_hash = $1, force_password_change = 0 WHERE id = $2",
-      [hashedPassword, record.user_id],
-    );
-    await pool.query(
-      "UPDATE platform_admin_otps SET used = TRUE WHERE id = $1",
-      [record.id],
-    );
+      const hashedPassword = await bcrypt.hash(new_password, 10);
+      await pool.query(
+        "UPDATE users SET password_hash = $1, force_password_change = 0 WHERE id = $2",
+        [hashedPassword, record.user_id],
+      );
+      await pool.query(
+        "UPDATE platform_admin_otps SET used = TRUE WHERE id = $1",
+        [record.id],
+      );
 
-    const userResult = await pool.query("SELECT * FROM users WHERE id = $1", [
-      record.user_id,
-    ]);
-    const user = userResult.rows[0];
-    await logActivity(
-      record.user_id,
-      user?.name || "Platform Admin",
-      null,
-      "RESET",
-      "platform_admin_reset",
-      email,
-      "Password self-reset via OTP",
-    );
+      const userResult = await pool.query("SELECT * FROM users WHERE id = $1", [
+        record.user_id,
+      ]);
+      const user = userResult.rows[0];
+      await logActivity(
+        record.user_id,
+        user?.name || "Platform Admin",
+        null,
+        "RESET",
+        "platform_admin_reset",
+        email,
+        "Password self-reset via OTP",
+      );
 
-    res.json({ success: true });
-  });
+      res.json({ success: true });
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // ACCOUNT LOCKOUT ROUTES
@@ -938,7 +983,9 @@ async function startServer() {
         res.json({ success: true });
       } catch (err: any) {
         console.error("Delete user error:", err);
-        res.status(500).json({ error: err.message || "Failed to delete user" });
+        res
+          .status(500)
+          .json({ error: safeError(err, "Failed to delete user") });
       }
     },
   );
@@ -989,7 +1036,7 @@ async function startServer() {
 
         res.json({ success: true, is_active: newStatus });
       } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: safeError(err) });
       }
     },
   );
@@ -1011,7 +1058,7 @@ async function startServer() {
         );
         res.json(rows);
       } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: safeError(err) });
       }
     },
   );
@@ -1065,7 +1112,7 @@ async function startServer() {
         }
         res.json({ success: true });
       } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: safeError(err) });
       }
     },
   );
@@ -1119,7 +1166,7 @@ async function startServer() {
         }
         res.json({ success: true, count: projects.length });
       } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: safeError(err) });
       }
     },
   );
@@ -1178,7 +1225,7 @@ async function startServer() {
         }
         res.json({ success: true });
       } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: safeError(err) });
       }
     },
   );
@@ -1187,34 +1234,39 @@ async function startServer() {
   // EQUIPMENT ROUTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/tenant/:tenantId/equipment/stats", async (req, res) => {
-    const { tenantId } = req.params;
+  app.get(
+    "/api/tenant/:tenantId/equipment/stats",
+    authenticate,
+    requireTenantAccess,
+    async (req, res) => {
+      const { tenantId } = req.params;
 
-    const { rows: customRows } = await pool.query(
-      `SELECT
+      const { rows: customRows } = await pool.query(
+        `SELECT
         COUNT(*) as total,
         SUM(CASE WHEN is_active = TRUE THEN 1 ELSE 0 END) as active,
         SUM(CASE WHEN is_active = FALSE THEN 1 ELSE 0 END) as inactive
        FROM equipment
        WHERE tenant_id = $1`,
-      [tenantId],
-    );
-    const custom = customRows[0];
+        [tenantId],
+      );
+      const custom = customRows[0];
 
-    const { rows: disabledRows } = await pool.query(
-      "SELECT COUNT(*) as count FROM tenant_disabled_defaults WHERE tenant_id = $1",
-      [tenantId],
-    );
-    const disabledCount = parseInt(disabledRows[0].count);
+      const { rows: disabledRows } = await pool.query(
+        "SELECT COUNT(*) as count FROM tenant_disabled_defaults WHERE tenant_id = $1",
+        [tenantId],
+      );
+      const disabledCount = parseInt(disabledRows[0].count);
 
-    const DEFAULT_COUNT = DEFAULT_LIBRARY.length;
-    const total = parseInt(custom.total) + DEFAULT_COUNT;
-    const active =
-      parseInt(custom.active || 0) + (DEFAULT_COUNT - disabledCount);
-    const inactive = parseInt(custom.inactive || 0) + disabledCount;
+      const DEFAULT_COUNT = DEFAULT_LIBRARY.length;
+      const total = parseInt(custom.total) + DEFAULT_COUNT;
+      const active =
+        parseInt(custom.active || 0) + (DEFAULT_COUNT - disabledCount);
+      const inactive = parseInt(custom.inactive || 0) + disabledCount;
 
-    res.json({ total, active, inactive });
-  });
+      res.json({ total, active, inactive });
+    },
+  );
 
   app.get(
     "/api/tenant/:id/equipment",
@@ -2245,7 +2297,9 @@ async function startServer() {
       res.json(report);
     } catch (err: any) {
       console.error("Compliance check failed:", err);
-      res.status(500).json({ error: err.message || "Compliance check failed" });
+      res
+        .status(500)
+        .json({ error: safeError(err, "Compliance check failed") });
     }
   });
 

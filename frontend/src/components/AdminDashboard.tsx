@@ -2684,14 +2684,28 @@ function UsersTab({
               <div>
                 <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
                   Phone
+                  <span className="text-brand-teal/60 normal-case tracking-normal">
+                    10 digits
+                  </span>
                 </label>
                 <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="\d{10}"
+                  placeholder="10-digit mobile number"
                   className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={editFormData.phone}
-                  onChange={(e) =>
-                    setEditFormData((p) => ({ ...p, phone: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                    setEditFormData((p) => ({ ...p, phone: val }));
+                  }}
                 />
+                {editFormData.phone && editFormData.phone.length !== 10 && (
+                  <p className="text-[10px] text-red-400 mt-1 ml-1">
+                    Must be exactly 10 digits
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
@@ -2762,14 +2776,28 @@ function UsersTab({
               <div>
                 <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
                   Phone
+                  <span className="text-brand-teal/60 normal-case tracking-normal">
+                    10 digits
+                  </span>
                 </label>
                 <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="\d{10}"
+                  placeholder="10-digit mobile number"
                   className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={newUser.phone}
-                  onChange={(e) =>
-                    setNewUser((p) => ({ ...p, phone: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                    setNewUser((p) => ({ ...p, phone: val }));
+                  }}
                 />
+                {newUser.phone && newUser.phone.length !== 10 && (
+                  <p className="text-[10px] text-red-400 mt-1 ml-1">
+                    Must be exactly 10 digits
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
@@ -3466,11 +3494,15 @@ function ProfileTab({
                 Mobile Number
               </label>
               <input
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="10-digit mobile number"
                 type="tel"
                 value={profileData.phone}
-                onChange={(e) =>
-                  setProfileData({ ...profileData, phone: e.target.value })
-                }
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  setProfileData({ ...profileData, phone: val });
+                }}
                 className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
               />
             </div>
