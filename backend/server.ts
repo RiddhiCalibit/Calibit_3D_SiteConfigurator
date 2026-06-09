@@ -20,7 +20,6 @@ declare global {
   }
 }
 
-// const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   console.error("❌ FATAL: JWT_SECRET env var is not set. Refusing to start.");
@@ -29,6 +28,7 @@ if (!JWT_SECRET) {
 
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import path from "path";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
@@ -41,6 +41,8 @@ import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl:
+    process.env.DATABASE_URL?.includes("sslmode=require") ||
+    process.env.DATABASE_URL?.includes("neon.tech") ||
     process.env.NODE_ENV === "production"
       ? { rejectUnauthorized: false }
       : false,
@@ -66,17 +68,23 @@ function safeError(err: any, fallback = "An error occurred"): string {
   if (process.env.NODE_ENV === "production") return fallback;
   return err?.message || fallback;
 }
+// async function ensureDatabaseSchema() {
+//   // const schemaPath = path.resolve(process.cwd(), "schema.sql");
+//   const schemaPath = path.resolve(__dirname, "../schema.sql");
+//   if (!fs.existsSync(schemaPath)) {
+//     throw new Error(`Database schema file missing: ${schemaPath}`);
+//   }
 
 async function ensureDatabaseSchema() {
-  // Try several likely locations for schema.sql so this works in dev and when compiled
   const candidates = [
-    path.resolve(__dirname, "../schema.sql"), // backend/schema.sql (ts-node / dev)
-    path.resolve(__dirname, "../../schema.sql"), // project-root/schema.sql (compiled under dist)
-    path.resolve(process.cwd(), "backend/schema.sql"), // explicit backend path from cwd
-    path.resolve(process.cwd(), "schema.sql"), // project root fallback
+    path.resolve(__dirname, "../schema.sql"),
+    path.resolve(__dirname, "../../schema.sql"),
+    path.resolve(process.cwd(), "backend/schema.sql"),
+    path.resolve(process.cwd(), "schema.sql"),
   ];
 
   const schemaPath = candidates.find((p) => fs.existsSync(p));
+
   if (!schemaPath) {
     throw new Error(
       `Database schema file missing. Checked paths:\n  ${candidates.join("\n  ")}`,
@@ -141,13 +149,13 @@ async function logActivity(
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 function authenticate(req: any, res: any, next: any) {
+  // Fix #6: read token from httpOnly cookie first, fall back to Authorization header
+  const cookieToken = req.cookies?.auth_token;
   const authHeader = req.headers["authorization"];
-  if (!authHeader) {
-    console.log("❌ No token provided");
+  const token = cookieToken || (authHeader ? authHeader.split(" ")[1] : null);
+  if (!token) {
     return res.status(401).json({ error: "No token provided" });
   }
-  const token = authHeader.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "No token provided" });
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as {
       userId: string;
@@ -276,6 +284,14 @@ const otpVerifyLimiter = rateLimit({
   },
 });
 
+// Global rate limiter — 200 requests per IP per 15 minutes across all routes
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { error: "Too many requests. Please slow down." },
+  skip: (req) => req.path === "/health", // skip health check
+});
+
 // ─── Server Bootstrap ─────────────────────────────────────────────────────────
 
 async function startServer() {
@@ -288,6 +304,8 @@ async function startServer() {
   console.log("✅ Database schema verified");
 
   const app = express();
+  app.use(globalLimiter); // ← Fix #5: global rate limit
+  app.use(cookieParser()); // ← Fix #6: parse cookies
 
   app.use(
     cors({
@@ -444,7 +462,15 @@ async function startServer() {
         );
 
         const { password_hash, ...safeUser } = user;
-        res.json({ user: safeUser, tenant, token });
+        // Fix #6: send token as httpOnly cookie (not in JSON body)
+        res.cookie("auth_token", token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+          maxAge: 8 * 60 * 60 * 1000, // 8 hours (matches JWT expiry)
+          path: "/",
+        });
+        res.json({ user: safeUser, tenant, token }); // token also in body for backward compat during migration
         await logActivity(
           user.id,
           user.name,
@@ -502,6 +528,12 @@ async function startServer() {
       console.error("Login route error:", err);
       return res.status(500).json({ error: "Login failed. Please try again." });
     }
+  });
+
+  // ── Logout — clears httpOnly cookie ────────────────────────────────────────
+  app.post("/api/auth/logout", (req, res) => {
+    res.clearCookie("auth_token", { path: "/" });
+    res.json({ success: true });
   });
 
   app.post(
@@ -1475,6 +1507,18 @@ async function startServer() {
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
+
+  // Validate Cloudinary config at startup
+  if (
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+    !process.env.CLOUDINARY_API_KEY ||
+    !process.env.CLOUDINARY_API_SECRET
+  ) {
+    console.warn(
+      "⚠️  Cloudinary env vars missing — GLB model uploads will not work.\n" +
+        "   Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.",
+    );
+  }
 
   // Cloudinary storage for GLB uploads
   const cloudinaryStorage = new CloudinaryStorage({

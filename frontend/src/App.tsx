@@ -257,8 +257,13 @@ export default function App() {
     localStorage.setItem("auth_user", JSON.stringify(updatedUser));
   };
 
-  const handleLogout = () => {
-    // localStorage.removeItem("authToken"); // clear token
+  const handleLogout = async () => {
+    // call logout endpoint to clear httpOnly cookie server-side
+    const API_URL = import.meta.env.VITE_API_URL || "";
+    await fetch(`${API_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => {});
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
     localStorage.removeItem("auth_tenant");

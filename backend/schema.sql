@@ -110,3 +110,8 @@ UPDATE users SET status = 'active' WHERE status IS NULL;
 -- Fix FK constraints to allow user deletion without breaking projects
 ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_user_id_fkey;
 ALTER TABLE projects ADD CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+
+-- Fix #7: unique phone per tenant (NULL phones are allowed and not counted as duplicates)
+CREATE UNIQUE INDEX IF NOT EXISTS users_phone_tenant_unique
+  ON users (phone, tenant_id)
+  WHERE phone IS NOT NULL AND phone != '';
