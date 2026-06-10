@@ -92,6 +92,7 @@ interface SidebarProps {
   onOpenProjects: () => void;
   projects: any[];
   currentProjectId: string | null;
+  currentProjectName: string | null;
   onAddCustomEquipment: (def: EquipmentDef) => void;
   onOpenCompliance: () => void;
   onSetUnitSystem: (unit: "metric" | "imperial") => void;
@@ -123,6 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onShowToast,
   projects,
   currentProjectId,
+  currentProjectName,
   onAddCustomEquipment,
   onOpenCompliance,
   onSetUnitSystem,
@@ -698,6 +700,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer Actions */}
 
+      {currentProjectName && (
+        <div className="w-full px-3 py-2 mb-2 rounded-lg bg-white/5 border border-white/10 text-xs text-white/80">
+          <span className="uppercase tracking-[0.2em] text-[10px] text-brand-teal/70">
+            Open project:
+          </span>
+          <div className="mt-1 font-semibold truncate">{currentProjectName}</div>
+        </div>
+      )}
       <div className="flex gap-2 mb-2">
         <button
           onClick={onSave}

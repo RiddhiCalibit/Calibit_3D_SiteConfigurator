@@ -77,7 +77,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#FF5733",
     category: "slides",
-    modelUrl: "/models/small_slide.glb",
+    //modelUrl: "/models/small_slide.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090100/calibit-models/defaults/small_slide.glb",
     isActive: true,
   },
   {
@@ -88,7 +90,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 6,
     color: "#C70039",
     category: "slides",
-    modelUrl: "/models/slide_large.glb",
+    //modelUrl: "/models/slide_large.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090104/calibit-models/defaults/slide_large.glb",
     isActive: true,
   },
   {
@@ -99,7 +103,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 10,
     color: "#34495E",
     category: "facilities",
-    modelUrl: "/models/tower.glb",
+    //modelUrl: "/models/tower.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090110/calibit-models/defaults/tower.glb",
     animationsEnabled: true,
     isActive: true,
   },
@@ -111,7 +117,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 2,
     color: "#F1C40F",
     category: "amenities",
-    modelUrl: "/models/duck.glb",
+    //modelUrl: "/models/duck.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090113/calibit-models/defaults/duck.glb",
     // imageUrl: "/images/duck.png",
     animationsEnabled: true,
     isActive: true,
@@ -124,7 +132,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 2,
     color: "#3498DB",
     category: "pools",
-    modelUrl: "/models/wave_pool.glb",
+    //modelUrl: "/models/wave_pool.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090118/calibit-models/defaults/wave_pool.glb",
     isActive: true,
   },
   {
@@ -135,7 +145,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 1.5,
     color: "#2980B9",
     category: "pools",
-    modelUrl: "/models/lazy_river.glb",
+    //modelUrl: "/models/lazy_river.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090121/calibit-models/defaults/lazy_river.glb",
     isActive: true,
   },
   {
@@ -147,6 +159,8 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     color: "#1ABC9C",
     category: "pools",
     //modelUrl: "/models/splash_pad.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090100/calibit-models/defaults/splash_pad.glb",
     isActive: true,
   },
   {
@@ -157,7 +171,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 4,
     color: "#7F8C8D",
     category: "facilities",
-    modelUrl: "/models/pump_station.glb",
+    //modelUrl: "/models/pump_station.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090137/calibit-models/defaults/pump_station.glb",
     isActive: true,
   },
   {
@@ -168,7 +184,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#F1C40F",
     category: "facilities",
-    modelUrl: "/models/ticket_booth.glb",
+    //modelUrl: "/models/ticket_booth.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090138/calibit-models/defaults/ticket_booth.glb",
     isActive: true,
   },
   {
@@ -179,7 +197,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#9B59B6",
     category: "facilities",
-    modelUrl: "/models/locker_block.glb",
+    //modelUrl: "/models/locker_block.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090152/calibit-models/defaults/locker_block.glb",
     isActive: true,
   },
   {
@@ -190,7 +210,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#E67E22",
     category: "facilities",
-    modelUrl: "/models/food_kiosk.glb",
+    //modelUrl: "/models/food_kiosk.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090155/calibit-models/defaults/food_kiosk.glb",
     isActive: true,
   },
   {
@@ -201,7 +223,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 1,
     color: "#2ECC71",
     category: "amenities",
-    modelUrl: "/models/seating area.glb",
+    //modelUrl: "/models/seating area.glb",
+    modelUrl:
+      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090160/calibit-models/defaults/seating_area.glb",
     isActive: true,
   },
 ];

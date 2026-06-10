@@ -85,6 +85,9 @@ export default function App() {
 
   const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentProjectName, setCurrentProjectName] = useState<string | null>(
+    null,
+  );
   const [customEquipment, setCustomEquipment] = useState<any[]>([]);
 
   const showToast = (
@@ -509,16 +512,27 @@ export default function App() {
         body: JSON.stringify({ data }),
       });
       if (res.ok) {
+        if (!currentProjectName) {
+          const savedProject = projects.find((p) => p.id === currentProjectId);
+          if (savedProject?.name) setCurrentProjectName(savedProject.name);
+        }
         alert("Project updated successfully!");
         fetchProjects(tenant);
       } else {
         alert("Failed to update project.");
       }
     } else {
-      // Create new project
-      const projectName =
-        prompt("Enter project name:", "New Project") || "Untitled Project";
-      const clientName = prompt("Enter company/client name:", "") || "";
+      // Create new project — require both project name and client/company name
+      const projectName = prompt("Enter project name:", "New Project");
+      if (!projectName || !projectName.trim()) {
+        alert("Project name is required. Project not saved.");
+        return;
+      }
+      const clientName = prompt("Enter company/client name:", "");
+      if (!clientName || !clientName.trim()) {
+        alert("Client/company name is required. Project not saved.");
+        return;
+      }
       const newId = uuidv4();
       const res = await authFetch("/api/projects", {
         method: "POST",
@@ -534,6 +548,7 @@ export default function App() {
       });
       if (res.ok) {
         setCurrentProjectId(newId);
+        setCurrentProjectName(projectName);
         alert("Project saved successfully!");
         fetchProjects(tenant);
       } else {
@@ -560,6 +575,7 @@ export default function App() {
       if (data.objects) setObjects(data.objects);
 
       setCurrentProjectId(projectId);
+      setCurrentProjectName(project.name || projectId);
     } catch {
       alert("Failed to load project.");
     }
@@ -571,6 +587,7 @@ export default function App() {
     // If currently editing this project, clear it
     if (currentProjectId === projectId) {
       setCurrentProjectId(null);
+      setCurrentProjectName(null);
     }
   };
 
@@ -597,6 +614,7 @@ export default function App() {
 
   const handleNewProject = () => {
     setCurrentProjectId(null);
+    setCurrentProjectName(null);
     setBoundary([]);
     setObjects([]);
   };
@@ -772,6 +790,7 @@ export default function App() {
         user={user}
         tenant={tenant}
         currentProjectId={currentProjectId}
+        currentProjectName={currentProjectName}
         onUserUpdate={handleUserUpdate}
         onShowToast={showToast}
         // disabledDefaults={disabledDefaults}
