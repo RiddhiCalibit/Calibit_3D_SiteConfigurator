@@ -49,6 +49,121 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     state,
   });
 
+  // Build equipment features from app state (used on initial load and style reloads)
+  const buildEquipmentFeatureCollection = (
+    stateSnapshot: AppState,
+    map: mapboxgl.Map,
+  ) => {
+    if (!stateSnapshot.originLngLat) {
+      return { type: "FeatureCollection", features: [] } as any;
+    }
+
+    const features = stateSnapshot.objects
+      .map((obj) => {
+        const def =
+          DEFAULT_LIBRARY.find((d) => d.id === obj.type) ??
+          stateSnapshot.customLibrary.find((d) => d.id === obj.type);
+        if (!def) return null;
+
+        const lngLat = metresToLngLat(
+          obj.x,
+          obj.z,
+          stateSnapshot.originLngLat!,
+        );
+
+        if (def.modelUrl) {
+          if (!map.hasModel(def.modelUrl)) {
+            map.addModel(def.modelUrl, def.modelUrl);
+          }
+
+          return {
+            type: "Feature",
+            id: obj.id,
+            geometry: {
+              type: "Point",
+              coordinates: [lngLat[0], lngLat[1]],
+            },
+            properties: {
+              id: obj.id,
+              color: obj.color || def.color,
+              height: def.height,
+              "model-uri": def.modelUrl,
+              rotation: (obj.rotationY * 180) / Math.PI,
+              animations: def.animationsEnabled
+                ? [{ name: "*", state: "play" }]
+                : [],
+            },
+          };
+        }
+
+        const halfW = def.width / 2;
+        const halfD = def.depth / 2;
+
+        const cornersMetres = [
+          { x: -halfW, z: -halfD },
+          { x: halfW, z: -halfD },
+          { x: halfW, z: halfD },
+          { x: -halfW, z: halfD },
+          { x: -halfW, z: -halfD },
+        ];
+
+        const rotatedCorners = cornersMetres.map((c) => {
+          const rx =
+            c.x * Math.cos(obj.rotationY) - c.z * Math.sin(obj.rotationY);
+          const rz =
+            c.x * Math.sin(obj.rotationY) + c.z * Math.cos(obj.rotationY);
+          return metresToLngLat(
+            obj.x + rx,
+            obj.z + rz,
+            stateSnapshot.originLngLat!,
+          );
+        });
+
+        return {
+          type: "Feature",
+          id: obj.id,
+          geometry: {
+            type: "Polygon",
+            coordinates: [rotatedCorners],
+          },
+          properties: {
+            id: obj.id,
+            color: obj.color || def.color,
+            height: def.height,
+          },
+        };
+      })
+      .filter((f) => f !== null);
+
+    const fc = {
+      type: "FeatureCollection",
+      features: features as any,
+    };
+
+    return fc as any;
+  };
+
+  // Build readonly boundary feature (used to repopulate after style reloads)
+  const buildBoundaryFeature = (stateSnapshot: AppState) => {
+    if (!stateSnapshot.originLngLat || stateSnapshot.siteBoundary.length < 3) {
+      return { type: "FeatureCollection", features: [] } as any;
+    }
+
+    const coords = [...stateSnapshot.siteBoundary];
+    if (
+      coords[0][0] !== coords[coords.length - 1][0] ||
+      coords[0][1] !== coords[coords.length - 1][1]
+    ) {
+      coords.push(coords[0]);
+    }
+
+    return {
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [coords] },
+      properties: {},
+    } as any;
+  };
+
   useEffect(() => {
     callbacks.current = {
       onBoundaryChange,
@@ -96,6 +211,50 @@ export const MapPanel: React.FC<MapPanelProps> = ({
         source: "boundary-readonly",
         paint: { "line-color": "#2E8B7A", "line-width": 2 },
       });
+
+      // Populate readonly boundary immediately (useful after a style reload)
+      try {
+        const source = map.getSource(
+          "boundary-readonly",
+        ) as mapboxgl.GeoJSONSource;
+        if (source) {
+          const bf = buildBoundaryFeature(callbacks.current.state);
+          if (bf && bf.geometry) {
+            source.setData(bf as any);
+          } else {
+            source.setData({ type: "FeatureCollection", features: [] } as any);
+          }
+
+          // Also ensure Mapbox Draw has the polygon so it's selectable/visible
+          const draw = drawRef.current;
+          try {
+            if (draw && callbacks.current.state.siteBoundary.length >= 3) {
+              const currentFeatures = draw.getAll().features;
+              const hasPolygon = currentFeatures.some(
+                (f) => f.geometry.type === "Polygon",
+              );
+              if (!hasPolygon) {
+                const coords = [...callbacks.current.state.siteBoundary];
+                if (
+                  coords[0][0] !== coords[coords.length - 1][0] ||
+                  coords[0][1] !== coords[coords.length - 1][1]
+                ) {
+                  coords.push(coords[0]);
+                }
+                draw.add({
+                  type: "Feature",
+                  geometry: { type: "Polygon", coordinates: [coords] },
+                  properties: {},
+                });
+              }
+            }
+          } catch (err) {
+            // ignore draw errors during style transitions
+          }
+        }
+      } catch (err) {
+        // Ignore errors during style transitions
+      }
     }
 
     // Add 3D buildings layer
@@ -197,6 +356,28 @@ export const MapPanel: React.FC<MapPanelProps> = ({
           ],
         } as any,
       });
+
+      // Populate equipment source immediately (useful after a style reload)
+      try {
+        const source = map.getSource("equipment") as mapboxgl.GeoJSONSource;
+        if (source) {
+          const fc = buildEquipmentFeatureCollection(
+            callbacks.current.state,
+            map,
+          );
+          source.setData(fc as any);
+
+          // Restore selection feature state
+          callbacks.current.state.objects.forEach((obj) => {
+            map.setFeatureState(
+              { source: "equipment", id: obj.id },
+              { selected: callbacks.current.state.selectedId === obj.id },
+            );
+          });
+        }
+      } catch (err) {
+        // Ignore errors during style transitions
+      }
     }
 
     if (!map.getSource("ghost-box")) {
@@ -970,31 +1151,65 @@ export const MapPanel: React.FC<MapPanelProps> = ({
 
   // Sync boundary to Mapbox Draw (for import)
   useEffect(() => {
-    if (!drawRef.current || state.siteBoundary.length < 3) return;
+    if (!drawRef.current) return;
 
-    const currentFeatures = drawRef.current.getAll().features;
-    const hasPolygon = currentFeatures.some(
-      (f) => f.geometry.type === "Polygon",
-    );
+    const draw = drawRef.current;
+    // If incoming boundary is too small, ensure draw is cleared
+    if (state.siteBoundary.length < 3) {
+      try {
+        draw.deleteAll();
+      } catch (err) {
+        // ignore
+      }
+      return;
+    }
 
-    // Only update if draw tool doesn't have the polygon (e.g. after import)
-    if (!hasPolygon) {
-      const coords = [...state.siteBoundary];
-      if (
-        coords[0][0] !== coords[coords.length - 1][0] ||
-        coords[0][1] !== coords[coords.length - 1][1]
-      ) {
-        coords.push(coords[0]);
+    const coords = [...state.siteBoundary];
+    if (
+      coords[0][0] !== coords[coords.length - 1]?.[0] ||
+      coords[0][1] !== coords[coords.length - 1]?.[1]
+    ) {
+      coords.push(coords[0]);
+    }
+
+    try {
+      const currentFeatures = draw
+        .getAll()
+        .features.filter((f) => f.geometry.type === "Polygon");
+
+      // If there's no polygon, simply add the new one
+      if (currentFeatures.length === 0) {
+        draw.add({
+          type: "Feature",
+          geometry: { type: "Polygon", coordinates: [coords] },
+          properties: {},
+        });
+        return;
       }
 
-      drawRef.current.add({
-        type: "Feature",
-        geometry: {
-          type: "Polygon",
-          coordinates: [coords],
-        },
-        properties: {},
-      });
+      // Compare existing polygon coords with new coords; if different, replace
+      const existing = currentFeatures[0].geometry.coordinates[0];
+      const existingStr = JSON.stringify(
+        existing.map((c: any) => [
+          Number(c[0]).toFixed(6),
+          Number(c[1]).toFixed(6),
+        ]),
+      );
+      const newStr = JSON.stringify(
+        coords.map((c) => [Number(c[0]).toFixed(6), Number(c[1]).toFixed(6)]),
+      );
+
+      if (existingStr !== newStr) {
+        // replace: remove all polygons and add the new one
+        draw.deleteAll();
+        draw.add({
+          type: "Feature",
+          geometry: { type: "Polygon", coordinates: [coords] },
+          properties: {},
+        });
+      }
+    } catch (err) {
+      // ignore errors (style transitions, etc.)
     }
   }, [state.siteBoundary]);
 
