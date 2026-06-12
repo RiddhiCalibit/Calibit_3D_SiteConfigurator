@@ -153,7 +153,6 @@ export function AdminDashboard({
     depth: 5,
     height: 5,
     color: "#14b8a6",
-    animationsEnabled: false,
   });
 
   const [resetRequests, setResetRequests] = useState<any[]>([]);
@@ -364,11 +363,15 @@ export function AdminDashboard({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...newEquipment,
         id,
+        name: newEquipment.name,
+        category: newEquipment.category,
+        width: newEquipment.width,
+        depth: newEquipment.depth,
+        height: newEquipment.height,
+        color: newEquipment.color,
         model_url: newEquipment.modelUrl || null,
         image_url: newEquipment.imageUrl || null,
-        is_active: newEquipment.isActive !== false ? 1 : 0,
       }),
     });
 
@@ -381,7 +384,6 @@ export function AdminDashboard({
         depth: 5,
         height: 5,
         color: "#14b8a6",
-        animationsEnabled: false,
         imageUrl: "",
       });
       fetchEquipment();
@@ -398,10 +400,15 @@ export function AdminDashboard({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...editingEquipment,
+          id: editingEquipment.id,
+          name: editingEquipment.name,
+          category: editingEquipment.category,
+          width: editingEquipment.width,
+          depth: editingEquipment.depth,
+          height: editingEquipment.height,
+          color: editingEquipment.color,
           model_url: editingEquipment.modelUrl || null,
           image_url: editingEquipment.imageUrl || null,
-          is_active: editingEquipment.isActive !== false ? 1 : 0,
         }),
       },
     );
@@ -1413,7 +1420,6 @@ function EquipmentTab({
                     depth: 5,
                     height: 5,
                     color: "#14b8a6",
-                    animationsEnabled: false,
                     imageUrl: "",
                   });
                 }}
@@ -1925,79 +1931,9 @@ function EquipmentTab({
               </div>
 
               {/* Row 4 — Animations checkbox */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="animations"
-                  checked={
-                    isAdding
-                      ? newEquipment.animationsEnabled
-                      : editingItem?.animationsEnabled
-                  }
-                  onChange={(e) =>
-                    isAdding
-                      ? setNewEquipment({
-                          ...newEquipment,
-                          animationsEnabled: e.target.checked,
-                        })
-                      : setEditingItem({
-                          ...editingItem!,
-                          animationsEnabled: e.target.checked,
-                        })
-                  }
-                  className="accent-brand-teal"
-                />
-                <label htmlFor="animations" className="text-xs opacity-60">
-                  Enable Animations
-                </label>
-              </div>
+              {/* Animations removed from form */}
 
-              {/* Active/Inactive toggle in edit form */}
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-theme-border">
-                <div>
-                  <p className="text-xs font-bold">Equipment Status</p>
-                  <p className="text-[10px] opacity-40 mt-0.5">
-                    Inactive equipment won't be visible to sales reps
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    isAdding
-                      ? setNewEquipment({
-                          ...newEquipment,
-                          isActive: !newEquipment.isActive,
-                        })
-                      : setEditingItem({
-                          ...editingItem!,
-                          isActive: !editingItem?.isActive,
-                        })
-                  }
-                  className={clsx(
-                    "w-12 h-6 rounded-full transition-colors relative shrink-0",
-                    (
-                      isAdding
-                        ? newEquipment.isActive !== false
-                        : editingItem?.isActive !== false
-                    )
-                      ? "bg-emerald-500"
-                      : "bg-white/20",
-                  )}
-                >
-                  <div
-                    className={clsx(
-                      "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
-                      (
-                        isAdding
-                          ? newEquipment.isActive !== false
-                          : editingItem?.isActive !== false
-                      )
-                        ? "left-7"
-                        : "left-1",
-                    )}
-                  />
-                </button>
-              </div>
+              {/* Equipment status removed from form */}
 
               {/* Row 5 — Action buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">

@@ -857,6 +857,26 @@ async function startServer() {
     async (req, res) => {
       const { id, email, password, role, name, phone } = req.body;
 
+      // Validate phone: must be exactly 10 digits if provided
+      if (phone) {
+        if (!/^\d{10}$/.test(phone.trim())) {
+          return res.status(400).json({
+            error: "Phone number must be exactly 10 digits (numbers only).",
+          });
+        }
+        // Check for duplicate phone within this tenant
+        const { rows: phoneRows } = await pool.query(
+          "SELECT id FROM users WHERE phone = $1 AND tenant_id = $2",
+          [phone.trim(), req.params.id],
+        );
+        if (phoneRows.length > 0) {
+          return res.status(409).json({
+            error:
+              "Mobile number already exists. Please use a different number.",
+          });
+        }
+      }
+
       const { rows } = await pool.query(
         "SELECT count(*) as count FROM users WHERE tenant_id = $1 AND role = 'sales_rep' AND is_active = TRUE",
         [req.params.id],
@@ -898,7 +918,24 @@ async function startServer() {
         }
         res.json({ success: true });
       } catch (error: any) {
-        res.status(400).json({ error: error.message });
+        // Postgres unique constraint violation
+        if (error.code === "23505") {
+          if (error.constraint?.includes("phone")) {
+            return res.status(409).json({
+              error:
+                "Mobile number already exists. Please use a different number.",
+            });
+          }
+          if (error.constraint?.includes("email")) {
+            return res.status(409).json({
+              error: "Email already exists. Please use a different email.",
+            });
+          }
+          return res
+            .status(409)
+            .json({ error: "Duplicate value. Please check your input." });
+        }
+        res.status(400).json({ error: safeError(error) });
       }
     },
   );
@@ -916,44 +953,77 @@ async function startServer() {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    if (password) {
-      const pwError = validatePassword(password);
-      if (pwError) return res.status(400).json({ error: pwError });
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await pool.query(
-        "UPDATE users SET name = $1, phone = $2, password_hash = $3, force_password_change = 0 WHERE id = $4",
-        [name, phone, hashedPassword, req.params.id],
-      );
-      if (req.user) {
-        await logActivity(
-          req.user.userId,
-          req.user.userName || "User",
-          req.user.tenantId || null,
-          "UPDATE",
-          "profile",
-          name,
-          "Profile updated with password change",
-        );
+    // Validate phone if provided
+    if (phone) {
+      if (!/^\d{10}$/.test(phone.trim())) {
+        return res.status(400).json({
+          error: "Phone number must be exactly 10 digits (numbers only).",
+        });
       }
-    } else {
-      await pool.query("UPDATE users SET name = $1, phone = $2 WHERE id = $3", [
-        name,
-        phone,
-        req.params.id,
-      ]);
-      if (req.user) {
-        await logActivity(
-          req.user.userId,
-          req.user.userName || "User",
-          req.user.tenantId || null,
-          "UPDATE",
-          "profile",
-          name,
-          "Profile updated",
-        );
+      // Check for duplicate phone (exclude this user)
+      const { rows: phoneRows } = await pool.query(
+        "SELECT id FROM users WHERE phone = $1 AND id != $2",
+        [phone.trim(), req.params.id],
+      );
+      if (phoneRows.length > 0) {
+        return res.status(409).json({
+          error: "Mobile number already exists. Please use a different number.",
+        });
       }
     }
-    res.json({ success: true });
+
+    try {
+      if (password) {
+        const pwError = validatePassword(password);
+        if (pwError) return res.status(400).json({ error: pwError });
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await pool.query(
+          "UPDATE users SET name = $1, phone = $2, password_hash = $3, force_password_change = 0 WHERE id = $4",
+          [name, phone, hashedPassword, req.params.id],
+        );
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName || "User",
+            req.user.tenantId || null,
+            "UPDATE",
+            "profile",
+            name,
+            "Profile updated with password change",
+          );
+        }
+      } else {
+        await pool.query(
+          "UPDATE users SET name = $1, phone = $2 WHERE id = $3",
+          [name, phone, req.params.id],
+        );
+        if (req.user) {
+          await logActivity(
+            req.user.userId,
+            req.user.userName || "User",
+            req.user.tenantId || null,
+            "UPDATE",
+            "profile",
+            name,
+            "Profile updated",
+          );
+        }
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      if (error.code === "23505") {
+        if (error.constraint?.includes("phone")) {
+          return res.status(409).json({
+            error:
+              "Mobile number already exists. Please use a different number.",
+          });
+        }
+        return res
+          .status(409)
+          .json({ error: "Duplicate value. Please check your input." });
+      }
+      res.status(400).json({ error: safeError(error) });
+    }
   });
 
   app.delete(

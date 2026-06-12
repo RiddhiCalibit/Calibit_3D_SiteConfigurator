@@ -256,7 +256,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           height: def.height,
           color: def.color,
           model_url: def.modelUrl || null,
-          animations_enabled: def.animationsEnabled || false,
         }),
       });
 
@@ -705,7 +704,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="uppercase tracking-[0.2em] text-[10px] text-brand-teal/70">
             Open project:
           </span>
-          <div className="mt-1 font-semibold truncate">{currentProjectName}</div>
+          <div className="mt-1 font-semibold truncate">
+            {currentProjectName}
+          </div>
         </div>
       )}
       <div className="flex gap-2 mb-2">
