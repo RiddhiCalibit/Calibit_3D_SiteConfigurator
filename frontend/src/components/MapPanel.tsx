@@ -625,10 +625,16 @@ export const MapPanel: React.FC<MapPanelProps> = ({
 
   // Sync equipment visual
   useEffect(() => {
-    if (!mapRef.current || !state.originLngLat) return;
+    if (!mapRef.current) return;
     const map = mapRef.current;
     const source = map.getSource("equipment") as mapboxgl.GeoJSONSource;
     if (!source) return;
+
+    // If no originLngLat or no objects, clear the equipment layer
+    if (!state.originLngLat || state.objects.length === 0) {
+      source.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
 
     const features = state.objects
       .map((obj) => {
@@ -1059,7 +1065,8 @@ export const MapPanel: React.FC<MapPanelProps> = ({
         .addTo(map);
     }
 
-    if (state.siteBoundary.length < 3) {
+    // Clear boundary if no origin or boundary too small
+    if (!state.originLngLat || state.siteBoundary.length < 3) {
       const source = map.getSource(
         "boundary-readonly",
       ) as mapboxgl.GeoJSONSource;
@@ -1188,7 +1195,15 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       }
 
       // Compare existing polygon coords with new coords; if different, replace
-      const existing = currentFeatures[0].geometry.coordinates[0];
+      // const existing = currentFeatures[0].geometry.coordinates[0];
+      const polygonFeature = currentFeatures[0];
+
+      if (polygonFeature.geometry.type !== "Polygon") {
+        return;
+      }
+
+      const existing = polygonFeature.geometry.coordinates[0];
+
       const existingStr = JSON.stringify(
         existing.map((c: any) => [
           Number(c[0]).toFixed(6),

@@ -748,7 +748,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <ChevronDown className="w-3 h-3" />
           </button>
 
-          {exportMenuOpen && (
+          {/* {exportMenuOpen && (
             <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
               <button
                 onClick={() => {
@@ -778,6 +778,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
               >
                 <span>Export as Excel</span>
+                <span className="text-[10px] opacity-50">.xls</span>
+              </button>
+            </div>
+          )} */}
+          {exportMenuOpen && (
+            <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
+              {/* PDF */}
+              <button
+                disabled
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs opacity-60 cursor-not-allowed"
+              >
+                <div className="flex flex-col">
+                  <span>Export as PDF</span>
+                  <span className="text-[9px] text-amber-400">
+                    upcoming feature
+                  </span>
+                </div>
+
+                <span className="text-[10px] opacity-50">.pdf</span>
+              </button>
+
+              {/* DWG */}
+              <button
+                disabled
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs opacity-60 cursor-not-allowed"
+              >
+                <div className="flex flex-col">
+                  <span>Export as DWG</span>
+                  <span className="text-[9px] text-amber-400">
+                    upcoming feature
+                  </span>
+                </div>
+
+                <span className="text-[10px] opacity-50">.dwg</span>
+              </button>
+
+              {/* Excel */}
+              <button
+                onClick={() => {
+                  onExport("excel");
+                  setExportMenuOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+              >
+                <span>Export as Excel</span>
+
                 <span className="text-[10px] opacity-50">.xls</span>
               </button>
             </div>
