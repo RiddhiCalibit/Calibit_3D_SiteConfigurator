@@ -15,6 +15,7 @@ interface MapPanelProps {
   onMapClick: (e: mapboxgl.MapMouseEvent) => void;
   onObjectSelect: (id: string | null) => void;
   onObjectUpdate: (id: string, updates: any) => void;
+  onSetBoundaryLock?: (locked: boolean) => void;
   drawTrigger: number;
   targetLocation?: { lng: number; lat: number; zoom?: number };
 }
@@ -27,6 +28,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   onMapClick,
   onObjectSelect,
   onObjectUpdate,
+  onSetBoundaryLock,
   drawTrigger,
   targetLocation,
 }) => {
@@ -46,6 +48,9 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     onMapClick,
     onObjectSelect,
     onObjectUpdate,
+    onSetBoundaryLock: undefined as any as
+      | ((locked: boolean) => void)
+      | undefined,
     state,
   });
 
@@ -171,6 +176,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       onMapClick,
       onObjectSelect,
       onObjectUpdate,
+      onSetBoundaryLock: onSetBoundaryLock || undefined,
       state,
     };
   });
@@ -595,6 +601,10 @@ export const MapPanel: React.FC<MapPanelProps> = ({
         const id = (features[0].id as string) || features[0].properties?.id;
         callbacks.current.onObjectSelect(id);
         draggingIdRef.current = id;
+        // Lock the boundary while dragging an object so it remains fixed
+        try {
+          callbacks.current.onSetBoundaryLock?.(true);
+        } catch {}
         map.dragPan.disable();
       } else {
         callbacks.current.onMapClick(e);
@@ -605,6 +615,10 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     });
 
     map.on("mouseup", () => {
+      // Unlock boundary when drag ends
+      try {
+        callbacks.current.onSetBoundaryLock?.(false);
+      } catch {}
       draggingIdRef.current = null;
       map.dragPan.enable();
     });
@@ -758,8 +772,13 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     ) as mapboxgl.GeoJSONSource;
     if (!safeSource || !violSource) return;
 
-    // Clear both layers when nothing is being placed
-    if (!state.pendingPlacement || !state.originLngLat || !hoverCoords) {
+    // Clear both layers when nothing is being placed or dragged
+    const isDragging = !!draggingIdRef.current;
+    if (
+      (!state.pendingPlacement && !isDragging) ||
+      !state.originLngLat ||
+      !hoverCoords
+    ) {
       safeSource.setData({ type: "FeatureCollection", features: [] });
       violSource.setData({ type: "FeatureCollection", features: [] });
       return;
@@ -798,7 +817,27 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     const { x, z } = lngLatToMetres(hoverCoords, origin);
     const ghostX = Math.round(x * 2) / 2;
     const ghostZ = Math.round(z * 2) / 2;
-    const def = state.pendingPlacement;
+    // Determine the definition and rotation for the ghost footprint.
+    // Use pendingPlacement when placing, or the dragged object's def when dragging.
+    let def = state.pendingPlacement;
+    let rotationY = 0;
+    if (!def && draggingIdRef.current) {
+      const draggingObj = state.objects.find(
+        (o) => o.id === draggingIdRef.current,
+      );
+      if (draggingObj) {
+        def =
+          DEFAULT_LIBRARY.find((d) => d.id === draggingObj.type) ??
+          (state.customLibrary || []).find((d) => d.id === draggingObj.type);
+        rotationY = draggingObj.rotationY || 0;
+      }
+    }
+
+    if (!def) {
+      violSource.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+
     const ghw = def.width / 2;
     const ghd = def.depth / 2;
     const ghostCorners = [
@@ -807,7 +846,11 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       { x: ghw, z: ghd },
       { x: -ghw, z: ghd },
       { x: -ghw, z: -ghd },
-    ].map((c) => metresToLngLat(ghostX + c.x, ghostZ + c.z, origin));
+    ].map((c) => {
+      const rx = c.x * Math.cos(rotationY) - c.z * Math.sin(rotationY);
+      const rz = c.x * Math.sin(rotationY) + c.z * Math.cos(rotationY);
+      return metresToLngLat(ghostX + rx, ghostZ + rz, origin);
+    });
 
     const ghostPolygon = turf.polygon([ghostCorners]);
 

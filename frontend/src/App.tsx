@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { authFetch } from "./utils/api";
 import { Sidebar } from "./components/Sidebar";
 import { MapPanel } from "./components/MapPanel";
@@ -9,10 +9,11 @@ import { Login } from "./components/Login";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { PlatformAdminDashboard } from "./components/PlatformAdminDashboard";
 import { useAppState } from "./useAppState";
-import { User, Tenant } from "../../backend/types";
+import { User, Tenant, EquipmentObject } from "../../backend/types";
 import { DEFAULT_LIBRARY } from "../../backend/types";
 import { v4 as uuidv4 } from "uuid";
-import { lngLatToMetres, isPointInBoundary } from "./utils/geo";
+import * as turf from "@turf/turf";
+import { lngLatToMetres, isPointInBoundary, metresToLngLat } from "./utils/geo";
 import { clsx } from "clsx";
 import { AlertTriangle, Download, Trash2 } from "lucide-react";
 import { ForgotPassword } from "./components/ForgotPassword";
@@ -38,6 +39,7 @@ export default function App() {
     toggleTerrain,
     toggleBuildings,
     toggleBoundaryLock,
+    setBoundaryLock,
     setPendingPlacement,
     setMeasurePoints,
     addCustomEquipment,
@@ -89,6 +91,7 @@ export default function App() {
     null,
   );
   const [customEquipment, setCustomEquipment] = useState<any[]>([]);
+  const boundaryViolationRef = useRef<string | null>(null);
 
   const showToast = (
     message: string,
@@ -96,6 +99,34 @@ export default function App() {
   ) => {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 3800);
+  };
+
+  // Helper: build a Turf polygon (lng/lat) for an equipment defined by centre metres (x,z), width, depth and rotation
+  const buildEquipmentPolygon = (
+    cx: number,
+    cz: number,
+    width: number,
+    depth: number,
+    rotationY: number,
+    origin: [number, number],
+  ) => {
+    const halfW = width / 2;
+    const halfD = depth / 2;
+    const cornersMetres = [
+      { x: -halfW, z: -halfD },
+      { x: halfW, z: -halfD },
+      { x: halfW, z: halfD },
+      { x: -halfW, z: halfD },
+      { x: -halfW, z: -halfD },
+    ];
+
+    const cornersLngLat = cornersMetres.map((c) => {
+      const rx = c.x * Math.cos(rotationY) - c.z * Math.sin(rotationY);
+      const rz = c.x * Math.sin(rotationY) + c.z * Math.cos(rotationY);
+      return metresToLngLat(cx + rx, cz + rz, origin);
+    });
+
+    return turf.polygon([cornersLngLat]);
   };
 
   // Add this useEffect after your useState declarations
@@ -306,6 +337,46 @@ export default function App() {
           )
         ) {
           console.log("Inside boundary, adding object...");
+
+          // Collision check: ensure ghost footprint doesn't intersect existing objects
+          const def = state.pendingPlacement;
+          const ghostPoly = buildEquipmentPolygon(
+            snappedX,
+            snappedZ,
+            def.width,
+            def.depth,
+            0,
+            state.originLngLat,
+          );
+
+          const collisions = state.objects.some((obj) => {
+            const objDef =
+              DEFAULT_LIBRARY.find((d) => d.id === obj.type) ??
+              (state.customLibrary || []).find((d) => d.id === obj.type);
+            if (!objDef) return false;
+            const objPoly = buildEquipmentPolygon(
+              obj.x,
+              obj.z,
+              objDef.width,
+              objDef.depth,
+              obj.rotationY || 0,
+              state.originLngLat!,
+            );
+            try {
+              return turf.booleanIntersects(ghostPoly, objPoly);
+            } catch {
+              return false;
+            }
+          });
+
+          if (collisions) {
+            showToast(
+              "Cannot place equipment on top of another object.",
+              "error",
+            );
+            return;
+          }
+
           addObject(
             state.pendingPlacement.id,
             snappedX,
@@ -345,6 +416,96 @@ export default function App() {
       state.measurePoints,
       addObject,
       setMeasurePoints,
+    ],
+  );
+
+  const handleObjectUpdate = useCallback(
+    (id: string, updates: Partial<EquipmentObject>) => {
+      const object = state.objects.find((obj) => obj.id === id);
+      if (!object) return;
+
+      const isPositionUpdate =
+        updates.x !== undefined || updates.z !== undefined;
+      if (!isPositionUpdate) {
+        updateObject(id, updates);
+        return;
+      }
+
+      if (!state.originLngLat || state.siteBoundary.length < 3) {
+        if (boundaryViolationRef.current !== id) {
+          boundaryViolationRef.current = id;
+          showToast("Move equipment inside boundary only.", "error");
+        }
+        return;
+      }
+
+      const newX = updates.x ?? object.x;
+      const newZ = updates.z ?? object.z;
+
+      if (
+        isPointInBoundary(newX, newZ, state.originLngLat, state.siteBoundary)
+      ) {
+        // Collision check against other objects
+        const def =
+          DEFAULT_LIBRARY.find((d) => d.id === object.type) ??
+          (state.customLibrary || []).find((d) => d.id === object.type);
+        if (!def) return;
+
+        const rot = updates.rotationY ?? object.rotationY ?? 0;
+        const ghostPoly = buildEquipmentPolygon(
+          newX,
+          newZ,
+          def.width,
+          def.depth,
+          rot,
+          state.originLngLat!,
+        );
+
+        const collides = state.objects.some((o) => {
+          if (o.id === id) return false;
+          const oDef =
+            DEFAULT_LIBRARY.find((d) => d.id === o.type) ??
+            (state.customLibrary || []).find((d) => d.id === o.type);
+          if (!oDef) return false;
+          const oPoly = buildEquipmentPolygon(
+            o.x,
+            o.z,
+            oDef.width,
+            oDef.depth,
+            o.rotationY || 0,
+            state.originLngLat!,
+          );
+          try {
+            return turf.booleanIntersects(ghostPoly, oPoly);
+          } catch {
+            return false;
+          }
+        });
+
+        if (collides) {
+          if (boundaryViolationRef.current !== id) {
+            boundaryViolationRef.current = id;
+            showToast(
+              "Cannot place equipment on top of another object.",
+              "error",
+            );
+          }
+          return;
+        }
+
+        boundaryViolationRef.current = null;
+        updateObject(id, updates);
+      } else if (boundaryViolationRef.current !== id) {
+        boundaryViolationRef.current = id;
+        showToast("Move equipment inside boundary only.", "error");
+      }
+    },
+    [
+      state.originLngLat,
+      state.siteBoundary,
+      state.objects,
+      showToast,
+      updateObject,
     ],
   );
 
@@ -816,7 +977,8 @@ export default function App() {
             onMapMove={() => {}}
             onMapClick={handleMapClick}
             onObjectSelect={selectObject}
-            onObjectUpdate={updateObject}
+            onObjectUpdate={handleObjectUpdate}
+            onSetBoundaryLock={setBoundaryLock}
             drawTrigger={drawTrigger}
             targetLocation={targetLocation}
           />

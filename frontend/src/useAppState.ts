@@ -1,6 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { AppState, EquipmentDef, EquipmentObject, DEFAULT_LIBRARY } from '../../backend/types';
-import { v4 as uuidv4 } from 'uuid';
+import { useState, useEffect, useCallback } from "react";
+import {
+  AppState,
+  EquipmentDef,
+  EquipmentObject,
+  DEFAULT_LIBRARY,
+} from "../../backend/types";
+import { v4 as uuidv4 } from "uuid";
 
 export function useAppState() {
   const [state, setState] = useState<AppState>({
@@ -10,16 +15,16 @@ export function useAppState() {
     selectedId: null,
     terrainEnabled: false,
     buildingsEnabled: false,
-    mapStyle: 'streets',
+    mapStyle: "streets",
     pendingPlacement: null,
     measurePoints: [],
     isBoundaryLocked: false,
     customLibrary: [],
-    unitSystem: 'metric',
+    unitSystem: "metric",
   });
 
   const setBoundary = useCallback((coords: [number, number][]) => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       siteBoundary: coords,
       originLngLat: coords.length > 0 ? coords[0] : null,
@@ -28,81 +33,93 @@ export function useAppState() {
   }, []);
 
   const toggleBoundaryLock = useCallback(() => {
-    setState(prev => ({ ...prev, isBoundaryLocked: !prev.isBoundaryLocked }));
+    setState((prev) => ({ ...prev, isBoundaryLocked: !prev.isBoundaryLocked }));
   }, []);
 
-  const addObject = useCallback((type: string, x: number, z: number, color?: string) => {
-    const newObject: EquipmentObject = {
-      id: uuidv4(),
-      type,
-      x,
-      z,
-      rotationY: 0,
-      color,
-    };
-    setState(prev => ({
-      ...prev,
-      objects: [...prev.objects, newObject],
-      pendingPlacement: null,
-    }));
+  const setBoundaryLock = useCallback((locked: boolean) => {
+    setState((prev) => ({ ...prev, isBoundaryLocked: locked }));
   }, []);
 
-  const updateObject = useCallback((id: string, updates: Partial<EquipmentObject>) => {
-    setState(prev => ({
-      ...prev,
-      objects: prev.objects.map(obj => obj.id === id ? { ...obj, ...updates } : obj),
-    }));
-  }, []);
+  const addObject = useCallback(
+    (type: string, x: number, z: number, color?: string) => {
+      const newObject: EquipmentObject = {
+        id: uuidv4(),
+        type,
+        x,
+        z,
+        rotationY: 0,
+        color,
+      };
+      setState((prev) => ({
+        ...prev,
+        objects: [...prev.objects, newObject],
+        pendingPlacement: null,
+      }));
+    },
+    [],
+  );
+
+  const updateObject = useCallback(
+    (id: string, updates: Partial<EquipmentObject>) => {
+      setState((prev) => ({
+        ...prev,
+        objects: prev.objects.map((obj) =>
+          obj.id === id ? { ...obj, ...updates } : obj,
+        ),
+      }));
+    },
+    [],
+  );
 
   const removeObject = useCallback((id: string) => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
-      objects: prev.objects.filter(obj => obj.id !== id),
+      objects: prev.objects.filter((obj) => obj.id !== id),
       selectedId: prev.selectedId === id ? null : prev.selectedId,
     }));
   }, []);
 
   const selectObject = useCallback((id: string | null) => {
-    setState(prev => ({ ...prev, selectedId: id }));
+    setState((prev) => ({ ...prev, selectedId: id }));
   }, []);
 
-  const setMapStyle = useCallback((style: 'streets' | 'satellite') => {
-    setState(prev => ({ ...prev, mapStyle: style }));
+  const setMapStyle = useCallback((style: "streets" | "satellite") => {
+    setState((prev) => ({ ...prev, mapStyle: style }));
   }, []);
 
   const toggleTerrain = useCallback(() => {
-    setState(prev => ({ ...prev, terrainEnabled: !prev.terrainEnabled }));
+    setState((prev) => ({ ...prev, terrainEnabled: !prev.terrainEnabled }));
   }, []);
 
   const toggleBuildings = useCallback(() => {
-    setState(prev => ({ ...prev, buildingsEnabled: !prev.buildingsEnabled }));
+    setState((prev) => ({ ...prev, buildingsEnabled: !prev.buildingsEnabled }));
   }, []);
 
   const setPendingPlacement = useCallback((def: EquipmentDef | null) => {
-    setState(prev => ({ ...prev, pendingPlacement: def }));
+    setState((prev) => ({ ...prev, pendingPlacement: def }));
   }, []);
 
   const setObjects = useCallback((objects: EquipmentObject[]) => {
-    setState(prev => ({ ...prev, objects }));
+    setState((prev) => ({ ...prev, objects }));
   }, []);
 
   const setMeasurePoints = useCallback((points: [number, number][]) => {
-    setState(prev => ({ ...prev, measurePoints: points }));
+    setState((prev) => ({ ...prev, measurePoints: points }));
   }, []);
 
   const addCustomEquipment = useCallback((def: EquipmentDef) => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
-      customLibrary: [...prev.customLibrary, def]
+      customLibrary: [...prev.customLibrary, def],
     }));
   }, []);
 
   const setCustomLibrary = useCallback((library: EquipmentDef[]) => {
-    setState(prev => ({ ...prev, customLibrary: library }));
+    setState((prev) => ({ ...prev, customLibrary: library }));
   }, []);
 
-  const setUnitSystem = useCallback((unit: 'metric' | 'imperial') => {
-    setState(prev => ({ ...prev, unitSystem: unit }));
+  const setUnitSystem = useCallback((unit: "metric" | "imperial") => {
+    setState((prev) => ({ ...prev, unitSystem: unit }));
   }, []);
 
   return {
@@ -121,6 +138,7 @@ export function useAppState() {
     setMeasurePoints,
     addCustomEquipment,
     setCustomLibrary,
+    setBoundaryLock,
     setUnitSystem,
   };
 }
