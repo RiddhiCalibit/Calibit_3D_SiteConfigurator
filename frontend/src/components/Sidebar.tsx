@@ -582,10 +582,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <p className="text-sm font-medium">{selectedDef?.name}</p>
               <div className="grid grid-cols-2 gap-2 text-[10px] font-mono opacity-60">
                 <div>X: {formatUnit(selectedObject.x)}</div>
-                <div>Z: {formatUnit(selectedObject.z)}</div>
+                <div>Y: {formatUnit(selectedObject.z)}</div>
                 <div>
-                  Rot: {((selectedObject.rotationY * 180) / Math.PI).toFixed(0)}
-                  °
+                  Angle:{" "}
+                  {((selectedObject.rotationY * 180) / Math.PI).toFixed(0)}°
                 </div>
               </div>
               {selectedDef && (
@@ -600,7 +600,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Color Picker */}
-            <div className="pt-2 border-t border-white/10">
+            {/* <div className="pt-2 border-t border-white/10">
               <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold mb-2 block">
                 Appearance
               </label>
@@ -639,7 +639,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className="w-6 h-6 rounded-full bg-transparent border-none cursor-pointer overflow-hidden"
                 />
               </div>
-            </div>
+            </div> */}
 
             {/* Manual Controls */}
             <div className="pt-2 border-t border-white/10 space-y-3">
@@ -743,7 +743,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => setExportMenuOpen((open) => !open)}
             className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors w-full"
           >
-            <Upload className="w-3 h-3" />
+            <Download className="w-3 h-3" />
             Export
             <ChevronDown className="w-3 h-3" />
           </button>
@@ -834,7 +834,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={onImport}
           className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors"
         >
-          <Download className="w-3 h-3" />
+          <Upload className="w-3 h-3" />
           Import
         </button>
       </div>
