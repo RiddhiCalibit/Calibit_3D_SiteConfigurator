@@ -134,7 +134,8 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     category: "pools",
     //modelUrl: "/models/wave_pool.glb",
     modelUrl:
-      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090118/calibit-models/defaults/wave_pool.glb",
+      //"https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090118/calibit-models/defaults/wave_pool.glb",
+      "https://res.cloudinary.com/dlft8pqu7/image/upload/v1781594825/wave_pool_nf7z9g.glb",
     isActive: true,
   },
   {

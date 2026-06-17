@@ -57,10 +57,11 @@ const genai = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // Returns current time as IST string e.g. "2025-01-01 10:30:00"
 function getISTString(): string {
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const istTime = new Date(now.getTime() + istOffset);
-  return istTime.toISOString().replace("T", " ").substring(0, 19);
+  // const now = new Date();
+  // const istOffset = 5.5 * 60 * 60 * 1000;
+  // const istTime = new Date(now.getTime() + istOffset);
+  // return istTime.toISOString().replace("T", " ").substring(0, 19);
+  return new Date().toISOString();
 }
 
 // ── Safe error message — never expose internals in production ──────────────
@@ -320,7 +321,10 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
   app.use((req, res, next) => {
-    console.log("👉 Incoming request:", req.method, req.url);
+    // console.log("👉 Incoming request:", req.method, req.url);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("👉 Incoming request:", req.method, req.url);
+    }
     next();
   });
 
