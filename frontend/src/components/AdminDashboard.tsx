@@ -2403,6 +2403,19 @@ function UsersTab({
     password: "",
     companyName: tenant.name,
   });
+
+  React.useEffect(() => {
+    if (isAdding) {
+      setNewUser({
+        name: "",
+        email: "",
+        phone: "",
+        password: "",
+        companyName: tenant.name,
+      });
+    }
+  }, [isAdding, tenant.name]);
+
   const [editFormData, setEditFormData] = React.useState({
     name: "",
     phone: "",
@@ -2680,7 +2693,11 @@ function UsersTab({
       {isAdding && (
         <div className="bg-theme-card border border-brand-teal/30 rounded-2xl p-6 space-y-4">
           <h3 className="font-bold text-sm">Add New Sales Rep</h3>
-          <form onSubmit={handleAddUser} className="space-y-4">
+          <form
+            onSubmit={handleAddUser}
+            className="space-y-4"
+            autoComplete="off"
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-[10px] font-bold opacity-40 uppercase tracking-widest">
@@ -2702,6 +2719,8 @@ function UsersTab({
                 <input
                   required
                   type="email"
+                  name="new-user-email"
+                  autoComplete="off"
                   className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={newUser.email}
                   onChange={(e) =>
@@ -2742,6 +2761,8 @@ function UsersTab({
                 <input
                   required
                   type="password"
+                  name="new-user-password"
+                  autoComplete="new-password"
                   className="w-full mt-1 bg-white/5 border border-theme-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50"
                   value={newUser.password}
                   onChange={(e) =>

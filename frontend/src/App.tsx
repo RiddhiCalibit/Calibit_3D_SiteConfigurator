@@ -1043,7 +1043,7 @@ export default function App() {
             </>
           }
         >
-          <div className="flex h-screen items-start gap-4">
+          <div className="flex items-start gap-4">
             <div className="p-3 bg-amber-500/20 rounded-xl">
               <AlertTriangle className="w-6 h-6 text-amber-500" />
             </div>
