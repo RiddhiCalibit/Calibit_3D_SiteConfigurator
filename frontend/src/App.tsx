@@ -20,6 +20,9 @@ import { ForgotPassword } from "./components/ForgotPassword";
 import { ForcePasswordChange } from "./components/ForcePasswordChange";
 import { ContactAdmin } from "./components/ContactAdmin";
 import { ProjectsPanel } from "./components/ProjectsPanel";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function App() {
   // useEffect(() => {
@@ -88,6 +91,9 @@ export default function App() {
   const [projectsPanelOpen, setProjectsPanelOpen] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(
+    null,
+  );
+  const [currentClientName, setCurrentClientName] = useState<string | null>(
     null,
   );
   const [customEquipment, setCustomEquipment] = useState<any[]>([]);
@@ -509,116 +515,319 @@ export default function App() {
     ],
   );
 
+  // const handleExport = (format: "json" | "pdf" | "dwg" | "excel" = "json") => {
+  //   const data = {
+  //     version: "1.0",
+  //     exportedAt: new Date().toISOString(),
+  //     origin: state.originLngLat,
+  //     siteBoundary: state.siteBoundary,
+  //     objects: state.objects,
+  //   };
+
+  //   let content: string;
+  //   let mimeType = "application/json";
+  //   let extension = "json";
+
+  //   if (format === "excel") {
+  //     extension = "xls";
+  //     mimeType = "application/vnd.ms-excel";
+  //     const headers = [
+  //       "ID",
+  //       "Name",
+  //       "Category",
+  //       "Width",
+  //       "Depth",
+  //       "Height",
+  //       "Color",
+  //     ];
+  //     const tableRows = state.objects
+  //       .map(
+  //         (obj: any) =>
+  //           `<tr><td>${obj.id ?? ""}</td><td>${obj.name ?? ""}</td><td>${obj.category ?? ""}</td><td>${obj.width ?? ""}</td><td>${obj.depth ?? ""}</td><td>${obj.height ?? ""}</td><td>${obj.color ?? ""}</td></tr>`,
+  //       )
+  //       .join("");
+  //     const projectJson = JSON.stringify(data);
+  //     content = `<!DOCTYPE html><html><head><meta charset="UTF-8" /></head><body><table border="1"><thead><tr>${headers
+  //       .map((header) => `<th>${header}</th>`)
+  //       .join(
+  //         "",
+  //       )}</tr></thead><tbody>${tableRows}</tbody></table><script type="application/json" id="project-data">${projectJson}</script></body></html>`;
+  //   } else if (format === "pdf") {
+  //     extension = "pdf";
+  //     mimeType = "application/pdf";
+  //     content = JSON.stringify(data, null, 2);
+  //   } else if (format === "dwg") {
+  //     extension = "dwg";
+  //     mimeType = "application/octet-stream";
+  //     content = JSON.stringify(data, null, 2);
+  //   } else {
+  //     content = JSON.stringify(data, null, 2);
+  //   }
+
+  //   const blob = new Blob([content], {
+  //     type: mimeType,
+  //   });
+  //   const url = URL.createObjectURL(blob);
+  //   const a = document.createElement("a");
+  //   a.href = url;
+  //   a.download = `site-config-${new Date().getTime()}.${extension}`;
+  //   a.click();
+  // };
+
   const handleExport = (format: "json" | "pdf" | "dwg" | "excel" = "json") => {
     const data = {
       version: "1.0",
       exportedAt: new Date().toISOString(),
+      projectName: currentProjectName || "Untitled Project",
+      clientName: currentClientName || "",
       origin: state.originLngLat,
       siteBoundary: state.siteBoundary,
       objects: state.objects,
     };
 
-    let content: string;
-    let mimeType = "application/json";
-    let extension = "json";
+    const exportDate = new Date().toLocaleDateString();
+    const timestamp = new Date().getTime();
 
     if (format === "excel") {
-      extension = "xls";
-      mimeType = "application/vnd.ms-excel";
-      const headers = [
+      // Build a real .xlsx workbook with two sheets: project info + equipment list
+      const infoSheetData = [
+        ["Project Name", data.projectName],
+        ["Client Name", data.clientName],
+        ["Export Date", exportDate],
+        ["Origin Longitude", data.origin?.[0] ?? ""],
+        ["Origin Latitude", data.origin?.[1] ?? ""],
+      ];
+      const infoSheet = XLSX.utils.aoa_to_sheet(infoSheetData);
+
+      const equipmentHeaders = [
         "ID",
         "Name",
         "Category",
+        "X",
+        "Z",
+        "RotationY",
+        "Color",
         "Width",
         "Depth",
         "Height",
-        "Color",
+        "ModelType",
       ];
-      const tableRows = state.objects
-        .map(
-          (obj: any) =>
-            `<tr><td>${obj.id ?? ""}</td><td>${obj.name ?? ""}</td><td>${obj.category ?? ""}</td><td>${obj.width ?? ""}</td><td>${obj.depth ?? ""}</td><td>${obj.height ?? ""}</td><td>${obj.color ?? ""}</td></tr>`,
-        )
-        .join("");
-      const projectJson = JSON.stringify(data);
-      content = `<!DOCTYPE html><html><head><meta charset="UTF-8" /></head><body><table border="1"><thead><tr>${headers
-        .map((header) => `<th>${header}</th>`)
-        .join(
-          "",
-        )}</tr></thead><tbody>${tableRows}</tbody></table><script type="application/json" id="project-data">${projectJson}</script></body></html>`;
-    } else if (format === "pdf") {
-      extension = "pdf";
-      mimeType = "application/pdf";
-      content = JSON.stringify(data, null, 2);
-    } else if (format === "dwg") {
-      extension = "dwg";
-      mimeType = "application/octet-stream";
-      content = JSON.stringify(data, null, 2);
-    } else {
-      content = JSON.stringify(data, null, 2);
+      const equipmentRows = state.objects.map((obj: any) => [
+        obj.id ?? "",
+        obj.name ?? obj.type ?? "",
+        obj.category ?? "",
+        obj.x ?? "",
+        obj.z ?? "",
+        obj.rotationY ?? 0,
+        obj.color ?? "",
+        obj.width ?? "",
+        obj.depth ?? "",
+        obj.height ?? "",
+        obj.type ?? "",
+      ]);
+      const equipmentSheet = XLSX.utils.aoa_to_sheet([
+        equipmentHeaders,
+        ...equipmentRows,
+      ]);
+
+      // Hidden raw-data sheet so re-import can reconstruct the project exactly
+      const rawSheet = XLSX.utils.aoa_to_sheet([
+        ["RawProjectData"],
+        [JSON.stringify(data)],
+      ]);
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, infoSheet, "Project Info");
+      XLSX.utils.book_append_sheet(workbook, equipmentSheet, "Equipment");
+      XLSX.utils.book_append_sheet(workbook, rawSheet, "RawData");
+
+      XLSX.writeFile(workbook, `site-config-${timestamp}.xlsx`);
+      return;
     }
 
-    const blob = new Blob([content], {
-      type: mimeType,
-    });
+    if (format === "pdf") {
+      const doc = new jsPDF();
+
+      doc.setFontSize(16);
+      doc.text(data.projectName, 14, 18);
+      doc.setFontSize(10);
+      doc.text(`Client: ${data.clientName || "N/A"}`, 14, 26);
+      doc.text(`Export Date: ${exportDate}`, 14, 32);
+
+      const equipmentRows = state.objects.map((obj: any) => [
+        obj.name ?? obj.type ?? "",
+        obj.category ?? "",
+        String(obj.x ?? ""),
+        String(obj.z ?? ""),
+        String(obj.width ?? ""),
+        String(obj.depth ?? ""),
+        String(obj.height ?? ""),
+      ]);
+
+      autoTable(doc, {
+        startY: 40,
+        head: [["Name", "Category", "X", "Z", "Width", "Depth", "Height"]],
+        body: equipmentRows,
+      });
+
+      doc.save(`site-config-${timestamp}.pdf`);
+      return;
+    }
+
+    // JSON / DWG fallback (kept as plain JSON, since DWG generation needs a CAD library)
+    const extension = format === "dwg" ? "dwg" : "json";
+    const mimeType =
+      format === "dwg" ? "application/octet-stream" : "application/json";
+    const content = JSON.stringify(data, null, 2);
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `site-config-${new Date().getTime()}.${extension}`;
+    a.download = `site-config-${timestamp}.${extension}`;
     a.click();
+    URL.revokeObjectURL(url);
   };
+
+  // const handleImport = () => {
+  //   const input = document.createElement("input");
+  //   input.type = "file";
+  //   input.accept = ".json,.pdf,.dwg,.xls,.xlsx";
+  //   input.onchange = (e: any) => {
+  //     const file = e.target.files[0];
+  //     const reader = new FileReader();
+  //     reader.onload = (re: any) => {
+  //       const text = re.target.result as string;
+  //       const extractProjectData = (content: string, fileName: string) => {
+  //         const lower = fileName.toLowerCase();
+  //         if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) {
+  //           if (
+  //             content.includes(
+  //               '<script type="application/json" id="project-data">',
+  //             )
+  //           ) {
+  //             const match = content.match(
+  //               /<script type=\"application\/json\" id=\"project-data\">([\s\S]*?)<\/script>/,
+  //             );
+  //             if (match && match[1]) {
+  //               return JSON.parse(match[1]);
+  //             }
+  //           }
+  //         }
+
+  //         // For PDF and DWG we expect embedded JSON text, not a true binary file.
+  //         if (
+  //           lower.endsWith(".pdf") ||
+  //           lower.endsWith(".dwg") ||
+  //           lower.endsWith(".json")
+  //         ) {
+  //           return JSON.parse(content);
+  //         }
+
+  //         // Fallback to JSON parse for any supported format.
+  //         return JSON.parse(content);
+  //       };
+
+  //       try {
+  //         const data = extractProjectData(text, file.name);
+  //         if (state.objects.length > 0 || state.siteBoundary.length > 0) {
+  //           setPendingImportData(data);
+  //           setImportModalOpen(true);
+  //         } else {
+  //           applyImport(data);
+  //         }
+  //       } catch (err) {
+  //         console.error(err);
+  //         alert(
+  //           "Failed to parse imported project. Make sure the file is a valid DWG/PDF/Excel export from this app.",
+  //         );
+  //       }
+  //     };
+  //     reader.readAsText(file);
+  //   };
+  //   input.click();
+  // };
 
   const handleImport = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json,.pdf,.dwg,.xls,.xlsx";
+    input.accept = ".json,.dwg,.xlsx,.xls";
     input.onchange = (e: any) => {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = (re: any) => {
-        const text = re.target.result as string;
-        const extractProjectData = (content: string, fileName: string) => {
-          const lower = fileName.toLowerCase();
-          if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) {
-            if (
-              content.includes(
-                '<script type="application/json" id="project-data">',
-              )
-            ) {
-              const match = content.match(
-                /<script type=\"application\/json\" id=\"project-data\">([\s\S]*?)<\/script>/,
-              );
-              if (match && match[1]) {
-                return JSON.parse(match[1]);
+      const fileName = file.name.toLowerCase();
+
+      const handleParsedData = (data: any) => {
+        if (state.objects.length > 0 || state.siteBoundary.length > 0) {
+          setPendingImportData(data);
+          setImportModalOpen(true);
+        } else {
+          applyImport(data);
+        }
+      };
+
+      if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+        // Real Excel file — read via SheetJS
+        const reader = new FileReader();
+        reader.onload = (re: any) => {
+          try {
+            const arrayBuffer = re.target.result;
+            const workbook = XLSX.read(arrayBuffer, { type: "array" });
+
+            // Prefer the RawData sheet (exact round-trip of project state)
+            if (workbook.SheetNames.includes("RawData")) {
+              const rawSheet = workbook.Sheets["RawData"];
+              const rawRows = XLSX.utils.sheet_to_json(rawSheet, {
+                header: 1,
+              }) as any[][];
+              const jsonString = rawRows?.[1]?.[0];
+              if (jsonString) {
+                handleParsedData(JSON.parse(jsonString));
+                return;
               }
             }
-          }
 
-          // For PDF and DWG we expect embedded JSON text, not a true binary file.
-          if (
-            lower.endsWith(".pdf") ||
-            lower.endsWith(".dwg") ||
-            lower.endsWith(".json")
-          ) {
-            return JSON.parse(content);
-          }
+            // Fallback: rebuild from the Equipment sheet only
+            if (workbook.SheetNames.includes("Equipment")) {
+              const equipSheet = workbook.Sheets["Equipment"];
+              const rows = XLSX.utils.sheet_to_json(equipSheet) as any[];
+              const objects = rows.map((row: any) => ({
+                id: row["ID"] || uuidv4(),
+                name: row["Name"],
+                category: row["Category"],
+                x: Number(row["X"]) || 0,
+                z: Number(row["Z"]) || 0,
+                rotationY: Number(row["RotationY"]) || 0,
+                color: row["Color"],
+                width: Number(row["Width"]) || undefined,
+                depth: Number(row["Depth"]) || undefined,
+                height: Number(row["Height"]) || undefined,
+                type: row["ModelType"],
+              }));
+              handleParsedData({ objects, siteBoundary: state.siteBoundary });
+              return;
+            }
 
-          // Fallback to JSON parse for any supported format.
-          return JSON.parse(content);
+            throw new Error("No recognizable project data found in file.");
+          } catch (err) {
+            console.error(err);
+            alert(
+              "Failed to parse imported Excel file. Make sure it was exported from this app.",
+            );
+          }
         };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
 
+      // JSON / DWG (plain JSON text)
+      const reader = new FileReader();
+      reader.onload = (re: any) => {
         try {
-          const data = extractProjectData(text, file.name);
-          if (state.objects.length > 0 || state.siteBoundary.length > 0) {
-            setPendingImportData(data);
-            setImportModalOpen(true);
-          } else {
-            applyImport(data);
-          }
+          const data = JSON.parse(re.target.result as string);
+          handleParsedData(data);
         } catch (err) {
           console.error(err);
           alert(
-            "Failed to parse imported project. Make sure the file is a valid DWG/PDF/Excel export from this app.",
+            "Failed to parse imported project. Make sure the file is a valid export from this app.",
           );
         }
       };
@@ -710,6 +919,7 @@ export default function App() {
       if (res.ok) {
         setCurrentProjectId(newId);
         setCurrentProjectName(projectName);
+        setCurrentClientName(clientName);
         alert("Project saved successfully!");
         fetchProjects(tenant);
       } else {
@@ -737,6 +947,7 @@ export default function App() {
 
       setCurrentProjectId(projectId);
       setCurrentProjectName(project.name || projectId);
+      setCurrentClientName(project.client_name || null);
     } catch {
       alert("Failed to load project.");
     }
@@ -749,6 +960,7 @@ export default function App() {
     if (currentProjectId === projectId) {
       setCurrentProjectId(null);
       setCurrentProjectName(null);
+      setCurrentClientName(null);
     }
   };
 
@@ -776,6 +988,7 @@ export default function App() {
   const handleNewProject = () => {
     setCurrentProjectId(null);
     setCurrentProjectName(null);
+    setCurrentClientName(null);
     setBoundary([]);
     setObjects([]);
   };

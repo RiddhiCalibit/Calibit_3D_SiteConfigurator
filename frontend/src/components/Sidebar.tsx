@@ -784,7 +784,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )} */}
           {exportMenuOpen && (
             <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
-              {/* PDF */}
+              {/* PDF
               <button
                 disabled
                 className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs opacity-60 cursor-not-allowed"
@@ -795,7 +795,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     upcoming feature
                   </span>
                 </div>
+                <span className="text-[10px] opacity-50">.pdf</span>
+              </button> */}
 
+              {/* PDF */}
+              <button
+                onClick={() => {
+                  onExport("pdf");
+                  setExportMenuOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+              >
+                <span>Export as PDF</span>
                 <span className="text-[10px] opacity-50">.pdf</span>
               </button>
 
