@@ -96,6 +96,12 @@ export default function App() {
   const [currentClientName, setCurrentClientName] = useState<string | null>(
     null,
   );
+  const [currentProjectCreatedAt, setCurrentProjectCreatedAt] = useState<
+    string | null
+  >(null);
+  const [currentProjectUpdatedAt, setCurrentProjectUpdatedAt] = useState<
+    string | null
+  >(null);
   const [customEquipment, setCustomEquipment] = useState<any[]>([]);
   const boundaryViolationRef = useRef<string | null>(null);
 
@@ -574,112 +580,502 @@ export default function App() {
   //   a.click();
   // };
 
+  // const handleExport = (format: "json" | "pdf" | "dwg" | "excel" = "json") => {
+  //   const data = {
+  //     version: "1.0",
+  //     exportedAt: new Date().toISOString(),
+  //     projectName: currentProjectName || "Untitled Project",
+  //     clientName: currentClientName || "",
+  //     origin: state.originLngLat,
+  //     siteBoundary: state.siteBoundary,
+  //     objects: state.objects,
+  //   };
+
+  //   const exportDate = new Date().toLocaleDateString();
+  //   const timestamp = new Date().getTime();
+
+  //   if (format === "excel") {
+  //     // Build a real .xlsx workbook with two sheets: project info + equipment list
+  //     const infoSheetData = [
+  //       ["Project Name", data.projectName],
+  //       ["Client Name", data.clientName],
+  //       ["Export Date", exportDate],
+  //       ["Origin Longitude", data.origin?.[0] ?? ""],
+  //       ["Origin Latitude", data.origin?.[1] ?? ""],
+  //     ];
+  //     const infoSheet = XLSX.utils.aoa_to_sheet(infoSheetData);
+
+  //     const equipmentHeaders = [
+  //       "ID",
+  //       "Name",
+  //       "Category",
+  //       "X",
+  //       "Y",
+  //       "RotationY",
+  //       "Width",
+  //       "Depth",
+  //       "Height",
+  //       "ModelType",
+  //     ];
+  //     const equipmentRows = state.objects.map((obj: any) => [
+  //       obj.id ?? "",
+  //       obj.name ?? obj.type ?? "",
+  //       obj.category ?? "",
+  //       obj.x ?? "",
+  //       obj.y ?? "",
+  //       obj.rotationY ?? 0,
+  //       obj.width ?? "",
+  //       obj.depth ?? "",
+  //       obj.height ?? "",
+  //       obj.type ?? "",
+  //     ]);
+  //     const equipmentSheet = XLSX.utils.aoa_to_sheet([
+  //       equipmentHeaders,
+  //       ...equipmentRows,
+  //     ]);
+
+  //     // Hidden raw-data sheet so re-import can reconstruct the project exactly
+  //     const rawSheet = XLSX.utils.aoa_to_sheet([
+  //       ["RawProjectData"],
+  //       [JSON.stringify(data)],
+  //     ]);
+
+  //     const workbook = XLSX.utils.book_new();
+  //     XLSX.utils.book_append_sheet(workbook, infoSheet, "Project Info");
+  //     XLSX.utils.book_append_sheet(workbook, equipmentSheet, "Equipment");
+  //     XLSX.utils.book_append_sheet(workbook, rawSheet, "RawData");
+
+  //     XLSX.writeFile(workbook, `site-config-${timestamp}.xlsx`);
+  //     return;
+  //   }
+
+  //   if (format === "pdf") {
+  //     // Build Mapbox static image URL centered on the site boundary
+  //     const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+  //     const origin = state.originLngLat;
+  //     const lng = origin?.[0] ?? 73.856;
+  //     const lat = origin?.[1] ?? 18.523;
+
+  //     // Draw equipment pins as Mapbox overlay markers
+  //     const markers = state.objects
+  //       .slice(0, 10) // Mapbox static API limit
+  //       .map((obj: any) => {
+  //         const objLng = lng + (obj.x ?? 0) * 0.000009;
+  //         const objLat = lat + (obj.z ?? 0) * 0.000009;
+  //         return `pin-s+14b8a6(${objLng.toFixed(5)},${objLat.toFixed(5)})`;
+  //       })
+  //       .join(",");
+
+  //     const staticMapUrl = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${markers}/${lng},${lat},16,0/600x300@2x?access_token=${mapboxToken}`;
+
+  //     const generatePDF = (mapImageDataUrl?: string) => {
+  //       const doc = new jsPDF({
+  //         orientation: "portrait",
+  //         unit: "mm",
+  //         format: "a4",
+  //       });
+  //       const teal: [number, number, number] = [20, 184, 166];
+  //       const dark: [number, number, number] = [15, 23, 42];
+
+  //       // Header bar
+  //       doc.setFillColor(...dark);
+  //       doc.rect(0, 0, 210, 22, "F");
+  //       doc.setFontSize(14);
+  //       doc.setTextColor(255, 255, 255);
+  //       doc.text("3D Site Configuration Report", 14, 14);
+
+  //       // Project info section
+  //       doc.setFontSize(10);
+  //       doc.setTextColor(...dark);
+
+  //       const formatDate = (iso: string | null) =>
+  //         iso ? new Date(iso).toLocaleString() : "N/A";
+
+  //       const infoRows = [
+  //         ["Project Name", currentProjectName || "Untitled Project"],
+  //         ["Client Name", currentClientName || "N/A"],
+  //         ["Export Date", new Date().toLocaleDateString()],
+  //         ["Created At", formatDate(currentProjectCreatedAt)],
+  //         ["Last Updated", formatDate(currentProjectUpdatedAt)],
+  //         ["Total Equipment", String(state.objects.length)],
+  //       ];
+
+  //       let y = 30;
+  //       infoRows.forEach(([label, value]) => {
+  //         doc.setFont("helvetica", "bold");
+  //         doc.setTextColor(100, 100, 100);
+  //         doc.text(label + ":", 14, y);
+  //         doc.setFont("helvetica", "normal");
+  //         doc.setTextColor(...dark);
+  //         doc.text(value, 60, y);
+  //         y += 7;
+  //       });
+
+  //       // Map image
+  //       if (mapImageDataUrl) {
+  //         doc.setFontSize(9);
+  //         doc.setTextColor(...teal);
+  //         doc.setFont("helvetica", "bold");
+  //         doc.text("SITE MAP", 14, y + 4);
+  //         y += 8;
+  //         try {
+  //           doc.addImage(mapImageDataUrl, "PNG", 14, y, 182, 65);
+  //           y += 70;
+  //         } catch {
+  //           // skip image if it fails
+  //         }
+  //       }
+
+  //       // Equipment table
+  //       doc.setFontSize(9);
+  //       doc.setTextColor(...teal);
+  //       doc.setFont("helvetica", "bold");
+  //       doc.text("EQUIPMENT LIST", 14, y + 4);
+  //       y += 6;
+
+  //       autoTable(doc, {
+  //         startY: y,
+  //         head: [["Name", "Category", "X (m)", "Z (m)", "W×D×H"]],
+  //         body: state.objects.map((obj: any) => [
+  //           obj.name ?? obj.type ?? "",
+  //           obj.category ?? "",
+  //           String(obj.x ?? ""),
+  //           String(obj.z ?? ""),
+  //           `${obj.width ?? "?"}×${obj.depth ?? "?"}×${obj.height ?? "?"}`,
+  //           obj.color ?? "",
+  //         ]),
+  //         headStyles: {
+  //           fillColor: teal,
+  //           textColor: [255, 255, 255],
+  //           fontStyle: "bold",
+  //         },
+  //         alternateRowStyles: { fillColor: [245, 250, 250] },
+  //         styles: { fontSize: 8 },
+  //       });
+
+  //       doc.save(`site-config-${new Date().getTime()}.pdf`);
+  //     };
+
+  //     // Fetch the map image, fall back to no image if it fails (e.g. token missing)
+  //     if (mapboxToken) {
+  //       const img = new Image();
+  //       img.crossOrigin = "anonymous";
+  //       img.onload = () => {
+  //         const canvas = document.createElement("canvas");
+  //         canvas.width = img.width;
+  //         canvas.height = img.height;
+  //         canvas.getContext("2d")!.drawImage(img, 0, 0);
+  //         generatePDF(canvas.toDataURL("image/png"));
+  //       };
+  //       img.onerror = () => generatePDF(); // generate without map if fetch fails
+  //       img.src = staticMapUrl;
+  //     } else {
+  //       generatePDF();
+  //     }
+  //     return;
+  //   }
+
   const handleExport = (format: "json" | "pdf" | "dwg" | "excel" = "json") => {
+    const timestamp = new Date().getTime();
+    const exportDate = new Date().toLocaleDateString();
+    const projectName = currentProjectName || "Untitled Project";
+    const clientName = currentClientName || "N/A";
+    const formatDate = (iso: string | null) =>
+      iso ? new Date(iso).toLocaleString() : "N/A";
+
+    // ── EXCEL ──────────────────────────────────────────────────────────────
+    if (format === "excel") {
+      const wb = XLSX.utils.book_new();
+
+      // Section 1: Project Info rows
+      const infoRows = [
+        ["PROJECT INFORMATION"],
+        ["Project Name", projectName],
+        ["Client Name", clientName],
+        ["Export Date", exportDate],
+        ["Created At", formatDate(currentProjectCreatedAt)],
+        ["Last Updated", formatDate(currentProjectUpdatedAt)],
+        ["Total Equipment", state.objects.length],
+        [],
+        // Section 2: Equipment header + rows in same sheet
+        ["EQUIPMENT LIST"],
+        [
+          "ID",
+          "Name",
+          "Category",
+          "X (m)",
+          "Z (m)",
+          "RotationY",
+          "Width (m)",
+          "Depth (m)",
+          "Height (m)",
+        ],
+        ...state.objects.map((obj: any) => [
+          obj.id ?? "",
+          obj.name ?? obj.type ?? "",
+          obj.category ?? "",
+          obj.x ?? "",
+          obj.z ?? "",
+          obj.rotationY ?? 0,
+          obj.width ?? "",
+          obj.depth ?? "",
+          obj.height ?? "",
+        ]),
+        [],
+        // Section 3: Raw JSON for re-import
+        ["RAW DATA (do not edit)"],
+        [
+          JSON.stringify({
+            version: "1.0",
+            exportedAt: new Date().toISOString(),
+            projectName,
+            clientName,
+            origin: state.originLngLat,
+            siteBoundary: state.siteBoundary,
+            objects: state.objects,
+          }),
+        ],
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(infoRows);
+      XLSX.utils.book_append_sheet(wb, ws, "Site Configuration");
+      XLSX.writeFile(wb, `site-config-${timestamp}.xlsx`);
+      return;
+    }
+
+    // ── PDF ────────────────────────────────────────────────────────────────
+    if (format === "pdf") {
+      const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+      const origin = state.originLngLat;
+      const lng = origin?.[0] ?? 0;
+      const lat = origin?.[1] ?? 0;
+
+      // Build GeoJSON boundary overlay as path
+      // const boundary = state.siteBoundary;
+      // let pathOverlay = "";
+      // if (boundary && boundary.length > 1) {
+      //   const coordStr = boundary
+      //     .map((pt: number[]) => `${pt[0].toFixed(5)},${pt[1].toFixed(5)}`)
+      //     .join(",");
+      //   pathOverlay = `path-3+14b8a6-0.5+14b8a6-0.3(${encodeURIComponent(coordStr)}),`;
+      // }
+      // Build boundary path overlay using correct Mapbox Static API polyline format
+      const boundary = state.siteBoundary;
+      let pathOverlay = "";
+      if (boundary && boundary.length > 1) {
+        const closedBoundary = [...boundary];
+        if (
+          closedBoundary[0][0] !== closedBoundary[closedBoundary.length - 1][0] ||
+          closedBoundary[0][1] !== closedBoundary[closedBoundary.length - 1][1]
+        ) {
+          closedBoundary.push(closedBoundary[0]);
+        }
+
+        const coordPairs = closedBoundary
+          .map((pt: number[]) => `${pt[0].toFixed(5)},${pt[1].toFixed(5)}`)
+          .join(";");
+
+        pathOverlay = `path-2+14b8a6-0.95+14b8a6-0.25(${encodeURIComponent(
+          coordPairs,
+        )}),`;
+      }
+
+      const pinOverlays = state.objects
+        .slice(0, 20)
+        .map((obj: any) => {
+          const [objLng, objLat] = metresToLngLat(
+            obj.x ?? 0,
+            obj.z ?? 0,
+            origin,
+          );
+          const label = encodeURIComponent(
+            String(obj.name ?? obj.type ?? "").slice(0, 6),
+          );
+          return `pin-l-${label}+14b8a6(${objLng.toFixed(5)},${objLat.toFixed(5)})`;
+        })
+        .join(",");
+
+      const overlays = [pathOverlay, pinOverlays].filter(Boolean).join("");
+      const overlaySegment = overlays ? `${overlays}/` : "";
+      const mapPosition = overlays ? "auto" : `${lng},${lat},16,0`;
+      const staticMapUrl = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${overlaySegment}${mapPosition}/600x300@2x?access_token=${mapboxToken}`;
+
+      const generatePDF = (mapImageDataUrl?: string) => {
+        const doc = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+        const teal: [number, number, number] = [20, 184, 166];
+        const dark: [number, number, number] = [15, 23, 42];
+        const white: [number, number, number] = [255, 255, 255];
+        const lightGray: [number, number, number] = [245, 250, 250];
+
+        // ── Header bar ──────────────────────────────────────────────────────
+        doc.setFillColor(...dark);
+        doc.rect(0, 0, 210, 24, "F");
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...white);
+        doc.text("3D Site Configuration Report", 14, 16);
+
+        // ── Project info grid (2 columns) ───────────────────────────────────
+        let y = 32;
+        const infoRows = [
+          ["Project Name:", projectName],
+          ["Client Name:", clientName],
+          ["Export Date:", exportDate],
+          ["Created At:", formatDate(currentProjectCreatedAt)],
+          ["Last Updated:", formatDate(currentProjectUpdatedAt)],
+          ["Total Equipment:", String(state.objects.length)],
+        ];
+
+        // Draw a subtle info box background
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(220, 220, 220);
+        doc.roundedRect(10, y - 4, 190, infoRows.length * 7 + 6, 2, 2, "FD");
+
+        infoRows.forEach(([label, value]) => {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.setTextColor(80, 80, 80);
+          doc.text(label, 16, y);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(...dark);
+          doc.text(value, 65, y);
+          y += 7;
+        });
+        y += 4;
+
+        // ── Site Map ────────────────────────────────────────────────────────
+        if (mapImageDataUrl) {
+          doc.setFontSize(9);
+          doc.setTextColor(...teal);
+          doc.setFont("helvetica", "bold");
+          doc.text("SITE MAP", 14, y);
+          y += 4;
+          try {
+            doc.addImage(mapImageDataUrl, "PNG", 14, y, 182, 70);
+            y += 74;
+          } catch {
+            /* skip map if image fails */
+          }
+        }
+
+        // ── Equipment List ──────────────────────────────────────────────────
+        y += 2;
+        doc.setFontSize(9);
+        doc.setTextColor(...teal);
+        doc.setFont("helvetica", "bold");
+        doc.text("EQUIPMENT LIST", 14, y);
+        y += 4;
+
+        // Resolve def (width/depth/height/color) from DEFAULT_LIBRARY + customLibrary
+        const allDefs = [...DEFAULT_LIBRARY, ...(state.customLibrary || [])];
+
+        autoTable(doc, {
+          startY: y,
+          head: [["Name", "Category", "X (m)", "Z (m)", "W×D×H"]],
+          body: state.objects.map((obj: any) => {
+            const def = allDefs.find((d: any) => d.id === obj.type);
+            const w = def?.width ?? obj.width ?? "?";
+            const d2 = def?.depth ?? obj.depth ?? "?";
+            const h = def?.height ?? obj.height ?? "?";
+            return [
+              obj.name ?? obj.type ?? "",
+              obj.category ?? def?.category ?? "",
+              typeof obj.x === "number"
+                ? obj.x.toFixed(1)
+                : String(obj.x ?? ""),
+              typeof obj.z === "number"
+                ? obj.z.toFixed(1)
+                : String(obj.z ?? ""),
+              `${w}×${d2}×${h}`,
+            ];
+          }),
+          headStyles: {
+            fillColor: teal,
+            textColor: white,
+            fontStyle: "bold",
+            fontSize: 9,
+          },
+          alternateRowStyles: { fillColor: lightGray },
+          styles: { fontSize: 8.5, cellPadding: 2.5 },
+          columnStyles: {
+            0: { cellWidth: 55 }, // Name
+            1: { cellWidth: 35 }, // Category
+            2: { cellWidth: 22, halign: "right" }, // X
+            3: { cellWidth: 22, halign: "right" }, // Z
+            4: { cellWidth: 36, halign: "center" }, // W×D×H
+          },
+        });
+
+        // ── Embed raw project data for re-import ────────────────────────────
+        const rawData = JSON.stringify({
+          version: "1.0",
+          exportedAt: new Date().toISOString(),
+          projectName,
+          clientName,
+          origin: state.originLngLat,
+          siteBoundary: state.siteBoundary,
+          objects: state.objects,
+          customLibrary: state.customLibrary || [],
+        });
+        const encoded = btoa(unescape(encodeURIComponent(rawData)));
+
+        // Method 1: PDF subject metadata (most reliable for re-import)
+        doc.setProperties({
+          title: `3D Site Configuration — ${projectName}`,
+          subject: `CALIBIT_DATA_START:${encoded}:CALIBIT_DATA_END`,
+          author: "Calibit 3D SiteConfigurator",
+          creator: "Calibit v1.3.0",
+        });
+
+        // Method 2: Hidden text on page 2 as one single string
+        // IMPORTANT: must be written as ONE doc.text() call — multiple calls
+        // inject PDF binary operators (Tj/ET/BT/Tf) between chunks which corrupt the base64
+        doc.addPage();
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(1);
+        doc.text(`CALIBIT_DATA_START:${encoded}:CALIBIT_DATA_END`, 1, 5, {
+          maxWidth: 200,
+        });
+
+        doc.save(`site-config-${timestamp}.pdf`);
+      };
+
+      if (mapboxToken && lng !== 0) {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          canvas.getContext("2d")!.drawImage(img, 0, 0);
+          generatePDF(canvas.toDataURL("image/png"));
+        };
+        img.onerror = () => generatePDF();
+        img.src = staticMapUrl;
+      } else {
+        generatePDF();
+      }
+      return;
+    }
+    // JSON / DWG fallback (kept as plain JSON, since DWG generation needs a CAD library)
+    // ── JSON / DWG fallback ────────────────────────────────────────────────
     const data = {
       version: "1.0",
       exportedAt: new Date().toISOString(),
-      projectName: currentProjectName || "Untitled Project",
-      clientName: currentClientName || "",
+      projectName,
+      clientName,
       origin: state.originLngLat,
       siteBoundary: state.siteBoundary,
       objects: state.objects,
     };
-
-    const exportDate = new Date().toLocaleDateString();
-    const timestamp = new Date().getTime();
-
-    if (format === "excel") {
-      // Build a real .xlsx workbook with two sheets: project info + equipment list
-      const infoSheetData = [
-        ["Project Name", data.projectName],
-        ["Client Name", data.clientName],
-        ["Export Date", exportDate],
-        ["Origin Longitude", data.origin?.[0] ?? ""],
-        ["Origin Latitude", data.origin?.[1] ?? ""],
-      ];
-      const infoSheet = XLSX.utils.aoa_to_sheet(infoSheetData);
-
-      const equipmentHeaders = [
-        "ID",
-        "Name",
-        "Category",
-        "X",
-        "Z",
-        "RotationY",
-        "Color",
-        "Width",
-        "Depth",
-        "Height",
-        "ModelType",
-      ];
-      const equipmentRows = state.objects.map((obj: any) => [
-        obj.id ?? "",
-        obj.name ?? obj.type ?? "",
-        obj.category ?? "",
-        obj.x ?? "",
-        obj.z ?? "",
-        obj.rotationY ?? 0,
-        obj.color ?? "",
-        obj.width ?? "",
-        obj.depth ?? "",
-        obj.height ?? "",
-        obj.type ?? "",
-      ]);
-      const equipmentSheet = XLSX.utils.aoa_to_sheet([
-        equipmentHeaders,
-        ...equipmentRows,
-      ]);
-
-      // Hidden raw-data sheet so re-import can reconstruct the project exactly
-      const rawSheet = XLSX.utils.aoa_to_sheet([
-        ["RawProjectData"],
-        [JSON.stringify(data)],
-      ]);
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, infoSheet, "Project Info");
-      XLSX.utils.book_append_sheet(workbook, equipmentSheet, "Equipment");
-      XLSX.utils.book_append_sheet(workbook, rawSheet, "RawData");
-
-      XLSX.writeFile(workbook, `site-config-${timestamp}.xlsx`);
-      return;
-    }
-
-    if (format === "pdf") {
-      const doc = new jsPDF();
-
-      doc.setFontSize(16);
-      doc.text(data.projectName, 14, 18);
-      doc.setFontSize(10);
-      doc.text(`Client: ${data.clientName || "N/A"}`, 14, 26);
-      doc.text(`Export Date: ${exportDate}`, 14, 32);
-
-      const equipmentRows = state.objects.map((obj: any) => [
-        obj.name ?? obj.type ?? "",
-        obj.category ?? "",
-        String(obj.x ?? ""),
-        String(obj.z ?? ""),
-        String(obj.width ?? ""),
-        String(obj.depth ?? ""),
-        String(obj.height ?? ""),
-      ]);
-
-      autoTable(doc, {
-        startY: 40,
-        head: [["Name", "Category", "X", "Z", "Width", "Depth", "Height"]],
-        body: equipmentRows,
-      });
-
-      doc.save(`site-config-${timestamp}.pdf`);
-      return;
-    }
-
-    // JSON / DWG fallback (kept as plain JSON, since DWG generation needs a CAD library)
     const extension = format === "dwg" ? "dwg" : "json";
-    const mimeType =
-      format === "dwg" ? "application/octet-stream" : "application/json";
-    const content = JSON.stringify(data, null, 2);
-    const blob = new Blob([content], { type: mimeType });
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -688,74 +1084,20 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // const handleImport = () => {
-  //   const input = document.createElement("input");
-  //   input.type = "file";
-  //   input.accept = ".json,.pdf,.dwg,.xls,.xlsx";
-  //   input.onchange = (e: any) => {
-  //     const file = e.target.files[0];
-  //     const reader = new FileReader();
-  //     reader.onload = (re: any) => {
-  //       const text = re.target.result as string;
-  //       const extractProjectData = (content: string, fileName: string) => {
-  //         const lower = fileName.toLowerCase();
-  //         if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) {
-  //           if (
-  //             content.includes(
-  //               '<script type="application/json" id="project-data">',
-  //             )
-  //           ) {
-  //             const match = content.match(
-  //               /<script type=\"application\/json\" id=\"project-data\">([\s\S]*?)<\/script>/,
-  //             );
-  //             if (match && match[1]) {
-  //               return JSON.parse(match[1]);
-  //             }
-  //           }
-  //         }
-
-  //         // For PDF and DWG we expect embedded JSON text, not a true binary file.
-  //         if (
-  //           lower.endsWith(".pdf") ||
-  //           lower.endsWith(".dwg") ||
-  //           lower.endsWith(".json")
-  //         ) {
-  //           return JSON.parse(content);
-  //         }
-
-  //         // Fallback to JSON parse for any supported format.
-  //         return JSON.parse(content);
-  //       };
-
-  //       try {
-  //         const data = extractProjectData(text, file.name);
-  //         if (state.objects.length > 0 || state.siteBoundary.length > 0) {
-  //           setPendingImportData(data);
-  //           setImportModalOpen(true);
-  //         } else {
-  //           applyImport(data);
-  //         }
-  //       } catch (err) {
-  //         console.error(err);
-  //         alert(
-  //           "Failed to parse imported project. Make sure the file is a valid DWG/PDF/Excel export from this app.",
-  //         );
-  //       }
-  //     };
-  //     reader.readAsText(file);
-  //   };
-  //   input.click();
-  // };
-
   const handleImport = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json,.dwg,.xlsx,.xls";
+    input.accept = ".json,.dwg,.xlsx,.xls,.pdf";
     input.onchange = (e: any) => {
       const file = e.target.files[0];
+      if (!file) return;
       const fileName = file.name.toLowerCase();
 
       const handleParsedData = (data: any) => {
+        if (!data.objects && !data.siteBoundary) {
+          alert("No valid project data found in this file.");
+          return;
+        }
         if (state.objects.length > 0 || state.siteBoundary.length > 0) {
           setPendingImportData(data);
           setImportModalOpen(true);
@@ -765,52 +1107,78 @@ export default function App() {
       };
 
       if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-        // Real Excel file — read via SheetJS
         const reader = new FileReader();
         reader.onload = (re: any) => {
           try {
-            const arrayBuffer = re.target.result;
-            const workbook = XLSX.read(arrayBuffer, { type: "array" });
+            const wb = XLSX.read(re.target.result, { type: "array" });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, {
+              header: 1,
+              raw: false, // read everything as strings to avoid truncation
+            }) as any[][];
 
-            // Prefer the RawData sheet (exact round-trip of project state)
-            if (workbook.SheetNames.includes("RawData")) {
-              const rawSheet = workbook.Sheets["RawData"];
-              const rawRows = XLSX.utils.sheet_to_json(rawSheet, {
-                header: 1,
-              }) as any[][];
-              const jsonString = rawRows?.[1]?.[0];
-              if (jsonString) {
-                handleParsedData(JSON.parse(jsonString));
+            // Strategy 1: Find RAW DATA row — most reliable, full round-trip
+            const rawIdx = rows.findIndex(
+              (r) => String(r[0]).trim() === "RAW DATA (do not edit)",
+            );
+            if (rawIdx !== -1 && rows[rawIdx + 1]?.[0]) {
+              try {
+                const parsed = JSON.parse(String(rows[rawIdx + 1][0]));
+                handleParsedData(parsed);
                 return;
+              } catch {
+                // RAW DATA row corrupted, fall through to Equipment strategy
               }
             }
 
-            // Fallback: rebuild from the Equipment sheet only
-            if (workbook.SheetNames.includes("Equipment")) {
-              const equipSheet = workbook.Sheets["Equipment"];
-              const rows = XLSX.utils.sheet_to_json(equipSheet) as any[];
-              const objects = rows.map((row: any) => ({
-                id: row["ID"] || uuidv4(),
-                name: row["Name"],
-                category: row["Category"],
-                x: Number(row["X"]) || 0,
-                z: Number(row["Z"]) || 0,
-                rotationY: Number(row["RotationY"]) || 0,
-                color: row["Color"],
-                width: Number(row["Width"]) || undefined,
-                depth: Number(row["Depth"]) || undefined,
-                height: Number(row["Height"]) || undefined,
-                type: row["ModelType"],
+            // Strategy 2: Rebuild from EQUIPMENT LIST rows
+            const equipIdx = rows.findIndex(
+              (r) => String(r[0]).trim() === "EQUIPMENT LIST",
+            );
+            if (equipIdx !== -1) {
+              // Skip the header row (equipIdx+1), read data rows until empty
+              const dataRows = rows
+                .slice(equipIdx + 2)
+                .filter(
+                  (r) =>
+                    r[0] &&
+                    String(r[0]).trim() !== "" &&
+                    String(r[0]).trim() !== "RAW DATA (do not edit)",
+                );
+
+              if (dataRows.length === 0) {
+                alert("Equipment list is empty in this file.");
+                return;
+              }
+
+              const objects = dataRows.map((r: any) => ({
+                id: String(r[0] || uuidv4()),
+                name: String(r[1] || ""),
+                category: String(r[2] || ""),
+                x: parseFloat(r[3]) || 0,
+                z: parseFloat(r[4]) || 0,
+                rotationY: parseFloat(r[5]) || 0,
+                width: r[6] ? parseFloat(r[6]) : undefined,
+                depth: r[7] ? parseFloat(r[7]) : undefined,
+                height: r[8] ? parseFloat(r[8]) : undefined,
+                type: String(r[1] || ""),
+                color: "#14b8a6",
               }));
-              handleParsedData({ objects, siteBoundary: state.siteBoundary });
+
+              // Try to get boundary from Project Info section
+              let siteBoundary = state.siteBoundary;
+              handleParsedData({ objects, siteBoundary, version: "1.0" });
               return;
             }
 
-            throw new Error("No recognizable project data found in file.");
-          } catch (err) {
-            console.error(err);
             alert(
-              "Failed to parse imported Excel file. Make sure it was exported from this app.",
+              "Could not find project data in this Excel file.\n\nMake sure the file was exported from this app and has not been edited.",
+            );
+          } catch (err) {
+            console.error("Excel import error:", err);
+            alert(
+              "Failed to read Excel file: " +
+                (err instanceof Error ? err.message : String(err)),
             );
           }
         };
@@ -818,16 +1186,105 @@ export default function App() {
         return;
       }
 
-      // JSON / DWG (plain JSON text)
+      // PDF — extract embedded JSON from metadata subject field
+      // if (fileName.endsWith(".pdf")) {
+      //   const reader = new FileReader();
+      //   reader.onload = (re: any) => {
+      //     try {
+      //       const text = re.target.result as string;
+      //       // jsPDF embeds subject as: /Subject (...)
+      //       const match = text.match(/\/Subject\s*\(([^)]+(?:\)[^)]*)*)\)/);
+      //       if (!match) {
+      //         alert(
+      //           "This PDF was not exported from this app or has no embedded project data.",
+      //         );
+      //         return;
+      //       }
+      //       // Unescape PDF string encoding
+      //       const raw = match[1]
+      //         .replace(/\\\(/g, "(")
+      //         .replace(/\\\)/g, ")")
+      //         .replace(/\\\\/g, "\\");
+      //       handleParsedData(JSON.parse(raw));
+      //     } catch (err) {
+      //       console.error("PDF import error:", err);
+      //       alert(
+      //         "Failed to extract project data from PDF. Make sure it was exported from this app.",
+      //       );
+      //     }
+      //   };
+      //   reader.readAsText(file, "latin1"); // latin1 to preserve binary chars
+      //   return;
+      // }
+      // PDF — extract embedded project data
+      if (fileName.endsWith(".pdf")) {
+        const extractEmbeddedBase64 = (text: string) => {
+          const hiddenMatch =
+            /CALIBIT_DATA_START:([A-Za-z0-9+/=\s\r\n]+?):CALIBIT_DATA_END/.exec(
+              text,
+            );
+          if (hiddenMatch?.[1]) return hiddenMatch[1];
+
+          const subjectMatch = /\/Subject\s*\((.*?)\)/s.exec(text);
+          if (subjectMatch?.[1]) {
+            const subject = subjectMatch[1]
+              .replace(/\\\(/g, "(")
+              .replace(/\\\)/g, ")")
+              .replace(/\\\\/g, "\\");
+            const subjectDataMatch =
+              /CALIBIT_DATA_START:([A-Za-z0-9+/=\s\r\n]+?):CALIBIT_DATA_END/.exec(
+                subject,
+              );
+            return subjectDataMatch?.[1] ?? null;
+          }
+
+          return null;
+        };
+
+        const reader = new FileReader();
+        reader.onload = (re: any) => {
+          try {
+            const buffer = re.target.result as ArrayBuffer;
+            const bytes = new Uint8Array(buffer);
+
+            let text = "";
+            for (let i = 0; i < bytes.length; i++) {
+              text += String.fromCharCode(bytes[i]);
+            }
+
+            const raw = extractEmbeddedBase64(text);
+            if (!raw) {
+              alert(
+                "This PDF has no embedded project data.\n\nOnly PDFs exported from this app can be re-imported.\n\nPlease export as PDF from this app first.",
+              );
+              return;
+            }
+
+            const base64 = raw.replace(/[^A-Za-z0-9+/=]/g, "");
+            const json = decodeURIComponent(escape(atob(base64)));
+            const parsed = JSON.parse(json);
+            handleParsedData(parsed);
+          } catch (err) {
+            console.error("PDF import error:", err);
+            alert(
+              "Failed to read project data from this PDF.\n\nMake sure it was exported from this app and has not been modified.",
+            );
+          }
+        };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
+
+      // JSON / DWG — plain text
       const reader = new FileReader();
       reader.onload = (re: any) => {
         try {
           const data = JSON.parse(re.target.result as string);
           handleParsedData(data);
         } catch (err) {
-          console.error(err);
+          console.error("JSON import error:", err);
           alert(
-            "Failed to parse imported project. Make sure the file is a valid export from this app.",
+            "Failed to parse file. Make sure it is a valid JSON or DWG export from this app.",
           );
         }
       };
@@ -920,6 +1377,8 @@ export default function App() {
         setCurrentProjectId(newId);
         setCurrentProjectName(projectName);
         setCurrentClientName(clientName);
+        setCurrentProjectCreatedAt(new Date().toISOString());
+        setCurrentProjectUpdatedAt(new Date().toISOString());
         alert("Project saved successfully!");
         fetchProjects(tenant);
       } else {
@@ -948,6 +1407,8 @@ export default function App() {
       setCurrentProjectId(projectId);
       setCurrentProjectName(project.name || projectId);
       setCurrentClientName(project.client_name || null);
+      setCurrentProjectCreatedAt(project.created_at || null);
+      setCurrentProjectUpdatedAt(project.updated_at || null);
     } catch {
       alert("Failed to load project.");
     }

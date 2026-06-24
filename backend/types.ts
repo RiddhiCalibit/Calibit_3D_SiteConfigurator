@@ -159,9 +159,9 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 0.5,
     color: "#1ABC9C",
     category: "pools",
-    //modelUrl: "/models/splash_pad.glb",
     modelUrl:
-      "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090100/calibit-models/defaults/splash_pad.glb",
+      // "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090100/calibit-models/defaults/splash_pad.glb",
+      "https://res.cloudinary.com/dlft8pqu7/image/upload/v1782210489/splashpad_ls7m5k.glb",
     isActive: true,
   },
   {
