@@ -880,52 +880,64 @@ export default function App() {
       const origin = state.originLngLat;
       const lng = origin?.[0] ?? 0;
       const lat = origin?.[1] ?? 0;
-
-      // Build GeoJSON boundary overlay as path
-      // const boundary = state.siteBoundary;
-      // let pathOverlay = "";
-      // if (boundary && boundary.length > 1) {
-      //   const coordStr = boundary
-      //     .map((pt: number[]) => `${pt[0].toFixed(5)},${pt[1].toFixed(5)}`)
-      //     .join(",");
-      //   pathOverlay = `path-3+14b8a6-0.5+14b8a6-0.3(${encodeURIComponent(coordStr)}),`;
-      // }
-      // Build boundary path overlay using correct Mapbox Static API polyline format
       const boundary = state.siteBoundary;
-      let pathOverlay = "";
-      if (boundary && boundary.length > 1) {
-        const closedBoundary = [...boundary];
-        if (
-          closedBoundary[0][0] !==
-            closedBoundary[closedBoundary.length - 1][0] ||
-          closedBoundary[0][1] !== closedBoundary[closedBoundary.length - 1][1]
-        ) {
-          closedBoundary.push(closedBoundary[0]);
+      const allDefs = [...DEFAULT_LIBRARY, ...(state.customLibrary || [])];
+      const mapPadding = { top: 36, right: 24, bottom: 24, left: 24 };
+      const equipmentMapItems = origin
+        ? state.objects.map((obj: any) => {
+            const def = allDefs.find((d: any) => d.id === obj.type);
+            const [objLng, objLat] = metresToLngLat(
+              obj.x ?? 0,
+              obj.z ?? 0,
+              origin,
+            );
+            return {
+              lng: objLng,
+              lat: objLat,
+              name: obj.name ?? def?.name ?? obj.type ?? "Equipment",
+            };
+          })
+        : [];
+      const mapPoints: [number, number][] = [
+        ...boundary,
+        ...equipmentMapItems.map(
+          (item) => [item.lng, item.lat] as [number, number],
+        ),
+      ];
+
+      const buildMapBbox = (points: [number, number][]) => {
+        if (points.length === 0) return null;
+
+        let minLng = Math.min(...points.map((pt) => pt[0]));
+        let maxLng = Math.max(...points.map((pt) => pt[0]));
+        let minLat = Math.min(...points.map((pt) => pt[1]));
+        let maxLat = Math.max(...points.map((pt) => pt[1]));
+
+        if (minLng === maxLng) {
+          minLng -= 0.003;
+          maxLng += 0.003;
+        }
+        if (minLat === maxLat) {
+          minLat -= 0.003;
+          maxLat += 0.003;
         }
 
-        const coordPairs = closedBoundary
-          .map((pt: number[]) => `${pt[0].toFixed(5)},${pt[1].toFixed(5)}`)
-          .join(";");
+        const lngPad = Math.max((maxLng - minLng) * 0.15, 0.0008);
+        const latPad = Math.max((maxLat - minLat) * 0.15, 0.0008);
 
-        pathOverlay = `path-2+14b8a6-0.95+14b8a6-0.25(${coordPairs}),`;
-      }
+        return {
+          minLng: minLng - lngPad,
+          minLat: minLat - latPad,
+          maxLng: maxLng + lngPad,
+          maxLat: maxLat + latPad,
+        };
+      };
 
-      const pinOverlays = state.objects
-        .slice(0, 10)
-        .map((obj: any) => {
-          const [objLng, objLat] = metresToLngLat(
-            obj.x ?? 0,
-            obj.z ?? 0,
-            origin,
-          );
-          return `pin-s+14b8a6(${objLng.toFixed(5)},${objLat.toFixed(5)})`;
-        })
-        .join(",");
-
-      const overlays = [pathOverlay, pinOverlays].filter(Boolean).join("");
-      const overlaySegment = overlays ? `${overlays}/` : "";
-      const mapPosition = overlays ? "auto" : `${lng},${lat},16,0`;
-      const staticMapUrl = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${overlaySegment}${mapPosition}/600x300@2x?access_token=${mapboxToken}`;
+      const mapBbox = buildMapBbox(mapPoints);
+      const mapPosition = mapBbox
+        ? `[${mapBbox.minLng},${mapBbox.minLat},${mapBbox.maxLng},${mapBbox.maxLat}]`
+        : `${lng},${lat},16,0`;
+      const staticMapUrl = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${mapPosition}/600x300@2x?padding=${mapPadding.top},${mapPadding.right},${mapPadding.bottom},${mapPadding.left}&access_token=${mapboxToken}`;
 
       const generatePDF = (mapImageDataUrl?: string) => {
         const doc = new jsPDF({
@@ -997,9 +1009,6 @@ export default function App() {
         doc.text("EQUIPMENT LIST", 14, y);
         y += 4;
 
-        // Resolve def (width/depth/height/color) from DEFAULT_LIBRARY + customLibrary
-        const allDefs = [...DEFAULT_LIBRARY, ...(state.customLibrary || [])];
-
         autoTable(doc, {
           startY: y,
           head: [["Name", "Category", "X (m)", "Y (m)", "W×D×H"]],
@@ -1009,7 +1018,7 @@ export default function App() {
             const d2 = def?.depth ?? obj.depth ?? "?";
             const h = def?.height ?? obj.height ?? "?";
             return [
-              obj.name ?? obj.type ?? "",
+              obj.name ?? def?.name ?? obj.type ?? "",
               obj.category ?? def?.category ?? "",
               typeof obj.x === "number"
                 ? obj.x.toFixed(1)
@@ -1078,7 +1087,95 @@ export default function App() {
           const canvas = document.createElement("canvas");
           canvas.width = img.width;
           canvas.height = img.height;
-          canvas.getContext("2d")!.drawImage(img, 0, 0);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            generatePDF();
+            return;
+          }
+
+          const mercatorX = (value: number) => (value + 180) / 360;
+          const mercatorY = (value: number) => {
+            const rad = (value * Math.PI) / 180;
+            return (
+              (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2
+            );
+          };
+
+          ctx.drawImage(img, 0, 0);
+
+          if (mapBbox) {
+            const minX = mercatorX(mapBbox.minLng);
+            const maxX = mercatorX(mapBbox.maxLng);
+            const minY = mercatorY(mapBbox.maxLat);
+            const maxY = mercatorY(mapBbox.minLat);
+            const spanX = Math.max(maxX - minX, 0.000001);
+            const spanY = Math.max(maxY - minY, 0.000001);
+            const innerWidth =
+              canvas.width - mapPadding.left - mapPadding.right;
+            const innerHeight =
+              canvas.height - mapPadding.top - mapPadding.bottom;
+            const scale = Math.min(innerWidth / spanX, innerHeight / spanY);
+            const offsetX = mapPadding.left + (innerWidth - spanX * scale) / 2;
+            const offsetY = mapPadding.top + (innerHeight - spanY * scale) / 2;
+            const projectPoint = (point: [number, number]) => {
+              const px = offsetX + (mercatorX(point[0]) - minX) * scale;
+              const py = offsetY + (mercatorY(point[1]) - minY) * scale;
+              return { x: px, y: py };
+            };
+
+            if (boundary.length > 1) {
+              ctx.save();
+              ctx.beginPath();
+              boundary.forEach((point: [number, number], index: number) => {
+                const projected = projectPoint(point);
+                if (index === 0) {
+                  ctx.moveTo(projected.x, projected.y);
+                } else {
+                  ctx.lineTo(projected.x, projected.y);
+                }
+              });
+              ctx.closePath();
+              ctx.fillStyle = "rgba(20, 184, 166, 0.16)";
+              ctx.strokeStyle = "#22c55e";
+              ctx.lineWidth = 6;
+              ctx.fill();
+              ctx.stroke();
+              ctx.restore();
+            }
+
+            ctx.textBaseline = "middle";
+            ctx.font = "bold 24px Arial";
+
+            equipmentMapItems.forEach((item, index) => {
+              const { x, y } = projectPoint([item.lng, item.lat]);
+              const labelOffsetY = index % 2 === 0 ? -24 : 26;
+              const labelX = Math.min(x + 14, canvas.width - 220);
+              const labelY = Math.max(
+                20,
+                Math.min(y + labelOffsetY, canvas.height - 20),
+              );
+              const labelText = item.name;
+              const textWidth = ctx.measureText(labelText).width;
+              const labelWidth = Math.min(textWidth + 18, 220);
+
+              ctx.save();
+              ctx.fillStyle = "#14b8a6";
+              ctx.beginPath();
+              ctx.arc(x, y, 12, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = "#ecfeff";
+              ctx.beginPath();
+              ctx.arc(x, y, 4, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+              ctx.fillRect(labelX - 6, labelY - 14, labelWidth, 28);
+              ctx.fillStyle = "#67e8f9";
+              ctx.fillText(labelText, labelX, labelY);
+              ctx.restore();
+            });
+          }
+
           generatePDF(canvas.toDataURL("image/png"));
         };
         img.onerror = () => generatePDF();
