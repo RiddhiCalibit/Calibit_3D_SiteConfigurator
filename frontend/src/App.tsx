@@ -780,12 +780,34 @@ export default function App() {
     const exportDate = new Date().toLocaleDateString();
     const projectName = currentProjectName || "Untitled Project";
     const clientName = currentClientName || "N/A";
+    const excelCellTextLimit = 32767;
+    const excelRawChunkSize = 30000;
     const formatDate = (iso: string | null) =>
       iso ? new Date(iso).toLocaleString() : "N/A";
 
     // ── EXCEL ──────────────────────────────────────────────────────────────
     if (format === "excel") {
       const wb = XLSX.utils.book_new();
+      const allDefs = [...DEFAULT_LIBRARY, ...(state.customLibrary || [])];
+      const rawSheetName = "_ProjectData";
+      const rawProjectData = JSON.stringify({
+        version: "1.0",
+        exportedAt: new Date().toISOString(),
+        projectName,
+        clientName,
+        origin: state.originLngLat,
+        siteBoundary: state.siteBoundary,
+        objects: state.objects,
+        customLibrary: state.customLibrary || [],
+      });
+      const rawDataRows = [];
+
+      for (let i = 0; i < rawProjectData.length; i += excelRawChunkSize) {
+        rawDataRows.push([
+          `Chunk ${Math.floor(i / excelRawChunkSize) + 1}`,
+          rawProjectData.slice(i, i + excelRawChunkSize),
+        ]);
+      }
 
       // Section 1: Project Info rows
       const infoRows = [
@@ -800,45 +822,54 @@ export default function App() {
         // Section 2: Equipment header + rows in same sheet
         ["EQUIPMENT LIST"],
         [
-          "ID",
           "Name",
           "Category",
           "X (m)",
-          "Z (m)",
+          "Y (m)",
           "RotationY",
           "Width (m)",
           "Depth (m)",
           "Height (m)",
         ],
-        ...state.objects.map((obj: any) => [
-          obj.id ?? "",
-          obj.name ?? obj.type ?? "",
-          obj.category ?? "",
-          obj.x ?? "",
-          obj.z ?? "",
-          obj.rotationY ?? 0,
-          obj.width ?? "",
-          obj.depth ?? "",
-          obj.height ?? "",
-        ]),
-        [],
-        // Section 3: Raw JSON for re-import
-        ["RAW DATA (do not edit)"],
-        [
-          JSON.stringify({
-            version: "1.0",
-            exportedAt: new Date().toISOString(),
-            projectName,
-            clientName,
-            origin: state.originLngLat,
-            siteBoundary: state.siteBoundary,
-            objects: state.objects,
-          }),
-        ],
+        ...state.objects.map((obj: any) => {
+          const def = allDefs.find((d: any) => d.id === obj.type);
+          return [
+            obj.name ?? def?.name ?? obj.type ?? "",
+            obj.category ?? def?.category ?? "",
+            obj.x ?? "",
+            obj.z ?? "",
+            obj.rotationY ?? 0,
+            def?.width ?? obj.width ?? "",
+            def?.depth ?? obj.depth ?? "",
+            def?.height ?? obj.height ?? "",
+          ];
+        }),
       ];
 
       const ws = XLSX.utils.aoa_to_sheet(infoRows);
+      ws["!cols"] = [
+        { wch: 26 },
+        { wch: 18 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+      ];
+      const rawWs = XLSX.utils.aoa_to_sheet([
+        ["RAW DATA (do not edit)"],
+        ...rawDataRows,
+      ]);
       XLSX.utils.book_append_sheet(wb, ws, "Site Configuration");
+      XLSX.utils.book_append_sheet(wb, rawWs, rawSheetName);
+      if (!wb.Workbook) {
+        wb.Workbook = { Sheets: [] };
+      }
+      wb.Workbook.Sheets = wb.SheetNames.map((name) => ({
+        name,
+        Hidden: name === rawSheetName ? 1 : 0,
+      }));
       XLSX.writeFile(wb, `site-config-${timestamp}.xlsx`);
       return;
     }
@@ -865,7 +896,8 @@ export default function App() {
       if (boundary && boundary.length > 1) {
         const closedBoundary = [...boundary];
         if (
-          closedBoundary[0][0] !== closedBoundary[closedBoundary.length - 1][0] ||
+          closedBoundary[0][0] !==
+            closedBoundary[closedBoundary.length - 1][0] ||
           closedBoundary[0][1] !== closedBoundary[closedBoundary.length - 1][1]
         ) {
           closedBoundary.push(closedBoundary[0]);
@@ -875,23 +907,18 @@ export default function App() {
           .map((pt: number[]) => `${pt[0].toFixed(5)},${pt[1].toFixed(5)}`)
           .join(";");
 
-        pathOverlay = `path-2+14b8a6-0.95+14b8a6-0.25(${encodeURIComponent(
-          coordPairs,
-        )}),`;
+        pathOverlay = `path-2+14b8a6-0.95+14b8a6-0.25(${coordPairs}),`;
       }
 
       const pinOverlays = state.objects
-        .slice(0, 20)
+        .slice(0, 10)
         .map((obj: any) => {
           const [objLng, objLat] = metresToLngLat(
             obj.x ?? 0,
             obj.z ?? 0,
             origin,
           );
-          const label = encodeURIComponent(
-            String(obj.name ?? obj.type ?? "").slice(0, 6),
-          );
-          return `pin-l-${label}+14b8a6(${objLng.toFixed(5)},${objLat.toFixed(5)})`;
+          return `pin-s+14b8a6(${objLng.toFixed(5)},${objLat.toFixed(5)})`;
         })
         .join(",");
 
@@ -975,7 +1002,7 @@ export default function App() {
 
         autoTable(doc, {
           startY: y,
-          head: [["Name", "Category", "X (m)", "Z (m)", "W×D×H"]],
+          head: [["Name", "Category", "X (m)", "Y (m)", "W×D×H"]],
           body: state.objects.map((obj: any) => {
             const def = allDefs.find((d: any) => d.id === obj.type);
             const w = def?.width ?? obj.width ?? "?";
@@ -1116,14 +1143,49 @@ export default function App() {
               header: 1,
               raw: false, // read everything as strings to avoid truncation
             }) as any[][];
+            const rawSheet = wb.SheetNames.map(
+              (sheetName) => wb.Sheets[sheetName],
+            ).find((sheet) => {
+              const marker = sheet?.["A1"];
+              return (
+                marker && String(marker.v).trim() === "RAW DATA (do not edit)"
+              );
+            });
+            const rawRowsSource = rawSheet
+              ? (XLSX.utils.sheet_to_json(rawSheet, {
+                  header: 1,
+                  raw: false,
+                }) as any[][])
+              : rows;
 
             // Strategy 1: Find RAW DATA row — most reliable, full round-trip
-            const rawIdx = rows.findIndex(
+            const rawIdx = rawRowsSource.findIndex(
               (r) => String(r[0]).trim() === "RAW DATA (do not edit)",
             );
-            if (rawIdx !== -1 && rows[rawIdx + 1]?.[0]) {
+            if (rawIdx !== -1 && rawRowsSource[rawIdx + 1]) {
               try {
-                const parsed = JSON.parse(String(rows[rawIdx + 1][0]));
+                const rawRows = [];
+                for (let i = rawIdx + 1; i < rawRowsSource.length; i += 1) {
+                  const row = rawRowsSource[i];
+                  const firstCell = String(row?.[0] ?? "").trim();
+
+                  if (!firstCell) {
+                    break;
+                  }
+
+                  rawRows.push(row);
+                }
+
+                const rawText =
+                  rawRows.length === 1 && rawRows[0]?.length === 1
+                    ? String(rawRows[0][0] ?? "")
+                    : rawRows
+                        .map((row) =>
+                          row.length > 1 ? String(row[1] ?? "") : "",
+                        )
+                        .join("");
+
+                const parsed = JSON.parse(rawText);
                 handleParsedData(parsed);
                 return;
               } catch {
@@ -1151,17 +1213,26 @@ export default function App() {
                 return;
               }
 
+              const equipmentHeader = rows[equipIdx + 1] ?? [];
+              const hasIdColumn =
+                String(equipmentHeader[0] ?? "").trim() === "ID";
               const objects = dataRows.map((r: any) => ({
-                id: String(r[0] || uuidv4()),
-                name: String(r[1] || ""),
-                category: String(r[2] || ""),
-                x: parseFloat(r[3]) || 0,
-                z: parseFloat(r[4]) || 0,
-                rotationY: parseFloat(r[5]) || 0,
-                width: r[6] ? parseFloat(r[6]) : undefined,
-                depth: r[7] ? parseFloat(r[7]) : undefined,
-                height: r[8] ? parseFloat(r[8]) : undefined,
-                type: String(r[1] || ""),
+                id: hasIdColumn ? String(r[0] || uuidv4()) : uuidv4(),
+                name: String(r[hasIdColumn ? 1 : 0] || ""),
+                category: String(r[hasIdColumn ? 2 : 1] || ""),
+                x: parseFloat(r[hasIdColumn ? 3 : 2]) || 0,
+                z: parseFloat(r[hasIdColumn ? 4 : 3]) || 0,
+                rotationY: parseFloat(r[hasIdColumn ? 5 : 4]) || 0,
+                width: r[hasIdColumn ? 6 : 5]
+                  ? parseFloat(r[hasIdColumn ? 6 : 5])
+                  : undefined,
+                depth: r[hasIdColumn ? 7 : 6]
+                  ? parseFloat(r[hasIdColumn ? 7 : 6])
+                  : undefined,
+                height: r[hasIdColumn ? 8 : 7]
+                  ? parseFloat(r[hasIdColumn ? 8 : 7])
+                  : undefined,
+                type: String(r[hasIdColumn ? 1 : 0] || ""),
                 color: "#14b8a6",
               }));
 
