@@ -516,6 +516,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       pitch: 0,
       bearing: 0,
       antialias: true,
+      preserveDrawingBuffer: true,
     });
 
     const draw = new MapboxDraw({

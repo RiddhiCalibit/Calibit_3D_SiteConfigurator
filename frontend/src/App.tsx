@@ -894,7 +894,8 @@ export default function App() {
             return {
               lng: objLng,
               lat: objLat,
-              name: obj.name ?? def?.name ?? obj.type ?? "Equipment",
+              //name: obj.name ?? def?.name ?? obj.type ?? "Equipment",
+              name: def?.name ?? obj.name ?? "Equipment",
             };
           })
         : [];
@@ -939,7 +940,8 @@ export default function App() {
         : `${lng},${lat},16,0`;
       const staticMapUrl = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${mapPosition}/600x300@2x?padding=${mapPadding.top},${mapPadding.right},${mapPadding.bottom},${mapPadding.left}&access_token=${mapboxToken}`;
 
-      const generatePDF = (mapImageDataUrl?: string) => {
+      // const generatePDF = (mapImageDataUrl?: string) => {
+      const generatePDF = (mapImageDataUrl?: string, screenshot?: string) => {
         const doc = new jsPDF({
           orientation: "portrait",
           unit: "mm",
@@ -1070,6 +1072,40 @@ export default function App() {
         // Method 2: Hidden text on page 2 as one single string
         // IMPORTANT: must be written as ONE doc.text() call — multiple calls
         // inject PDF binary operators (Tj/ET/BT/Tf) between chunks which corrupt the base64
+
+        // doc.addPage();
+        // doc.setTextColor(255, 255, 255);
+        // doc.setFontSize(1);
+        // doc.text(`CALIBIT_DATA_START:${encoded}:CALIBIT_DATA_END`, 1, 5, {
+        //   maxWidth: 200,
+        // });
+
+        // doc.save(`site-config-${timestamp}.pdf`);
+        // ── Page 2: Live 3D screenshot ──────────────────────────────────────
+        if (screenshot) {
+          doc.addPage();
+          doc.setFillColor(...dark);
+          doc.rect(0, 0, 210, 24, "F");
+          doc.setFontSize(16);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(...white);
+          doc.text("3D View — " + projectName, 14, 16);
+
+          doc.setFontSize(9);
+          doc.setTextColor(...teal);
+          doc.setFont("helvetica", "bold");
+          doc.text("LIVE 3D SCENE CAPTURE", 14, 32);
+
+          try {
+            doc.addImage(screenshot, "PNG", 14, 34, 182, 102);
+          } catch {
+            doc.setFontSize(9);
+            doc.setTextColor(150, 150, 150);
+            doc.text("Screenshot could not be embedded.", 14, 40);
+          }
+        }
+
+        // ── Hidden data page for re-import ─────────────────────────────────
         doc.addPage();
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(1);
@@ -1080,6 +1116,23 @@ export default function App() {
         doc.save(`site-config-${timestamp}.pdf`);
       };
 
+      // ── Capture live 3D screenshot BEFORE async fetch ──────────────────
+      const captureScreenshot = (): string | null => {
+        try {
+          const mapCanvas = document.querySelector(
+            ".mapboxgl-canvas",
+          ) as HTMLCanvasElement | null;
+          if (mapCanvas && mapCanvas.width > 0) {
+            return mapCanvas.toDataURL("image/png");
+          }
+        } catch {
+          // cross-origin tainted — ignore
+        }
+        return null;
+      };
+      const screenshotDataUrl = captureScreenshot();
+
+      // ── Fetch Mapbox Static map then draw overlays and generate PDF ──────
       if (mapboxToken && lng !== 0) {
         const img = new Image();
         img.crossOrigin = "anonymous";
@@ -1089,102 +1142,128 @@ export default function App() {
           canvas.height = img.height;
           const ctx = canvas.getContext("2d");
           if (!ctx) {
-            generatePDF();
+            generatePDF(undefined, screenshotDataUrl ?? undefined);
             return;
           }
-
-          const mercatorX = (value: number) => (value + 180) / 360;
-          const mercatorY = (value: number) => {
-            const rad = (value * Math.PI) / 180;
-            return (
-              (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2
-            );
-          };
-
           ctx.drawImage(img, 0, 0);
 
           if (mapBbox) {
-            const minX = mercatorX(mapBbox.minLng);
-            const maxX = mercatorX(mapBbox.maxLng);
-            const minY = mercatorY(mapBbox.maxLat);
-            const maxY = mercatorY(mapBbox.minLat);
-            const spanX = Math.max(maxX - minX, 0.000001);
-            const spanY = Math.max(maxY - minY, 0.000001);
-            const innerWidth =
-              canvas.width - mapPadding.left - mapPadding.right;
-            const innerHeight =
-              canvas.height - mapPadding.top - mapPadding.bottom;
-            const scale = Math.min(innerWidth / spanX, innerHeight / spanY);
-            const offsetX = mapPadding.left + (innerWidth - spanX * scale) / 2;
-            const offsetY = mapPadding.top + (innerHeight - spanY * scale) / 2;
-            const projectPoint = (point: [number, number]) => {
-              const px = offsetX + (mercatorX(point[0]) - minX) * scale;
-              const py = offsetY + (mercatorY(point[1]) - minY) * scale;
-              return { x: px, y: py };
-            };
+            const lngSpan = mapBbox.maxLng - mapBbox.minLng;
+            const latSpan = mapBbox.maxLat - mapBbox.minLat;
 
+            const padFracL =
+              mapPadding.left / (600 + mapPadding.left + mapPadding.right);
+            const padFracR =
+              mapPadding.right / (600 + mapPadding.left + mapPadding.right);
+            const padFracT =
+              mapPadding.top / (300 + mapPadding.top + mapPadding.bottom);
+            const padFracB =
+              mapPadding.bottom / (300 + mapPadding.top + mapPadding.bottom);
+
+            const contentX = canvas.width * padFracL;
+            const contentY = canvas.height * padFracT;
+            const contentW = canvas.width * (1 - padFracL - padFracR);
+            const contentH = canvas.height * (1 - padFracT - padFracB);
+
+            const projectPoint = (lngVal: number, latVal: number) => ({
+              x: contentX + ((lngVal - mapBbox.minLng) / lngSpan) * contentW,
+              y: contentY + ((mapBbox.maxLat - latVal) / latSpan) * contentH,
+            });
+
+            // Draw boundary
             if (boundary.length > 1) {
               ctx.save();
               ctx.beginPath();
               boundary.forEach((point: [number, number], index: number) => {
-                const projected = projectPoint(point);
-                if (index === 0) {
-                  ctx.moveTo(projected.x, projected.y);
-                } else {
-                  ctx.lineTo(projected.x, projected.y);
-                }
+                const { x, y } = projectPoint(point[0], point[1]);
+                index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
               });
               ctx.closePath();
               ctx.fillStyle = "rgba(20, 184, 166, 0.16)";
-              ctx.strokeStyle = "#22c55e";
-              ctx.lineWidth = 6;
+              ctx.strokeStyle = "#14b8a6";
+              ctx.lineWidth = 4;
               ctx.fill();
               ctx.stroke();
               ctx.restore();
             }
 
-            ctx.textBaseline = "middle";
-            ctx.font = "bold 24px Arial";
-
+            // Draw equipment pins with name labels
             equipmentMapItems.forEach((item, index) => {
-              const { x, y } = projectPoint([item.lng, item.lat]);
-              const labelOffsetY = index % 2 === 0 ? -24 : 26;
-              const labelX = Math.min(x + 14, canvas.width - 220);
-              const labelY = Math.max(
-                20,
-                Math.min(y + labelOffsetY, canvas.height - 20),
-              );
-              const labelText = item.name;
-              const textWidth = ctx.measureText(labelText).width;
-              const labelWidth = Math.min(textWidth + 18, 220);
+              const { x, y } = projectPoint(item.lng, item.lat);
+              const radius = 14;
 
               ctx.save();
+              // Pin circle
+              ctx.beginPath();
+              ctx.arc(x, y, radius, 0, Math.PI * 2);
               ctx.fillStyle = "#14b8a6";
-              ctx.beginPath();
-              ctx.arc(x, y, 12, 0, Math.PI * 2);
               ctx.fill();
-              ctx.fillStyle = "#ecfeff";
+              ctx.strokeStyle = "#ffffff";
+              ctx.lineWidth = 2;
+              ctx.stroke();
+
+              // Number inside pin
+              ctx.fillStyle = "#ffffff";
+              ctx.font = "bold 14px Arial";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText(String(index + 1), x, y);
+
+              // Label box above pin
+              const label = item.name;
+              ctx.font = "bold 13px Arial";
+              const textW = ctx.measureText(label).width;
+              const boxW = textW + 16;
+              const boxH = 22;
+              const boxX = Math.max(
+                4,
+                Math.min(x - boxW / 2, canvas.width - boxW - 4),
+              );
+              const boxY = Math.max(4, y - radius - boxH - 4);
+
+              // Rounded rect background
+              const r = 4;
+              ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
               ctx.beginPath();
-              ctx.arc(x, y, 4, 0, Math.PI * 2);
+              ctx.moveTo(boxX + r, boxY);
+              ctx.lineTo(boxX + boxW - r, boxY);
+              ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + r);
+              ctx.lineTo(boxX + boxW, boxY + boxH - r);
+              ctx.quadraticCurveTo(
+                boxX + boxW,
+                boxY + boxH,
+                boxX + boxW - r,
+                boxY + boxH,
+              );
+              ctx.lineTo(boxX + r, boxY + boxH);
+              ctx.quadraticCurveTo(boxX, boxY + boxH, boxX, boxY + boxH - r);
+              ctx.lineTo(boxX, boxY + r);
+              ctx.quadraticCurveTo(boxX, boxY, boxX + r, boxY);
+              ctx.closePath();
               ctx.fill();
 
-              ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-              ctx.fillRect(labelX - 6, labelY - 14, labelWidth, 28);
-              ctx.fillStyle = "#67e8f9";
-              ctx.fillText(labelText, labelX, labelY);
+              ctx.fillStyle = "#ffffff";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText(label, boxX + boxW / 2, boxY + boxH / 2);
               ctx.restore();
             });
           }
 
-          generatePDF(canvas.toDataURL("image/png"));
+          generatePDF(
+            canvas.toDataURL("image/png"),
+            screenshotDataUrl ?? undefined,
+          );
         };
-        img.onerror = () => generatePDF();
+        img.onerror = () =>
+          generatePDF(undefined, screenshotDataUrl ?? undefined);
         img.src = staticMapUrl;
       } else {
-        generatePDF();
+        generatePDF(undefined, screenshotDataUrl ?? undefined);
       }
       return;
     }
+
     // JSON / DWG fallback (kept as plain JSON, since DWG generation needs a CAD library)
     // ── JSON / DWG fallback ────────────────────────────────────────────────
     const data = {
