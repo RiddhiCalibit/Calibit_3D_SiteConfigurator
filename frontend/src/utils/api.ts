@@ -16,7 +16,7 @@ export async function authFetch(url: string, options: RequestInit = {}) {
   });
 
   // Auto-logout on token errors
-  if (res.status === 401) {
+  if (res.status === 401 || res.status === 403) {
     try {
       const data = await res.clone().json();
       if (

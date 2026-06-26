@@ -1,3 +1,13 @@
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import path from "path";
+import { Pool } from "pg";
+import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
+import { v4 as uuidv4 } from "uuid";
+import { DEFAULT_LIBRARY } from "./types";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import multer from "multer";
@@ -62,17 +72,6 @@ if (!JWT_SECRET) {
   console.error("❌ FATAL: JWT_SECRET env var is not set. Refusing to start.");
   process.exit(1);
 }
-
-import express from "express";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-import path from "path";
-import { Pool } from "pg";
-import bcrypt from "bcryptjs";
-import rateLimit from "express-rate-limit";
-import { v4 as uuidv4 } from "uuid";
-import { DEFAULT_LIBRARY } from "./types";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
 // ─── PostgreSQL Connection Pool ───────────────────────────────────────────────
 const pool = new Pool({
@@ -187,7 +186,7 @@ async function logActivity(
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 function authenticate(req: any, res: any, next: any) {
-  // Fix #6: read token from httpOnly cookie first, fall back to Authorization header
+  // Read token from httpOnly cookie first, fall back to Authorization header
   const cookieToken = req.cookies?.auth_token;
   const authHeader = req.headers["authorization"];
   const token = cookieToken || (authHeader ? authHeader.split(" ")[1] : null);
@@ -205,7 +204,7 @@ function authenticate(req: any, res: any, next: any) {
     next();
   } catch (error) {
     console.log("❌ Token error:", (error as Error).message);
-    return res.status(403).json({ error: "Invalid or expired token" });
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 }
 
