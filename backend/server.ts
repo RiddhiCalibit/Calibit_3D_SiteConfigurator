@@ -3,6 +3,43 @@ import dotenv from "dotenv";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
+import ratelimit from "express-rate-limit";
+
+// ─── Rate Limiters ────────────────────────────────────────────────────────────
+
+// Gemini AI — max 10 compliance checks per user per hour
+const geminiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 10, // max 10 requests per IP per hour
+  message: {
+    error:
+      "Too many compliance checks. You can run up to 10 per hour. Please wait before trying again.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Cloudinary uploads — max 20 file uploads per user per day
+const uploadLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hour window
+  max: 20, // max 20 uploads per IP per day
+  message: {
+    error: "Too many file uploads. You can upload up to 20 files per day.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// General API — prevent brute force on all routes
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minute window
+  max: 200, // max 200 requests per IP per 15 mins
+  message: {
+    error: "Too many requests. Please slow down.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 import fs from "fs";
 dotenv.config();
@@ -305,8 +342,9 @@ async function startServer() {
   console.log("✅ Database schema verified");
 
   const app = express();
-  app.use(globalLimiter); // ← Fix #5: global rate limit
-  app.use(cookieParser()); // ← Fix #6: parse cookies
+  app.use(globalLimiter); // global rate limit
+  app.use(cookieParser()); // parse cookies
+  app.use(generalLimiter); // applies to ALL routes
 
   app.use(
     cors({
@@ -2343,11 +2381,15 @@ async function startServer() {
   // COMPLIANCE ROUTE (Gemini AI)
   // ══════════════════════════════════════════════════════════════════════════
 
-  app.post("/api/compliance/check", async (req, res) => {
-    try {
-      const siteData = req.body;
+  app.post(
+    "/api/compliance/check",
+    authenticate,
+    geminiLimiter,
+    async (req, res) => {
+      try {
+        const siteData = req.body;
 
-      const prompt = `
+        const prompt = `
         Analyze the following 3D site configuration for compliance with safety and operational standards.
         The site is a water park / recreational facility.
 
@@ -2363,63 +2405,69 @@ async function startServer() {
         Return a structured JSON report.
       `;
 
-      const model = genai.getGenerativeModel({
-        model: "gemini-3-flash-preview",
-      });
+        const model = genai.getGenerativeModel({
+          model: "gemini-3-flash-preview",
+        });
 
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: SchemaType.OBJECT,
-            properties: {
-              overallScore: {
-                type: SchemaType.NUMBER,
-                description: "Score from 0 to 100",
-              },
-              summary: { type: SchemaType.STRING },
-              checks: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    category: { type: SchemaType.STRING },
-                    status: {
-                      type: SchemaType.STRING,
-                      format: "enum",
-                      enum: ["pass", "fail", "warning"],
+        const result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: SchemaType.OBJECT,
+              properties: {
+                overallScore: {
+                  type: SchemaType.NUMBER,
+                  description: "Score from 0 to 100",
+                },
+                summary: { type: SchemaType.STRING },
+                checks: {
+                  type: SchemaType.ARRAY,
+                  items: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                      category: { type: SchemaType.STRING },
+                      status: {
+                        type: SchemaType.STRING,
+                        format: "enum",
+                        enum: ["pass", "fail", "warning"],
+                      },
+                      message: { type: SchemaType.STRING },
+                      details: { type: SchemaType.STRING },
                     },
-                    message: { type: SchemaType.STRING },
-                    details: { type: SchemaType.STRING },
+                    required: ["category", "status", "message"],
                   },
-                  required: ["category", "status", "message"],
+                },
+                recommendations: {
+                  type: SchemaType.ARRAY,
+                  items: { type: SchemaType.STRING },
                 },
               },
-              recommendations: {
-                type: SchemaType.ARRAY,
-                items: { type: SchemaType.STRING },
-              },
+              required: [
+                "overallScore",
+                "summary",
+                "checks",
+                "recommendations",
+              ],
             },
-            required: ["overallScore", "summary", "checks", "recommendations"],
           },
-        },
-      });
+        });
 
-      const response = result.response;
-      const text = response.text();
-      if (!text) {
-        throw new Error("Failed to get response text from AI");
+        const response = result.response;
+        const text = response.text();
+        if (!text) {
+          throw new Error("Failed to get response text from AI");
+        }
+        const report = JSON.parse(text);
+        res.json(report);
+      } catch (err: any) {
+        console.error("Compliance check failed:", err);
+        res
+          .status(500)
+          .json({ error: safeError(err, "Compliance check failed") });
       }
-      const report = JSON.parse(text);
-      res.json(report);
-    } catch (err: any) {
-      console.error("Compliance check failed:", err);
-      res
-        .status(500)
-        .json({ error: safeError(err, "Compliance check failed") });
-    }
-  });
+    },
+  );
 
   // ─── Serve frontend (must be AFTER all API routes) ────────────────────────
   const frontendDist = path.join(__dirname, "../../frontend/dist");
