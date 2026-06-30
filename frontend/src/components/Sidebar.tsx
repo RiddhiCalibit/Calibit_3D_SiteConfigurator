@@ -812,16 +812,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
               {/* DWG */}
               <button
-                disabled
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs opacity-60 cursor-not-allowed"
+                onClick={() => {
+                  onExport("dwg");
+                  setExportMenuOpen(false);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
               >
-                <div className="flex flex-col">
-                  <span>Export as DWG</span>
-                  <span className="text-[9px] text-amber-400">
-                    upcoming feature
-                  </span>
-                </div>
-
+                <span>Export as DWG</span>
                 <span className="text-[10px] opacity-50">.dwg</span>
               </button>
 

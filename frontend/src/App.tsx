@@ -24,6 +24,186 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+// ── CAD DXF GENERATION & PARSING HELPERS ───────────────────────────────────
+const generateDXFContent = (
+  projectName: string,
+  clientName: string,
+  origin: [number, number] | null,
+  siteBoundary: [number, number][],
+  objects: any[],
+  customLibrary: any[],
+): string => {
+  const lines: string[] = [];
+  const writeGroup = (code: number, value: string | number) => {
+    lines.push(String(code));
+    lines.push(String(value));
+  };
+
+  // 1. Embed JSON payload in DXF group 999 comments for lossless re-import
+  const rawData = JSON.stringify({
+    version: "1.0",
+    exportedAt: new Date().toISOString(),
+    projectName,
+    clientName,
+    origin,
+    siteBoundary,
+    objects,
+    customLibrary,
+  });
+  const encoded = btoa(unescape(encodeURIComponent(rawData)));
+
+  writeGroup(999, "CALIBIT_JSON_DATA_START");
+  for (let i = 0; i < encoded.length; i += 200) {
+    writeGroup(999, encoded.slice(i, i + 200));
+  }
+  writeGroup(999, "CALIBIT_JSON_DATA_END");
+
+  // 2. DXF Header Section
+  writeGroup(0, "SECTION");
+  writeGroup(2, "HEADER");
+  writeGroup(9, "$INSUNITS");
+  writeGroup(70, 6); // 6 = Meters (AutoCAD drawing unit)
+  writeGroup(0, "ENDSEC");
+
+  // 3. DXF Entities Section
+  writeGroup(0, "SECTION");
+  writeGroup(2, "ENTITIES");
+
+  // Draw Site Boundary as continuous lines
+  if (origin && siteBoundary.length > 0) {
+    const pts = siteBoundary.map((coord) => {
+      const { x, z } = lngLatToMetres(coord, origin);
+      return { x, y: -z }; // Y-axis is North (+), Z in 3D coordinate increases South (+)
+    });
+
+    for (let i = 0; i < pts.length; i++) {
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % pts.length];
+      writeGroup(0, "LINE");
+      writeGroup(8, "Site_Boundary"); // Layer
+      writeGroup(10, p1.x);
+      writeGroup(20, p1.y);
+      writeGroup(30, 0.0);
+      writeGroup(11, p2.x);
+      writeGroup(21, p2.y);
+      writeGroup(31, 0.0);
+    }
+  }
+
+  // Draw Placed Equipment items
+  const allDefs = [...DEFAULT_LIBRARY, ...customLibrary];
+  objects.forEach((obj, idx) => {
+    const def = allDefs.find((d) => d.id === obj.type);
+    const w = def?.width ?? obj.width ?? 4;
+    const d = def?.depth ?? obj.depth ?? 4;
+    const name = obj.name ?? def?.name ?? obj.type ?? "Equipment";
+    
+    const cx = obj.x ?? 0;
+    const cy = -(obj.z ?? 0);
+    const angleRad = -(obj.rotationY ?? 0);
+
+    const hw = w / 2;
+    const hd = d / 2;
+
+    // Local bounding corners
+    const corners = [
+      { x: -hw, y: -hd },
+      { x: hw, y: -hd },
+      { x: hw, y: hd },
+      { x: -hw, y: hd },
+    ].map((p) => ({
+      x: cx + p.x * Math.cos(angleRad) - p.y * Math.sin(angleRad),
+      y: cy + p.x * Math.sin(angleRad) + p.y * Math.cos(angleRad),
+    }));
+
+    const layerName = `Equipment_${def?.category || "Amenity"}`;
+
+    // Draw box outline
+    for (let i = 0; i < 4; i++) {
+      const p1 = corners[i];
+      const p2 = corners[(i + 1) % 4];
+      writeGroup(0, "LINE");
+      writeGroup(8, layerName);
+      writeGroup(10, p1.x);
+      writeGroup(20, p1.y);
+      writeGroup(30, 0.0);
+      writeGroup(11, p2.x);
+      writeGroup(21, p2.y);
+      writeGroup(31, 0.0);
+    }
+
+    // Draw diagonal cross (X) inside box to indicate CAD layout block
+    writeGroup(0, "LINE");
+    writeGroup(8, layerName);
+    writeGroup(10, corners[0].x);
+    writeGroup(20, corners[0].y);
+    writeGroup(30, 0.0);
+    writeGroup(11, corners[2].x);
+    writeGroup(21, corners[2].y);
+    writeGroup(31, 0.0);
+
+    writeGroup(0, "LINE");
+    writeGroup(8, layerName);
+    writeGroup(10, corners[1].x);
+    writeGroup(20, corners[1].y);
+    writeGroup(30, 0.0);
+    writeGroup(11, corners[3].x);
+    writeGroup(21, corners[3].y);
+    writeGroup(31, 0.0);
+
+    // Text Label in the center
+    writeGroup(0, "TEXT");
+    writeGroup(8, layerName);
+    writeGroup(10, cx);
+    writeGroup(20, cy);
+    writeGroup(30, 0.0);
+    writeGroup(40, 1.2); // Text height in meters
+    writeGroup(1, `${idx + 1}. ${name}`);
+    writeGroup(50, (angleRad * 180) / Math.PI); // Angle in degrees
+  });
+
+  writeGroup(0, "ENDSEC");
+  writeGroup(0, "EOF");
+
+  return lines.join("\n");
+};
+
+const extractJSONFromDXF = (text: string): string | null => {
+  const lines = text.split(/\r?\n/);
+  let isCollecting = false;
+  const chunks: string[] = [];
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const code = lines[i].trim();
+    const val = lines[i + 1].trim();
+
+    if (code === "999") {
+      if (val === "CALIBIT_JSON_DATA_START") {
+        isCollecting = true;
+        i++;
+        continue;
+      }
+      if (val === "CALIBIT_JSON_DATA_END") {
+        isCollecting = false;
+        break;
+      }
+      if (isCollecting) {
+        chunks.push(val);
+        i++;
+      }
+    }
+  }
+
+  if (chunks.length === 0) return null;
+  try {
+    const base64 = chunks.join("").replace(/[^A-Za-z0-9+/=]/g, "");
+    return decodeURIComponent(escape(atob(base64)));
+  } catch (e) {
+    console.error("Failed to decode base64 from DXF", e);
+    return null;
+  }
+};
+
 export default function App() {
   // useEffect(() => {
   //  console.log("API URL:", import.meta.env.VITE_API_URL);
@@ -1264,8 +1444,26 @@ export default function App() {
       return;
     }
 
-    // JSON / DWG fallback (kept as plain JSON, since DWG generation needs a CAD library)
-    // ── JSON / DWG fallback ────────────────────────────────────────────────
+    if (format === "dwg") {
+      const dxfContent = generateDXFContent(
+        projectName,
+        clientName,
+        state.originLngLat,
+        state.siteBoundary,
+        state.objects,
+        state.customLibrary || [],
+      );
+      const blob = new Blob([dxfContent], { type: "image/vnd.dxf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `site-config-${timestamp}.dwg`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // JSON fallback
     const data = {
       version: "1.0",
       exportedAt: new Date().toISOString(),
@@ -1275,14 +1473,13 @@ export default function App() {
       siteBoundary: state.siteBoundary,
       objects: state.objects,
     };
-    const extension = format === "dwg" ? "dwg" : "json";
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `site-config-${timestamp}.${extension}`;
+    a.download = `site-config-${timestamp}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1290,7 +1487,7 @@ export default function App() {
   const handleImport = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json,.dwg,.xlsx,.xls,.pdf";
+    input.accept = ".json,.dwg,.dxf,.xlsx,.xls,.pdf";
     input.onchange = (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -1526,12 +1723,25 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = (re: any) => {
         try {
-          const data = JSON.parse(re.target.result as string);
-          handleParsedData(data);
+          const fileText = re.target.result as string;
+          let parsedData: any = null;
+
+          if (fileText.includes("CALIBIT_JSON_DATA_START")) {
+            const jsonText = extractJSONFromDXF(fileText);
+            if (jsonText) {
+              parsedData = JSON.parse(jsonText);
+            }
+          }
+
+          if (!parsedData) {
+            parsedData = JSON.parse(fileText);
+          }
+
+          handleParsedData(parsedData);
         } catch (err) {
-          console.error("JSON import error:", err);
+          console.error("JSON/DWG import error:", err);
           alert(
-            "Failed to parse file. Make sure it is a valid JSON or DWG export from this app.",
+            "Failed to parse file. Make sure it is a valid JSON or CAD/DWG export from this app.",
           );
         }
       };
