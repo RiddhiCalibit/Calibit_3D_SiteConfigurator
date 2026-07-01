@@ -8,7 +8,7 @@ interface AppState {
 
 export interface ComplianceResult {
   category: string;
-  status: 'pass' | 'fail' | 'warning';
+  status: "pass" | "fail" | "warning";
   message: string;
   details?: string;
 }
@@ -20,30 +20,40 @@ export interface ComplianceReport {
   recommendations: string[];
 }
 
-export async function runComplianceCheck(state: AppState): Promise<ComplianceReport> {
+export async function runComplianceCheck(
+  state: AppState,
+): Promise<ComplianceReport> {
   const siteData = {
     boundary: state.siteBoundary,
-    objects: state.objects.map(obj => {
-      const def = [...DEFAULT_LIBRARY, ...state.customLibrary].find(d => d.id === obj.type);
+    objects: state.objects.map((obj) => {
+      const def = [...DEFAULT_LIBRARY, ...state.customLibrary].find(
+        (d) => d.id === obj.type,
+      );
       return {
         id: obj.id,
         name: def?.name || obj.type,
-        category: def?.category || 'unknown',
+        category: def?.category || "unknown",
         position: { x: obj.x, z: obj.z },
-        dimensions: def ? { w: def.width, d: def.depth, h: def.height } : null
+        dimensions: def ? { w: def.width, d: def.depth, h: def.height } : null,
       };
-    })
+    }),
   };
 
-  const res = await fetch('/api/compliance/check', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const token = localStorage.getItem("auth_token");
+  if (!token) throw new Error("No token provided");
+
+  const res = await fetch("/api/compliance/check", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(siteData),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Compliance check failed');
+    throw new Error(err.error || "Compliance check failed");
   }
 
   return res.json();
