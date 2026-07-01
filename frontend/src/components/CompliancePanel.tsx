@@ -1,21 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { AppState } from '../../../backend/types';
-import { runComplianceCheck, ComplianceReport, ComplianceResult } from '../services/complianceService';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ShieldCheck, 
-  ShieldAlert, 
-  ShieldQuestion, 
-  RefreshCw, 
-  ChevronRight, 
+import React, { useState, useEffect } from "react";
+import { AppState } from "../../../backend/types";
+import {
+  runComplianceCheck,
+  ComplianceReport,
+  ComplianceResult,
+} from "../services/complianceService";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
+  RefreshCw,
+  ChevronRight,
   AlertCircle,
   CheckCircle2,
   Info,
-  ArrowRight
-} from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { clsx } from 'clsx';
-import Markdown from 'react-markdown';
+  ArrowRight,
+} from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { clsx } from "clsx";
+import Markdown from "react-markdown";
 
 interface Props {
   state: AppState;
@@ -48,21 +52,23 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
     }
   }, [isOpen]);
 
-  const chartData = report ? [
-    { name: 'Score', value: report.overallScore },
-    { name: 'Remaining', value: 100 - report.overallScore }
-  ] : [];
+  const chartData = report
+    ? [
+        { name: "Score", value: report.overallScore },
+        { name: "Remaining", value: 100 - report.overallScore },
+      ]
+    : [];
 
-  const COLORS = ['#10b981', '#1e293b']; // Emerald and Slate-800
+  const COLORS = ["#10b981", "#1e293b"]; // Emerald and Slate-800
 
   if (!isOpen) return null;
 
   return (
     <motion.div
-      initial={{ x: '100%' }}
+      initial={{ x: "100%" }}
       animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      exit={{ x: "100%" }}
+      transition={{ type: "spring", damping: 25, stiffness: 200 }}
       className="absolute top-0 right-0 w-[400px] h-full bg-brand-navy/95 backdrop-blur-xl border-l border-white/10 z-[60] flex flex-col shadow-2xl"
     >
       {/* Header */}
@@ -72,11 +78,15 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
             <ShieldCheck className="w-5 h-5 text-emerald-500" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest">Compliance Engine</h2>
-            <p className="text-[10px] text-white/40 font-mono">AI-POWERED RISK ASSESSMENT</p>
+            <h2 className="text-sm font-bold text-white uppercase tracking-widest">
+              Compliance Engine
+            </h2>
+            <p className="text-[10px] text-white/40 font-mono">
+              AI-POWERED RISK ASSESSMENT
+            </p>
           </div>
         </div>
-        <button 
+        <button
           onClick={onClose}
           className="p-2 hover:bg-white/5 rounded-lg text-white/40 hover:text-white transition-colors"
         >
@@ -94,16 +104,20 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
             >
               <RefreshCw className="w-8 h-8 text-emerald-500" />
             </motion.div>
-            <p className="text-xs text-white/60 font-medium animate-pulse">Analyzing site configuration...</p>
+            <p className="text-xs text-white/60 font-medium animate-pulse">
+              Analyzing site configuration...
+            </p>
           </div>
         ) : error ? (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl space-y-3">
             <div className="flex items-center gap-2 text-red-500">
               <AlertCircle className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase">Analysis Error</span>
+              <span className="text-xs font-bold uppercase">
+                Analysis Error
+              </span>
             </div>
             <p className="text-xs text-white/60 leading-relaxed">{error}</p>
-            <button 
+            <button
               onClick={handleRunCheck}
               className="w-full py-2 bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-red-600 transition-colors"
             >
@@ -133,20 +147,30 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
                       dataKey="value"
                     >
                       {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                          stroke="none"
+                        />
                       ))}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pt-8">
-                  <span className="text-4xl font-bold text-white leading-none">{report.overallScore}</span>
-                  <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Safety Score</span>
+                  <span className="text-4xl font-bold text-white leading-none">
+                    {report.overallScore}
+                  </span>
+                  <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
+                    Safety Score
+                  </span>
                 </div>
               </div>
 
               {/* Summary */}
               <div className="space-y-3">
-                <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Executive Summary</h3>
+                <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  Executive Summary
+                </h3>
                 <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
                   <p className="text-xs text-white/80 leading-relaxed italic">
                     "{report.summary}"
@@ -156,20 +180,28 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
 
               {/* Checks List */}
               <div className="space-y-4">
-                <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Checklist Results</h3>
+                <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  Checklist Results
+                </h3>
                 <div className="space-y-3">
                   {report.checks.map((check, idx) => (
-                    <div 
+                    <div
                       key={idx}
                       className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-2 group hover:bg-white/10 transition-colors"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">{check.category}</span>
+                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
+                          {check.category}
+                        </span>
                         <StatusBadge status={check.status} />
                       </div>
-                      <p className="text-xs text-white font-medium">{check.message}</p>
+                      <p className="text-xs text-white font-medium">
+                        {check.message}
+                      </p>
                       {check.details && (
-                        <p className="text-[10px] text-white/40 leading-relaxed">{check.details}</p>
+                        <p className="text-[10px] text-white/40 leading-relaxed">
+                          {check.details}
+                        </p>
                       )}
                     </div>
                   ))}
@@ -178,12 +210,19 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
 
               {/* Recommendations */}
               <div className="space-y-4 pb-8">
-                <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Recommendations</h3>
+                <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  Recommendations
+                </h3>
                 <div className="space-y-2">
                   {report.recommendations.map((rec, idx) => (
-                    <div key={idx} className="flex items-start gap-3 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                    <div
+                      key={idx}
+                      className="flex items-start gap-3 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg"
+                    >
                       <ArrowRight className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                      <p className="text-xs text-white/80 leading-relaxed">{rec}</p>
+                      <p className="text-xs text-white/80 leading-relaxed">
+                        {rec}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -196,12 +235,15 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
               <ShieldQuestion className="w-12 h-12 text-white/20" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-sm font-bold text-white">Ready for Analysis</h3>
+              <h3 className="text-sm font-bold text-white">
+                Ready for Analysis
+              </h3>
               <p className="text-xs text-white/40 leading-relaxed max-w-[240px]">
-                Run the AI compliance engine to verify safety distances, capacity, and operational standards.
+                Run the AI compliance engine to verify safety distances,
+                capacity, and operational standards.
               </p>
             </div>
-            <button 
+            <button
               onClick={handleRunCheck}
               className="px-8 py-3 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
             >
@@ -213,12 +255,14 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
 
       {/* Footer */}
       <div className="p-6 border-t border-white/10 bg-brand-navy/50">
-        <button 
+        <button
           onClick={handleRunCheck}
           disabled={loading}
           className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          <RefreshCw className={clsx("w-3.5 h-3.5", loading && "animate-spin")} />
+          <RefreshCw
+            className={clsx("w-3.5 h-3.5", loading && "animate-spin")}
+          />
           Refresh Report
         </button>
       </div>
@@ -226,23 +270,23 @@ export function CompliancePanel({ state, isOpen, onClose }: Props) {
   );
 }
 
-function StatusBadge({ status }: { status: ComplianceResult['status'] }) {
+function StatusBadge({ status }: { status: ComplianceResult["status"] }) {
   switch (status) {
-    case 'pass':
+    case "pass":
       return (
         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/20 text-emerald-500 rounded-full">
           <CheckCircle2 className="w-3 h-3" />
           <span className="text-[9px] font-bold uppercase">Pass</span>
         </div>
       );
-    case 'fail':
+    case "fail":
       return (
         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/20 text-red-500 rounded-full">
           <AlertCircle className="w-3 h-3" />
           <span className="text-[9px] font-bold uppercase">Fail</span>
         </div>
       );
-    case 'warning':
+    case "warning":
       return (
         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-full">
           <Info className="w-3 h-3" />

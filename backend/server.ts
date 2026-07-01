@@ -2405,7 +2405,7 @@ async function startServer() {
       `;
 
         const model = genai.getGenerativeModel({
-          model: "gemini-3-flash-preview",
+          model: "gemini-3-flash",
         });
 
         const result = await model.generateContent({

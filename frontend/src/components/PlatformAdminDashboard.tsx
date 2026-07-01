@@ -1436,7 +1436,7 @@ function SettingsTab({
         </div>
       </div>
 
-      <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
+      {/* <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
         <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">
           Platform Security
         </h3>
@@ -1453,7 +1453,7 @@ function SettingsTab({
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

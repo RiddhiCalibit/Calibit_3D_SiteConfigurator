@@ -310,8 +310,6 @@ export function AdminDashboard({
     fetchEquipment();
     fetchEquipmentStats();
     fetchDisabledDefaults();
-    // fetchResetRequests();
-    //fetchSalesRepCount();
     fetchLogs();
     fetchActiveProjects();
     fetchProjectStats();
@@ -322,18 +320,6 @@ export function AdminDashboard({
       fetchLogs();
     }
   }, [activeTab, tenant.id]);
-
-  //   // Toggle handler for active/inactive status
-  //   const handleToggleDefault = async (equipmentId: string, currentlyDisabled: boolean) => {
-  //   const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults/${equipmentId}`, {
-  //     method: 'POST',
-  //     body: JSON.stringify({ disable: !currentlyDisabled })
-  //   });
-  //   if (res.ok) {
-  //     fetchDisabledDefaults();
-  //     fetchEquipmentStats();
-  //   }
-  // };
 
   // Add resolve handler
   const handleResolveReset = async (requestId: string) => {
@@ -431,26 +417,6 @@ export function AdminDashboard({
     }
   };
 
-  // const handleToggleActive = async (id: string, currentlyActive: boolean) => {
-  //   // Optimistic update — flip the badge immediately without waiting for server
-  //   setEquipment(prev => prev.map(eq =>
-  //     eq.id === id ? { ...eq, isActive: !currentlyActive } : eq
-  //   ));
-
-  //   const res = await authFetch(`/api/tenant/${tenant.id}/equipment/${id}/toggle`, {
-  //     method: 'PATCH',
-  //     headers: { 'Content-Type': 'application/json' },
-  //     body: JSON.stringify({ is_active: currentlyActive ? 0 : 1 })
-  //   });
-
-  //   if (res.ok) {
-  //     fetchEquipmentStats(); // refresh the Active/Inactive counts in the header
-  //   } else {
-  //     // Revert on failure
-  //     setEquipment(prev => prev.map(eq => eq.id === id ? { ...eq, isActive: currentlyActive } : eq));
-  //   }
-  // };
-
   const handleToggleActive = async (id: string, currentlyActive: boolean) => {
     // Optimistic UI: flip the equipment state immediately so counts and badges update
     setEquipment((prev) =>
@@ -489,14 +455,6 @@ export function AdminDashboard({
       setEquipmentStats(prevStats);
     }
   };
-
-  //   const fetchDisabledDefaults = async () => {
-  //   const res = await authFetch(`/api/tenant/${tenant.id}/disabled-defaults`);
-  //   if (res.ok) {
-  //     const data = await res.json();
-  //     setDisabledDefaults(data);
-  //   }
-  // };
 
   // Toggle a DEFAULT_LIBRARY item on/off for this tenant
   const handleToggleDefault = async (equipmentId: string) => {
@@ -661,37 +619,6 @@ export function AdminDashboard({
             </h2>
             <p className="text-sm opacity-40">Welcome back, {user.name}</p>
           </div>
-
-          {/* {(activeTab === 'equipment' || activeTab === 'users') && (
-            // <button 
-            //   onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
-            //   className="flex items-center gap-2 px-4 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
-            // >
-            //   <Plus className="w-4 h-4" />
-            //   {activeTab === 'equipment' ? 'Add New Equipment' : 'Add Person'}
-            // </button>
-            <button 
-            // onClick={() => activeTab === 'equipment' ? setIsAddingEquipment(true) : setIsAddingUser(true)}
-            onClick={() => {
-  if (activeTab === 'equipment') {
-    setEditingEquipment(null); // clear edit mode
-    setNewEquipment({
-      name: '',
-      category: 'slides',
-      width: 5,
-      depth: 5,
-      height: 5,
-      color: '#14b8a6',
-      animationsEnabled: false,
-      imageUrl: '' 
-    });
-    setIsAddingEquipment(true);
-  } else {
-    setIsAddingUser(true);
-  }
-}}
-            className="flex items-center gap-1 lg:gap-2 px-2 lg:px-4 py-2 bg-brand-teal text-white text-[10px] lg:text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20 shrink-0"
-            > */}
 
           {(activeTab === "equipment" || activeTab === "users") && (
             <div className="flex items-center gap-3 shrink-0">
@@ -1172,20 +1099,12 @@ function OverviewTab({
 }) {
   return (
     <div className="space-y-8">
-      {/* <div className="grid grid-cols-3 gap-6"> */}
       {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6"> */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
-        {/* <StatCard
-          label="Active Projects"
-          value="24"
-          trend="+12%"
-          icon={<LayoutDashboard className="w-5 h-5" />}
-        /> */}
         <StatCard
           label="Active Projects"
           value={activeProjectCount.toString()}
           trend="last 5 days"
-          // icon={...}
           icon={<LayoutDashboard className="w-5 h-5" />}
         />
         <StatCard
@@ -1194,12 +1113,12 @@ function OverviewTab({
           trend={`${equipmentStats.active} active`}
           icon={<Package className="w-5 h-5" />}
         />
-        <StatCard
+        {/* <StatCard
           label="Sales Activity"
           value="89%"
           trend="+2%"
           icon={<TrendingUp className="w-5 h-5" />}
-        />
+        /> */}
       </div>
 
       <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
@@ -1323,8 +1242,6 @@ function EquipmentTab({
   onUpdate: (e: React.FormEvent) => void;
   onDelete: (id: string) => void;
   onToggleActive: (id: string, currentlyActive: boolean) => void;
-  //disabledDefaults: string[],
-  //onToggleDefault: (id: string, currentlyDisabled: boolean) => void
   disabledDefaults: Set<string>;
   onToggleDefault: (id: string) => void;
 }) {
@@ -1336,50 +1253,6 @@ function EquipmentTab({
 
   return (
     <div className="space-y-6">
-      {/* Default Equipment Section
-<div className="space-y-3">
-  <div className="flex items-center justify-between">
-    <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
-      Default Equipment ({DEFAULT_LIBRARY.filter(d => !disabledDefaults.includes(d.id)).length} active)
-    </label>
-  </div>
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-    {DEFAULT_LIBRARY.map(item => {
-      const isDisabled = disabledDefaults.includes(item.id);
-      return (
-        <div key={item.id} className={clsx(
-          "flex items-center justify-between p-3 bg-theme-card border rounded-xl transition-all",
-          isDisabled ? "border-red-500/20 opacity-50" : "border-theme-border"
-        )}>
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg shrink-0" style={{ backgroundColor: item.color }} />
-            <div className="min-w-0">
-              <p className="text-xs font-bold truncate">{item.name}</p>
-              <p className="text-[9px] opacity-40 uppercase">{item.category}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => onToggleDefault(item.id, isDisabled)}
-            className={clsx(
-              "w-10 h-5 rounded-full transition-colors relative shrink-0 ml-2",
-              !isDisabled ? "bg-emerald-500" : "bg-white/20"
-            )}
-          >
-            <div className={clsx(
-              "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-              !isDisabled ? "left-6" : "left-1"
-            )} />
-          </button>
-        </div>
-      );
-    })}
-  </div>
-  <div className="border-t border-theme-border pt-4">
-    <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
-      Custom Equipment ({filteredEquipment.filter(e => e.isActive !== false).length} active)
-    </label>
-  </div>
-</div> */}
       {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-20" />
@@ -1401,8 +1274,6 @@ function EquipmentTab({
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            //className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl"
-            // Add max-height and overflow scroll
             className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]"
           >
             <div className="p-6 border-b border-theme-border flex justify-between items-center">
@@ -1790,33 +1661,6 @@ function EquipmentTab({
                     />
                   </div>
                 </div>
-                {/* <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                    Equipment URL (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={
-                      isAdding
-                        ? newEquipment.modelUrl
-                        : editingItem?.modelUrl || ""
-                    }
-                    onChange={(e) =>
-                      isAdding
-                        ? setNewEquipment({
-                            ...newEquipment,
-                            modelUrl: e.target.value,
-                          })
-                        : setEditingItem({
-                            ...editingItem!,
-                            modelUrl: e.target.value,
-                          })
-                    }
-                    className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-                    placeholder="/models/..."
-                  />
-                </div>
-              </div> */}
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
@@ -1882,10 +1726,7 @@ function EquipmentTab({
                       const token =
                         localStorage.getItem("auth_token") ||
                         sessionStorage.getItem("auth_token");
-                      // const res = await authFetch("/api/upload/model", {
-                      //   method: "POST",
-                      //   body: formData,
-                      // });
+
                       // Show uploading state
                       if (isAdding) {
                         setNewEquipment({
@@ -1929,11 +1770,6 @@ function EquipmentTab({
                   </p>
                 </div>
               </div>
-
-              {/* Row 4 — Animations checkbox */}
-              {/* Animations removed from form */}
-
-              {/* Equipment status removed from form */}
 
               {/* Row 5 — Action buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-theme-border">
@@ -2061,36 +1897,7 @@ function EquipmentTab({
           </div>
         )}
       </div>
-      {/* onChange={async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
 
-  const MAX_GLB_SIZE = 25 * 1024 * 1024; // 25MB
-  if (file.size > MAX_GLB_SIZE) {
-    alert("GLB file must be under 25MB.");
-    e.target.value = "";
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await authFetch("/api/upload/model", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (res.ok) {
-    const { url } = await res.json();
-    if (isAdding) {
-      setNewEquipment({ ...newEquipment, modelUrl: url });
-    } else {
-      setEditingItem({ ...editingItem!, modelUrl: url });
-    }
-  } else {
-    alert("Failed to upload GLB file.");
-  }
-}} */}
       {/* ── Default Equipment Section ────────────────────────────────────── */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
@@ -3017,7 +2824,7 @@ function SettingsTab({
         </div>
       </div>
 
-      <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
+      {/* <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
         <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">
           Account Notifications
         </h3>
@@ -3034,74 +2841,10 @@ function SettingsTab({
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
-
-// function ProjectStatsTab({ projectStats }: { projectStats: any[] }) {
-//   const totalProjects = projectStats.reduce(
-//     (sum, s) => sum + parseInt(s.project_count),
-//     0,
-//   );
-
-//   return (
-//     <div className="space-y-6">
-//       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-//         <StatCard
-//           label="Total Projects"
-//           value={totalProjects.toString()}
-//           trend="across all reps"
-//           icon={<FolderOpen className="w-5 h-5" />}
-//         />
-//         <StatCard
-//           label="Sales Reps"
-//           value={projectStats.length.toString()}
-//           trend="in your team"
-//           icon={<Users className="w-5 h-5" />}
-//         />
-//       </div>
-
-//       <div className="p-6 bg-theme-card border border-theme-border rounded-2xl">
-//         <h3 className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">
-//           Projects per Sales Rep
-//         </h3>
-//         {projectStats.length === 0 ? (
-//           <p className="text-sm opacity-30 text-center py-8">
-//             No sales reps found
-//           </p>
-//         ) : (
-//           <div className="space-y-3">
-//             {projectStats.map((rep) => (
-//               <div
-//                 key={rep.user_id}
-//                 className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-theme-border hover:border-white/20 transition-all"
-//               >
-//                 <div className="flex items-center gap-3">
-//                   <div className="w-9 h-9 rounded-lg bg-brand-teal/10 flex items-center justify-center text-brand-teal font-bold text-sm">
-//                     {rep.user_name?.charAt(0).toUpperCase()}
-//                   </div>
-//                   <div>
-//                     <p className="text-sm font-medium">{rep.user_name}</p>
-//                     <p className="text-[11px] opacity-30">{rep.email}</p>
-//                   </div>
-//                 </div>
-//                 <div className="text-right">
-//                   <p className="text-lg font-bold text-brand-teal">
-//                     {rep.project_count}
-//                   </p>
-//                   <p className="text-[10px] opacity-30 uppercase tracking-wider">
-//                     projects
-//                   </p>
-//                 </div>
-//               </div>
-//             ))}
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
 
 function ProjectStatsTab({
   projectStats,

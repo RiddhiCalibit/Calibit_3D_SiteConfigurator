@@ -270,45 +270,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // const handleModelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const file = e.target.files?.[0];
-  //   if (!file) return;
-
-  //   const url = URL.createObjectURL(file);
-  //   const name = file.name.replace(".glb", "");
-
-  //   // Now calls the DB-saving version above
-  //   handleAddCustomEquipment({
-  //     id: `custom_${Date.now()}`,
-  //     name: `${name} (Custom)`,
-  //     width: 2,
-  //     depth: 2,
-  //     height: 2,
-  //     color: "#9B59B6",
-  //     category: "custom",
-  //     modelUrl: url,
-  //   });
-  // };
-
   const handleLoadProject = (project: any) => {
     const data =
       typeof project.data === "string"
         ? JSON.parse(project.data) // DB stores it as JSON string
         : project.data;
 
-    // if (data.siteBoundary) onSetBoundary(data.siteBoundary);
-    // if (data.objects) onSetObjects(data.objects);
-
-    // if (data.siteBoundary) onDeleteBoundary();  // clear first
-    // // Note: to properly load, we need to pass data up to App.tsx
-    // // For now alert the user — full load needs App.tsx wiring
-    // alert(`Project "${project.name}" loaded. Boundary and objects restored.`);
-
     if (data.siteBoundary) onLoadProject(data.siteBoundary, data.objects || []);
   };
 
   return (
-    // <aside className="w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">
     <aside className="w-[200px] lg:w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">
       {/* Header */}
       <div className="p-6 border-b border-theme-border">
@@ -538,12 +509,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     "ring-1 ring-brand-teal bg-brand-teal/10",
                 )}
               >
-                {/* <div
-                  className="w-8 h-8 rounded shrink-0 shadow-inner flex items-center justify-center overflow-hidden"
-                  style={{ backgroundColor: item.color }}
-                >
-                  {item.modelUrl && <Box className="w-4 h-4 text-white/20" />}
-                </div> */}
                 <img
                   src={getEquipmentThumbnail(item)}
                   alt={item.name}
@@ -748,56 +713,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <ChevronDown className="w-3 h-3" />
           </button>
 
-          {/* {exportMenuOpen && (
-            <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
-              <button
-                onClick={() => {
-                  onExport("pdf");
-                  setExportMenuOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
-              >
-                <span>Export as PDF</span>
-                <span className="text-[10px] opacity-50">.pdf</span>
-              </button>
-              <button
-                onClick={() => {
-                  onExport("dwg");
-                  setExportMenuOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
-              >
-                <span>Export as DWG</span>
-                <span className="text-[10px] opacity-50">.dwg</span>
-              </button>
-              <button
-                onClick={() => {
-                  onExport("excel");
-                  setExportMenuOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
-              >
-                <span>Export as Excel</span>
-                <span className="text-[10px] opacity-50">.xls</span>
-              </button>
-            </div>
-          )} */}
           {exportMenuOpen && (
             <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
-              {/* PDF
-              <button
-                disabled
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs opacity-60 cursor-not-allowed"
-              >
-                <div className="flex flex-col">
-                  <span>Export as PDF</span>
-                  <span className="text-[9px] text-amber-400">
-                    upcoming feature
-                  </span>
-                </div>
-                <span className="text-[10px] opacity-50">.pdf</span>
-              </button> */}
-
               {/* PDF */}
               <button
                 onClick={() => {
@@ -863,8 +780,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
       <div className="mt-4 flex justify-between text-[9px] opacity-30 font-mono uppercase tracking-tighter">
-        <span>Del · Esc · R · M · G</span>
-        <span>v1.0</span>
+        {/* <span>Del · Esc · R · M · G</span> */}
+        <span>Version v1.3.0 </span>
       </div>
 
       {/* Settings/Profile Modal */}

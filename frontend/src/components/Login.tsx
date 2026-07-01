@@ -76,13 +76,6 @@ export function Login({ onLogin, onForgotPassword, onContactAdmin }: Props) {
         className="w-full max-w-md space-y-8 relative z-10"
       >
         <div className="text-center space-y-2">
-          {/* <div className="inline-flex p-4 bg-brand-teal/10 rounded-2xl mb-4"> */}
-          {/* <div className="flex justify-center mb-4">
-            <img src={logo} alt="Company Logo" className="w-10 h-10 text-brand-teal" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">3D Site Configurator</h1>
-          <p className="opacity-40 text-sm">Sign in to your company workspace</p>
-        </div> */}
           <div className="flex flex-col items-center mb-6">
             <img src={logo} alt="Company Logo" className="h-16 mb-2" />
             <h1 className="text-2xl font-bold text-white">
