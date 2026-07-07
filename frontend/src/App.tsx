@@ -97,7 +97,7 @@ const generateDXFContent = (
     const w = def?.width ?? obj.width ?? 4;
     const d = def?.depth ?? obj.depth ?? 4;
     const name = obj.name ?? def?.name ?? obj.type ?? "Equipment";
-    
+
     const cx = obj.x ?? 0;
     const cy = -(obj.z ?? 0);
     const angleRad = -(obj.rotationY ?? 0);
@@ -2135,13 +2135,17 @@ export default function App() {
           />
 
           {/* Top Overlays */}
-          <div className="absolute top-4 left-4 right-4 flex items-start justify-end pointer-events-none">
-            <div className="pointer-events-auto">
-              <LocationSearch
-                onSelectLocation={(lng, lat) => setTargetLocation({ lng, lat })}
-              />
+          {state.mapStyle !== "plain" && (
+            <div className="absolute top-4 left-4 right-4 flex items-start justify-end pointer-events-none">
+              <div className="pointer-events-auto">
+                <LocationSearch
+                  onSelectLocation={(lng, lat) =>
+                    setTargetLocation({ lng, lat })
+                  }
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Import Confirmation Modal */}

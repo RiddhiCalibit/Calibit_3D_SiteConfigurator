@@ -60,7 +60,7 @@ export interface AppState {
   selectedId: string | null;
   terrainEnabled: boolean;
   buildingsEnabled: boolean;
-  mapStyle: "streets" | "satellite";
+  mapStyle: "streets" | "satellite" | "plain";
   pendingPlacement: EquipmentDef | null;
   measurePoints: [number, number][];
   isBoundaryLocked: boolean;

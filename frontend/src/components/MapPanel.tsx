@@ -6,6 +6,7 @@ import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { AppState, DEFAULT_LIBRARY } from "../../../backend/types";
 import * as turf from "@turf/turf";
 import { metresToLngLat, lngLatToMetres } from "../utils/geo";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface MapPanelProps {
   state: AppState;
@@ -40,6 +41,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [hoverCoords, setHoverCoords] = useState<[number, number] | null>(null);
   const draggingIdRef = useRef<string | null>(null);
+  const { theme } = useTheme();
 
   // Use refs for callbacks to avoid stale closures in Mapbox event listeners
   const callbacks = useRef({
@@ -986,8 +988,23 @@ export const MapPanel: React.FC<MapPanelProps> = ({
 
     state.measurePoints.forEach((pt, i) => {
       const el = document.createElement("div");
-      el.className =
+      const isPlainMode = state.mapStyle === "plain";
+      const isLightTheme = theme === "light";
+
+      // Adjust marker colors for plain mode
+      let markerClass =
         "w-3 h-3 bg-brand-teal border-2 border-white rounded-full shadow-lg";
+      if (isPlainMode) {
+        if (isLightTheme) {
+          markerClass =
+            "w-4 h-4 bg-[#00FF00] border-2 border-white rounded-full shadow-lg";
+        } else {
+          markerClass =
+            "w-4 h-4 bg-[#FFD700] border-2 border-black rounded-full shadow-lg";
+        }
+      }
+
+      el.className = markerClass;
       const marker = new mapboxgl.Marker(el).setLngLat(pt).addTo(map);
       measureMarkersRef.current.push(marker);
     });
@@ -1016,8 +1033,23 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       }
 
       const label = document.createElement("div");
-      label.className =
+      const isPlainMode = state.mapStyle === "plain";
+      const isLightTheme = theme === "light";
+
+      // Adjust label colors for plain mode
+      let labelClass =
         "bg-white text-brand-navy px-2 py-1 rounded shadow-lg text-[10px] font-bold border border-brand-teal";
+      if (isPlainMode) {
+        if (isLightTheme) {
+          labelClass =
+            "bg-[#00FF00] text-black px-2 py-1 rounded shadow-lg text-[10px] font-bold border-2 border-white";
+        } else {
+          labelClass =
+            "bg-[#FFD700] text-black px-2 py-1 rounded shadow-lg text-[10px] font-bold border-2 border-black";
+        }
+      }
+
+      label.className = labelClass;
 
       if (state.unitSystem === "imperial") {
         const distFeet = distMeters * 3.28084;
@@ -1031,17 +1063,82 @@ export const MapPanel: React.FC<MapPanelProps> = ({
         .addTo(map);
       measureLineRef.current = labelMarker;
     }
-  }, [state.measurePoints, state.unitSystem]);
+  }, [state.measurePoints, state.unitSystem, theme, state.mapStyle]);
 
   // Sync style
   useEffect(() => {
     if (!mapRef.current) return;
+
+    if (state.mapStyle === "plain") {
+      const plainStyle = {
+        version: 8,
+        name: "plain",
+        metadata: {},
+        sources: {},
+        layers: [
+          {
+            id: "plain-background",
+            type: "background",
+            paint: {
+              "background-color": theme === "dark" ? "#ffffff" : "#000000",
+            },
+          },
+        ],
+      } as any;
+
+      mapRef.current.setStyle(plainStyle);
+      return;
+    }
+
     const style =
-      state.mapStyle === "streets"
-        ? "mapbox://styles/mapbox/streets-v12"
-        : "mapbox://styles/mapbox/satellite-v9";
+      state.mapStyle === "satellite"
+        ? "mapbox://styles/mapbox/satellite-v9"
+        : "mapbox://styles/mapbox/streets-v12";
+
     mapRef.current.setStyle(style);
-  }, [state.mapStyle]);
+  }, [state.mapStyle, theme]);
+
+  // Adjust visibility colors for plain mode
+  useEffect(() => {
+    if (!mapRef.current || state.mapStyle !== "plain") return;
+    const map = mapRef.current;
+
+    // In plain mode, increase opacity and contrast for boundary and measurements
+    const isLightTheme = theme === "light";
+    const boundaryColor = isLightTheme ? "#00FF00" : "#FFD700"; // Bright green for black bg, gold for white bg
+    const boundaryOpacity = 0.3;
+    const measureColor = isLightTheme ? "#00FF00" : "#FFD700";
+    const measureWidth = isLightTheme ? 4 : 3;
+
+    try {
+      if (map.getLayer("boundary-readonly-fill")) {
+        map.setPaintProperty(
+          "boundary-readonly-fill",
+          "fill-color",
+          boundaryColor,
+        );
+        map.setPaintProperty(
+          "boundary-readonly-fill",
+          "fill-opacity",
+          boundaryOpacity,
+        );
+      }
+      if (map.getLayer("boundary-readonly-stroke")) {
+        map.setPaintProperty(
+          "boundary-readonly-stroke",
+          "line-color",
+          boundaryColor,
+        );
+        map.setPaintProperty("boundary-readonly-stroke", "line-width", 3);
+      }
+      if (map.getLayer("measure-line-layer")) {
+        map.setPaintProperty("measure-line-layer", "line-color", measureColor);
+        map.setPaintProperty("measure-line-layer", "line-width", measureWidth);
+      }
+    } catch (err) {
+      // Layer not ready yet
+    }
+  }, [state.mapStyle, theme]);
 
   // Sync terrain and buildings
   useEffect(() => {
@@ -1050,7 +1147,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
 
     const handleStyleLoad = () => {
       // Terrain
-      if (state.terrainEnabled) {
+      if (state.terrainEnabled && state.mapStyle === "streets") {
         if (!map.getSource("mapbox-dem")) {
           map.addSource("mapbox-dem", {
             type: "raster-dem",
@@ -1095,9 +1192,30 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     if (originMarkerRef.current) originMarkerRef.current.remove();
     if (state.originLngLat) {
       const el = document.createElement("div");
-      el.className =
-        "w-6 h-6 flex items-center justify-center bg-brand-teal rounded-full border-2 border-white shadow-xl animate-pulse";
-      el.innerHTML = '<div class="w-2 h-2 bg-white rounded-full"></div>';
+      const isPlainMode = state.mapStyle === "plain";
+      const isLightTheme = theme === "light";
+
+      // Adjust marker colors for plain mode: bright colors for visibility
+      let bgColor = "bg-brand-teal";
+      let innerColor = "bg-white";
+      let borderColor = "border-white";
+
+      if (isPlainMode) {
+        if (isLightTheme) {
+          // For black background in light theme mode
+          bgColor = "bg-[#00FF00]"; // Bright green
+          innerColor = "bg-white";
+          borderColor = "border-white";
+        } else {
+          // For white background in dark theme mode
+          bgColor = "bg-[#FFD700]"; // Gold
+          innerColor = "bg-black";
+          borderColor = "border-black";
+        }
+      }
+
+      el.className = `w-6 h-6 flex items-center justify-center ${bgColor} rounded-full border-2 ${borderColor} shadow-xl animate-pulse`;
+      el.innerHTML = `<div class="w-2 h-2 ${innerColor} rounded-full"></div>`;
 
       const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(
         '<div class="text-[10px] font-bold text-brand-navy p-1">BENCHMARK ORIGIN</div>',
@@ -1138,7 +1256,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       },
       properties: {},
     } as any);
-  }, [state.siteBoundary, state.originLngLat]);
+  }, [state.siteBoundary, state.originLngLat, theme, state.mapStyle]);
 
   // Sync Mapbox Draw mode and visibility based on app state
   useEffect(() => {

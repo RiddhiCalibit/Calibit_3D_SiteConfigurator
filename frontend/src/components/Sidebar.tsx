@@ -76,7 +76,7 @@ function cn(...inputs: ClassValue[]) {
 
 interface SidebarProps {
   state: AppState;
-  onSetStyle: (style: "streets" | "satellite") => void;
+  onSetStyle: (style: "streets" | "satellite" | "plain") => void;
   onToggleTerrain: () => void;
   onToggleBuildings: () => void;
   onDrawBoundary: () => void;
@@ -348,6 +348,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             >
               Satellite
+            </button>
+            <button
+              onClick={() => onSetStyle("plain")}
+              className={cn(
+                "flex-1 py-1.5 text-xs rounded-md transition-all",
+                state.mapStyle === "plain"
+                  ? "bg-brand-teal text-white shadow-lg"
+                  : "opacity-60 hover:opacity-100",
+              )}
+            >
+              Plain
             </button>
           </div>
         </section>

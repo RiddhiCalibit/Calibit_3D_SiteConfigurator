@@ -83,7 +83,7 @@ export function useAppState() {
     setState((prev) => ({ ...prev, selectedId: id }));
   }, []);
 
-  const setMapStyle = useCallback((style: "streets" | "satellite") => {
+  const setMapStyle = useCallback((style: "streets" | "satellite" | "plain") => {
     setState((prev) => ({ ...prev, mapStyle: style }));
   }, []);
 
