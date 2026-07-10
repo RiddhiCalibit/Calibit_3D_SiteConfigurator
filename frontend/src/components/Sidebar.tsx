@@ -1,3 +1,981 @@
+// import React, { useState } from "react";
+// import { authFetch } from "../utils/api";
+// import {
+//   EquipmentDef,
+//   DEFAULT_LIBRARY,
+//   AppState,
+//   User,
+//   Tenant,
+// } from "../../../backend/types";
+// import {
+//   Map as MapIcon,
+//   Layers,
+//   Mountain,
+//   Square,
+//   Trash2,
+//   Ruler,
+//   Download,
+//   Upload,
+//   Info,
+//   Box,
+//   Lock,
+//   Unlock,
+//   ChevronUp,
+//   ChevronDown,
+//   ChevronLeft,
+//   ChevronRight,
+//   RotateCcw,
+//   RotateCw,
+//   ShieldCheck,
+//   SaveIcon,
+//   LogOut,
+//   Settings,
+//   User as UserIcon,
+//   Moon,
+//   Sun,
+//   X,
+//   FolderOpen,
+// } from "lucide-react";
+
+// const generateDefaultEquipmentImage = (item: EquipmentDef) => {
+//   const label = item.name
+//     .split(" ")
+//     .map((word) => word[0])
+//     .join("")
+//     .slice(0, 3)
+//     .toUpperCase();
+//   const fill = item.color || "#999";
+//   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='${fill}'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, system-ui, sans-serif' font-size='28' fill='#ffffff' opacity='0.85'>${label}</text></svg>`;
+//   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+// };
+
+// const resolveImageUrl = (imageUrl?: string | null) => {
+//   if (!imageUrl) return null;
+//   if (
+//     imageUrl.startsWith("data:") ||
+//     imageUrl.startsWith("http://") ||
+//     imageUrl.startsWith("https://")
+//   ) {
+//     return imageUrl;
+//   }
+//   return `${import.meta.env.VITE_API_URL}${imageUrl}`;
+// };
+
+// const getEquipmentThumbnail = (item: EquipmentDef) => {
+//   const imageUrl = resolveImageUrl(item.imageUrl);
+//   return imageUrl ? imageUrl : generateDefaultEquipmentImage(item);
+// };
+// import { clsx, type ClassValue } from "clsx";
+// import { twMerge } from "tailwind-merge";
+// import { useTheme } from "../contexts/ThemeContext";
+// import { motion, AnimatePresence } from "motion/react";
+
+// function cn(...inputs: ClassValue[]) {
+//   return twMerge(clsx(inputs));
+// }
+
+// interface SidebarProps {
+//   state: AppState;
+//   onSetStyle: (style: "streets" | "satellite" | "plain") => void;
+//   onToggleTerrain: () => void;
+//   onToggleBuildings: () => void;
+//   onDrawBoundary: () => void;
+//   onDeleteBoundary: () => void;
+//   onToggleMeasure: () => void;
+//   onToggleBoundaryLock: () => void;
+//   onSelectEquipment: (def: EquipmentDef) => void;
+//   onDeleteSelected: () => void;
+//   onUpdateObject: (id: string, updates: any) => void;
+//   onExport: (format: "json" | "pdf" | "dwg" | "excel") => void;
+//   onImport: () => void;
+//   onSave: () => void;
+//   onOpenProjects: () => void;
+//   projects: any[];
+//   currentProjectId: string | null;
+//   currentProjectName: string | null;
+//   onAddCustomEquipment: (def: EquipmentDef) => void;
+//   onOpenCompliance: () => void;
+//   onSetUnitSystem: (unit: "metric" | "imperial") => void;
+//   onLogout: () => void;
+//   onLoadProject: (boundary: [number, number][], objects: any[]) => void;
+//   onUserUpdate?: (user: User) => void;
+//   onShowToast?: (message: string, type?: "success" | "error") => void;
+//   user: User | null;
+//   tenant: Tenant | null;
+// }
+
+// export const Sidebar: React.FC<SidebarProps> = ({
+//   state,
+//   onSetStyle,
+//   onToggleTerrain,
+//   onToggleBuildings,
+//   onDrawBoundary,
+//   onDeleteBoundary,
+//   onToggleMeasure,
+//   onToggleBoundaryLock,
+//   onSelectEquipment,
+//   onDeleteSelected,
+//   onUpdateObject,
+//   onExport,
+//   onImport,
+//   onSave,
+//   onOpenProjects,
+//   onUserUpdate,
+//   onShowToast,
+//   projects,
+//   currentProjectId,
+//   currentProjectName,
+//   onAddCustomEquipment,
+//   onOpenCompliance,
+//   onSetUnitSystem,
+//   onLogout,
+//   onLoadProject,
+//   user,
+//   tenant,
+// }) => {
+//   const { theme, setTheme } = useTheme();
+//   const [modalMode, setModalMode] = React.useState<
+//     "none" | "settings" | "profile"
+//   >("none");
+//   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+//   const [disabledDefaults, setDisabledDefaults] = React.useState<Set<string>>(
+//     new Set(),
+//   );
+
+//   // Fetch which DEFAULT_LIBRARY items this tenant has hidden
+//   React.useEffect(() => {
+//     if (!tenant) return;
+//     authFetch(`/api/tenant/${tenant.id}/disabled-defaults`)
+//       .then((r) => (r.ok ? r.json() : []))
+//       .then((ids: string[]) => setDisabledDefaults(new Set(ids)))
+//       .catch(() => {});
+//   }, [tenant?.id]);
+
+//   const [profileData, setProfileData] = React.useState({
+//     name: user?.name || "",
+//     phone: user?.phone || "",
+//     password: "",
+//   });
+//   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
+
+//   React.useEffect(() => {
+//     if (user) {
+//       setProfileData({
+//         name: user.name,
+//         phone: user.phone || "",
+//         password: "",
+//       });
+//     }
+//   }, [user]);
+
+//   const handleSaveProfile = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     if (!user) return;
+
+//     setIsSavingProfile(true);
+//     try {
+//       const res = await authFetch(`/api/users/${user.id}`, {
+//         method: "PUT",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({
+//           name: profileData.name,
+//           phone: profileData.phone,
+//           password: profileData.password || undefined,
+//         }),
+//       });
+
+//       if (res.ok) {
+//         const updatedUser: User = {
+//           ...user,
+//           name: profileData.name,
+//           phone: profileData.phone || undefined,
+//         };
+//         onUserUpdate?.(updatedUser);
+//         onShowToast?.("Profile updated successfully!");
+//       }
+//     } catch (error) {
+//       console.error("Failed to update profile:", error);
+//     } finally {
+//       setIsSavingProfile(false);
+//     }
+//   };
+//   const selectedObject = state.objects.find((o) => o.id === state.selectedId);
+//   //const fullLibrary = [...DEFAULT_LIBRARY, ...state.customLibrary]
+//   //.filter(item => item.isActive !== false);
+//   const fullLibrary = [
+//     ...DEFAULT_LIBRARY.filter((item) => !disabledDefaults.has(item.id)),
+//     ...state.customLibrary.filter((item) => item.isActive !== false),
+//   ];
+
+//   const selectedDef = selectedObject
+//     ? fullLibrary.find((d) => d.id === selectedObject.type)
+//     : null;
+
+//   const handleManualMove = (dx: number, dz: number) => {
+//     if (selectedObject) {
+//       onUpdateObject(selectedObject.id, {
+//         x: selectedObject.x + dx,
+//         z: selectedObject.z + dz,
+//       });
+//     }
+//   };
+
+//   const handleManualRotate = (deg: number) => {
+//     if (selectedObject) {
+//       onUpdateObject(selectedObject.id, {
+//         rotationY: selectedObject.rotationY + (deg * Math.PI) / 180,
+//       });
+//     }
+//   };
+
+//   const formatUnit = (meters: number) => {
+//     if (state.unitSystem === "imperial") {
+//       return `${(meters * 3.28084).toFixed(1)}ft`;
+//     }
+//     return `${meters.toFixed(1)}m`;
+//   };
+
+//   const formatDimensions = (w: number, d: number, h: number) => {
+//     if (state.unitSystem === "imperial") {
+//       return `${(w * 3.28084).toFixed(1)}x${(d * 3.28084).toFixed(1)}x${(h * 3.28084).toFixed(1)}ft`;
+//     }
+//     return `${w}x${d}x${h}m`;
+//   };
+
+//   const handleAddCustomEquipment = async (def: EquipmentDef) => {
+//     // Save to DB if user belongs to a tenant
+//     if (tenant) {
+//       const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
+//         method: "POST",
+//         body: JSON.stringify({
+//           id: def.id,
+//           name: def.name,
+//           category: def.category,
+//           width: def.width,
+//           depth: def.depth,
+//           height: def.height,
+//           color: def.color,
+//           model_url: def.modelUrl || null,
+//         }),
+//       });
+
+//       if (res.ok) {
+//         onAddCustomEquipment(def); // update React state after DB save
+//       } else {
+//         alert("Failed to save equipment to database");
+//       }
+//     } else {
+//       // Platform admin has no tenant — just update state
+//       onAddCustomEquipment(def);
+//     }
+//   };
+
+//   const handleLoadProject = (project: any) => {
+//     const data =
+//       typeof project.data === "string"
+//         ? JSON.parse(project.data) // DB stores it as JSON string
+//         : project.data;
+
+//     if (data.siteBoundary) onLoadProject(data.siteBoundary, data.objects || []);
+//   };
+
+//   return (
+//     <aside className="w-[200px] lg:w-[280px] h-full bg-theme-bg text-theme-text flex flex-col shrink-0 overflow-y-auto border-r border-theme-border transition-colors duration-300">
+//       {/* Header */}
+//       <div className="p-6 border-b border-theme-border">
+//         <div className="flex items-center gap-2 mb-1">
+//           {tenant?.logo_url ? (
+//             <img
+//               src={tenant.logo_url}
+//               alt="Logo"
+//               className="w-6 h-6 rounded-sm object-cover"
+//             />
+//           ) : (
+//             <Box className="w-6 h-6 text-brand-teal" />
+//           )}
+//           <h1 className="text-base font-bold tracking-tight uppercase">
+//             {tenant?.name || "EQUIPMENTSCO"}
+//           </h1>
+//         </div>
+//         <div className="flex flex-col gap-0.5">
+//           <p className="text-[10px] opacity-30 uppercase tracking-widest font-mono">
+//             3D Site Configurator
+//           </p>
+//           {user && (
+//             <div className="flex items-center justify-between mt-1">
+//               <div className="flex items-center gap-2">
+//                 <div className="w-1 h-1 bg-brand-teal rounded-full animate-pulse" />
+//                 <p className="text-[11px] opacity-60 font-medium">
+//                   {user.name}
+//                 </p>
+//               </div>
+//               <button
+//                 onClick={() => setModalMode("profile")}
+//                 className="text-[9px] text-brand-teal hover:underline font-bold uppercase tracking-tighter"
+//               >
+//                 View Profile
+//               </button>
+//             </div>
+//           )}
+//         </div>
+//       </div>
+
+//       <div className="flex-1 p-4 space-y-6">
+//         {/* Map Style */}
+//         <section className="space-y-3">
+//           <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+//             Map Style
+//           </label>
+//           <div className="flex p-1 bg-white/5 rounded-lg">
+//             <button
+//               onClick={() => onSetStyle("streets")}
+//               className={cn(
+//                 "flex-1 py-1.5 text-xs rounded-md transition-all",
+//                 state.mapStyle === "streets"
+//                   ? "bg-brand-teal text-white shadow-lg"
+//                   : "opacity-60 hover:opacity-100",
+//               )}
+//             >
+//               Streets
+//             </button>
+//             <button
+//               onClick={() => onSetStyle("satellite")}
+//               className={cn(
+//                 "flex-1 py-1.5 text-xs rounded-md transition-all",
+//                 state.mapStyle === "satellite"
+//                   ? "bg-brand-teal text-white shadow-lg"
+//                   : "opacity-60 hover:opacity-100",
+//               )}
+//             >
+//               Satellite
+//             </button>
+//             <button
+//               onClick={() => onSetStyle("plain")}
+//               className={cn(
+//                 "flex-1 py-1.5 text-xs rounded-md transition-all",
+//                 state.mapStyle === "plain"
+//                   ? "bg-brand-teal text-white shadow-lg"
+//                   : "opacity-60 hover:opacity-100",
+//               )}
+//             >
+//               Plain
+//             </button>
+//           </div>
+//         </section>
+
+//         {/* Terrain */}
+//         <section className="space-y-3">
+//           <div className="flex items-center justify-between">
+//             <div className="flex items-center gap-2">
+//               <Mountain className="w-4 h-4 opacity-60" />
+//               <span className="text-sm">3D Terrain</span>
+//             </div>
+//             <button
+//               onClick={onToggleTerrain}
+//               className={cn(
+//                 "w-10 h-5 rounded-full transition-colors relative",
+//                 state.terrainEnabled ? "bg-brand-teal" : "bg-white/20",
+//               )}
+//             >
+//               <div
+//                 className={cn(
+//                   "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+//                   state.terrainEnabled ? "left-6" : "left-1",
+//                 )}
+//               />
+//             </button>
+//           </div>
+
+//           <div className="flex items-center justify-between">
+//             <div className="flex items-center gap-2">
+//               <Layers className="w-4 h-4 opacity-60" />
+//               <span className="text-sm">3D Buildings</span>
+//             </div>
+//             <button
+//               onClick={onToggleBuildings}
+//               className={cn(
+//                 "w-10 h-5 rounded-full transition-colors relative",
+//                 state.buildingsEnabled ? "bg-brand-teal" : "bg-white/20",
+//               )}
+//             >
+//               <div
+//                 className={cn(
+//                   "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+//                   state.buildingsEnabled ? "left-6" : "left-1",
+//                 )}
+//               />
+//             </button>
+//           </div>
+//         </section>
+
+//         {/* Draw Tools */}
+//         <section className="space-y-3">
+//           <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+//             Draw Tools
+//           </label>
+//           <div className="grid grid-cols-2 gap-2">
+//             <button
+//               onClick={onDrawBoundary}
+//               disabled={state.isBoundaryLocked}
+//               className={cn(
+//                 "flex items-center justify-center gap-2 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors",
+//                 state.isBoundaryLocked && "opacity-30 cursor-not-allowed",
+//               )}
+//             >
+//               <Square className="w-4 h-4" />
+//               Boundary
+//             </button>
+//             <button
+//               onClick={onDeleteBoundary}
+//               disabled={state.isBoundaryLocked}
+//               className={cn(
+//                 "flex items-center justify-center gap-2 p-2 bg-white/5 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition-colors",
+//                 state.isBoundaryLocked && "opacity-30 cursor-not-allowed",
+//               )}
+//             >
+//               <Trash2 className="w-4 h-4" />
+//               Clear
+//             </button>
+//           </div>
+//           <button
+//             onClick={onToggleBoundaryLock}
+//             className={cn(
+//               "w-full flex items-center justify-center gap-2 p-2 rounded-lg text-xs transition-all border",
+//               state.isBoundaryLocked
+//                 ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
+//                 : "bg-white/5 border-transparent hover:bg-white/10 opacity-60",
+//             )}
+//           >
+//             {state.isBoundaryLocked ? (
+//               <Lock className="w-4 h-4" />
+//             ) : (
+//               <Unlock className="w-4 h-4" />
+//             )}
+//             {state.isBoundaryLocked ? "Boundary Locked" : "Lock Boundary"}
+//           </button>
+//         </section>
+
+//         {/* Measure Tool */}
+//         <section className="space-y-2">
+//           <button
+//             onClick={onToggleMeasure}
+//             className={cn(
+//               "w-full flex items-center justify-center gap-2 p-2 rounded-lg text-xs transition-all border",
+//               state.measurePoints.length > 0
+//                 ? "bg-brand-teal border-brand-teal text-white"
+//                 : "bg-white/5 border-transparent hover:bg-white/10",
+//             )}
+//           >
+//             <Ruler className="w-4 h-4" />
+//             Measure Tool
+//           </button>
+
+//           <button
+//             onClick={onOpenCompliance}
+//             className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-xs transition-all border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+//           >
+//             <ShieldCheck className="w-4 h-4" />
+//             Compliance Engine
+//           </button>
+//         </section>
+
+//         {/* Equipment Library */}
+//         <section className="space-y-3">
+//           <div className="flex items-center justify-between">
+//             <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+//               Equipment Library Active: {fullLibrary.length}
+//             </label>
+//             {/* <label className="cursor-pointer group">
+//               <input
+//                 type="file"
+//                 accept=".glb"
+//                 className="hidden"
+//                 onChange={handleModelUpload}
+//               />
+//               <div className="flex items-center gap-1 text-[10px] text-brand-teal hover:text-brand-teal/80 transition-colors">
+//                 <Upload className="w-3 h-3" />
+//                 <span>Add GLB</span>
+//               </div>
+//             </label> */}
+//           </div>
+//           <div
+//             className={cn(
+//               "space-y-2 max-h-[300px] overflow-y-auto pr-2",
+//               state.siteBoundary.length === 0 &&
+//                 "opacity-30 pointer-events-none",
+//             )}
+//           >
+//             {state.siteBoundary.length === 0 && (
+//               <p className="text-[10px] opacity-40 italic mb-2">
+//                 Draw a site boundary first
+//               </p>
+//             )}
+//             {fullLibrary.map((item) => (
+//               <button
+//                 key={item.id}
+//                 onClick={() => onSelectEquipment(item)}
+//                 className={cn(
+//                   "w-full flex items-center gap-3 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-left transition-all group",
+//                   state.pendingPlacement?.id === item.id &&
+//                     "ring-1 ring-brand-teal bg-brand-teal/10",
+//                 )}
+//               >
+//                 <img
+//                   src={getEquipmentThumbnail(item)}
+//                   alt={item.name}
+//                   className="w-8 h-8 rounded-lg object-cover shrink-0"
+//                 />
+
+//                 <div className="flex-1 min-w-0">
+//                   <p className="text-xs font-medium truncate">{item.name}</p>
+//                   <p className="text-[10px] opacity-40 font-mono">
+//                     {formatDimensions(item.width, item.depth, item.height)}
+//                   </p>
+//                   <p className="text-[10px] text-amber-400/70 font-mono">
+//                     ⚠ zone {item.width + 3}×{item.depth + 3}m
+//                   </p>
+//                 </div>
+//               </button>
+//             ))}
+//           </div>
+//         </section>
+
+//         {/* Selected Object Inspector */}
+//         {selectedObject && (
+//           <section className="p-4 bg-brand-teal/10 border border-brand-teal/20 rounded-xl space-y-3 animate-in fade-in slide-in-from-bottom-2">
+//             <div className="flex items-center justify-between">
+//               <h3 className="text-xs font-bold text-brand-teal uppercase tracking-wider">
+//                 Inspector
+//               </h3>
+//               <button
+//                 onClick={onDeleteSelected}
+//                 className="text-red-400 hover:text-red-300"
+//               >
+//                 <Trash2 className="w-4 h-4" />
+//               </button>
+//             </div>
+//             <div className="space-y-1">
+//               <p className="text-sm font-medium">{selectedDef?.name}</p>
+//               <div className="grid grid-cols-2 gap-2 text-[10px] font-mono opacity-60">
+//                 <div>X: {formatUnit(selectedObject.x)}</div>
+//                 <div>Y: {formatUnit(selectedObject.z)}</div>
+//                 <div>
+//                   Angle:{" "}
+//                   {((selectedObject.rotationY * 180) / Math.PI).toFixed(0)}°
+//                 </div>
+//               </div>
+//               {selectedDef && (
+//                 <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+//                   <span className="text-amber-400 text-[10px]">⚠</span>
+//                   <span className="text-[10px] text-amber-400 font-mono">
+//                     Safe zone: {selectedDef.width + 3} × {selectedDef.depth + 3}{" "}
+//                     × {selectedDef.height + 3} m
+//                   </span>
+//                 </div>
+//               )}
+//             </div>
+
+//             {/* Color Picker */}
+//             {/* <div className="pt-2 border-t border-white/10">
+//               <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold mb-2 block">
+//                 Appearance
+//               </label>
+//               <div className="flex flex-wrap gap-2">
+//                 {[
+//                   "#4285F4",
+//                   "#EA4335",
+//                   "#FBBC05",
+//                   "#34A853",
+//                   "#8E24AA",
+//                   "#F06292",
+//                   "#00ACC1",
+//                   "#795548",
+//                   "#455A64",
+//                 ].map((color) => (
+//                   <button
+//                     key={color}
+//                     onClick={() => onUpdateObject(selectedObject.id, { color })}
+//                     className={cn(
+//                       "w-6 h-6 rounded-full border-2 transition-all",
+//                       (selectedObject.color || selectedDef?.color) === color
+//                         ? "border-white scale-110 shadow-lg"
+//                         : "border-transparent hover:scale-105",
+//                     )}
+//                     style={{ backgroundColor: color }}
+//                   />
+//                 ))}
+//                 <input
+//                   type="color"
+//                   value={
+//                     selectedObject.color || selectedDef?.color || "#4285F4"
+//                   }
+//                   onChange={(e) =>
+//                     onUpdateObject(selectedObject.id, { color: e.target.value })
+//                   }
+//                   className="w-6 h-6 rounded-full bg-transparent border-none cursor-pointer overflow-hidden"
+//                 />
+//               </div>
+//             </div> */}
+
+//             {/* Manual Controls */}
+//             <div className="pt-2 border-t border-white/10 space-y-3">
+//               <div className="flex flex-col items-center gap-1">
+//                 <button
+//                   onClick={() => handleManualMove(0, -0.5)}
+//                   className="p-1.5 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors"
+//                 >
+//                   <ChevronUp className="w-4 h-4" />
+//                 </button>
+//                 <div className="flex gap-1">
+//                   <button
+//                     onClick={() => handleManualMove(-0.5, 0)}
+//                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors"
+//                   >
+//                     <ChevronLeft className="w-4 h-4" />
+//                   </button>
+//                   <button
+//                     onClick={() => handleManualMove(0, 0.5)}
+//                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors"
+//                   >
+//                     <ChevronDown className="w-4 h-4" />
+//                   </button>
+//                   <button
+//                     onClick={() => handleManualMove(0.5, 0)}
+//                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors"
+//                   >
+//                     <ChevronRight className="w-4 h-4" />
+//                   </button>
+//                 </div>
+//               </div>
+
+//               <div className="flex justify-center gap-4">
+//                 <button
+//                   onClick={() => handleManualRotate(-5)}
+//                   className="flex flex-col items-center gap-1 p-2 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors group"
+//                 >
+//                   <RotateCcw className="w-4 h-4 opacity-40 group-hover:text-brand-teal" />
+//                   <span className="text-[8px] uppercase tracking-tighter">
+//                     -5°
+//                   </span>
+//                 </button>
+//                 <button
+//                   onClick={() => handleManualRotate(5)}
+//                   className="flex flex-col items-center gap-1 p-2 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors group"
+//                 >
+//                   <RotateCw className="w-4 h-4 opacity-40 group-hover:text-brand-teal" />
+//                   <span className="text-[8px] uppercase tracking-tighter">
+//                     +5°
+//                   </span>
+//                 </button>
+//               </div>
+//             </div>
+//           </section>
+//         )}
+//       </div>
+
+//       {/* Footer Actions */}
+
+//       {currentProjectName && (
+//         <div className="w-full px-3 py-2 mb-2 rounded-lg bg-white/5 border border-white/10 text-xs text-white/80">
+//           <span className="uppercase tracking-[0.2em] text-[10px] text-brand-teal/70">
+//             Open project:
+//           </span>
+//           <div className="mt-1 font-semibold truncate">
+//             {currentProjectName}
+//           </div>
+//         </div>
+//       )}
+//       <div className="flex gap-2 mb-2">
+//         <button
+//           onClick={onSave}
+//           className="relative min-w-[110px] h-10 flex items-center justify-center gap-1.5 px-4 bg-brand-teal hover:bg-white/10 hover:border-brand-teal/30 hover:text-brand-teal rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors border border-white/10"
+//         >
+//           <SaveIcon className="w-4 h-4" />
+//           <span>{currentProjectId ? "Update" : "Save"}</span>
+//           {/* <div style={{ color: "red", fontSize: "10px" }}>
+//             PID: {currentProjectId || "null"}
+//           </div> */}
+//         </button>
+
+//         <button
+//           onClick={onOpenProjects}
+//           className="relative min-w-[110px] h-10 flex items-center justify-center gap-1.5 px-4 bg-brand-teal hover:bg-white/10 hover:border-brand-teal/30 hover:text-brand-teal rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors border border-white/10"
+//         >
+//           <FolderOpen className="w-4 h-4" />
+
+//           <span>My Projects</span>
+
+//           {projects.length > 0 && (
+//             <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-teal rounded-full text-[9px] font-bold flex items-center justify-center text-white">
+//               {projects.length > 9 ? "9+" : projects.length}
+//             </span>
+//           )}
+//         </button>
+//       </div>
+
+//       <div className="grid grid-cols-2 gap-2">
+//         <div className="relative">
+//           <button
+//             onClick={() => setExportMenuOpen((open) => !open)}
+//             className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors w-full"
+//           >
+//             <Download className="w-3 h-3" />
+//             Export
+//             <ChevronDown className="w-3 h-3" />
+//           </button>
+
+//           {exportMenuOpen && (
+//             <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
+//               {/* PDF */}
+//               <button
+//                 onClick={() => {
+//                   onExport("pdf");
+//                   setExportMenuOpen(false);
+//                 }}
+//                 className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+//               >
+//                 <span>Export as PDF</span>
+//                 <span className="text-[10px] opacity-50">.pdf</span>
+//               </button>
+
+//               {/* DWG */}
+//               <button
+//                 onClick={() => {
+//                   onExport("dwg");
+//                   setExportMenuOpen(false);
+//                 }}
+//                 className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+//               >
+//                 <span>Export as DWG</span>
+//                 <span className="text-[10px] opacity-50">.dwg</span>
+//               </button>
+
+//               {/* Excel */}
+//               <button
+//                 onClick={() => {
+//                   onExport("excel");
+//                   setExportMenuOpen(false);
+//                 }}
+//                 className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
+//               >
+//                 <span>Export as Excel</span>
+
+//                 <span className="text-[10px] opacity-50">.xls</span>
+//               </button>
+//             </div>
+//           )}
+//         </div>
+
+//         <button
+//           onClick={onImport}
+//           className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors"
+//         >
+//           <Upload className="w-3 h-3" />
+//           Import
+//         </button>
+//       </div>
+//       <div className="grid grid-cols-2 gap-2">
+//         <button
+//           onClick={() => setModalMode("settings")}
+//           className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors"
+//         >
+//           <Settings className="w-3 h-3" />
+//           Settings
+//         </button>
+//         <button
+//           onClick={onLogout}
+//           className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-red-500/20 opacity-60 hover:opacity-100 hover:text-red-400 rounded-lg text-xs transition-colors border border-transparent hover:border-red-500/20"
+//         >
+//           <LogOut className="w-3 h-3" />
+//           Logout
+//         </button>
+//       </div>
+//       <div className="mt-4 flex justify-between text-[9px] opacity-30 font-mono uppercase tracking-tighter">
+//         {/* <span>Del · Esc · R · M · G</span> */}
+//         <span>Version v1.3.0 </span>
+//       </div>
+
+//       {/* Settings/Profile Modal */}
+//       <AnimatePresence>
+//         {modalMode !== "none" && (
+//           <motion.div
+//             initial={{ opacity: 0 }}
+//             animate={{ opacity: 1 }}
+//             exit={{ opacity: 0 }}
+//             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+//           >
+//             <motion.div
+//               initial={{ scale: 0.9, opacity: 0 }}
+//               animate={{ scale: 1, opacity: 1 }}
+//               exit={{ scale: 0.9, opacity: 0 }}
+//               className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+//             >
+//               <div className="p-6 border-b border-theme-border flex justify-between items-center">
+//                 <h3 className="text-lg font-bold">
+//                   {modalMode === "profile" ? "Profile" : "Settings"}
+//                 </h3>
+//                 <button
+//                   onClick={() => setModalMode("none")}
+//                   className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+//                 >
+//                   <X className="w-5 h-5 opacity-40" />
+//                 </button>
+//               </div>
+
+//               <div className="p-6 space-y-8">
+//                 {modalMode === "profile" && (
+//                   <section className="space-y-4">
+//                     <h4 className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+//                       Profile Settings
+//                     </h4>
+//                     <form onSubmit={handleSaveProfile} className="space-y-4">
+//                       <div className="space-y-2">
+//                         <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+//                           Full Name
+//                         </label>
+//                         <input
+//                           type="text"
+//                           value={profileData.name}
+//                           onChange={(e) =>
+//                             setProfileData({
+//                               ...profileData,
+//                               name: e.target.value,
+//                             })
+//                           }
+//                           className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+//                         />
+//                       </div>
+//                       <div className="space-y-2">
+//                         <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+//                           Mobile Number
+//                         </label>
+//                         <input
+//                           type="tel"
+//                           value={profileData.phone}
+//                           onChange={(e) =>
+//                             setProfileData({
+//                               ...profileData,
+//                               phone: e.target.value,
+//                             })
+//                           }
+//                           className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+//                         />
+//                       </div>
+//                       <div className="space-y-2">
+//                         <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+//                           New Password (Optional)
+//                         </label>
+//                         <input
+//                           type="password"
+//                           value={profileData.password}
+//                           onChange={(e) =>
+//                             setProfileData({
+//                               ...profileData,
+//                               password: e.target.value,
+//                             })
+//                           }
+//                           className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+//                           placeholder="Leave blank to keep current"
+//                         />
+//                       </div>
+//                       <button
+//                         type="submit"
+//                         disabled={isSavingProfile}
+//                         className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+//                       >
+//                         {isSavingProfile ? "Saving..." : "Update Profile"}
+//                       </button>
+//                     </form>
+//                   </section>
+//                 )}
+
+//                 {modalMode === "settings" && (
+//                   <>
+//                     <section className="space-y-4">
+//                       <h4 className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+//                         Appearance
+//                       </h4>
+//                       <div className="grid grid-cols-2 gap-4">
+//                         <button
+//                           onClick={() => setTheme("dark")}
+//                           className={cn(
+//                             "p-4 rounded-xl border transition-all flex flex-col items-center gap-3",
+//                             theme === "dark"
+//                               ? "bg-brand-teal/20 border-brand-teal text-brand-teal"
+//                               : "bg-white/5 border-theme-border opacity-40 hover:opacity-100 hover:bg-white/10",
+//                           )}
+//                         >
+//                           <Moon className="w-6 h-6" />
+//                           <span className="text-xs font-bold uppercase tracking-widest">
+//                             Dark Mode
+//                           </span>
+//                         </button>
+//                         <button
+//                           onClick={() => setTheme("light")}
+//                           className={cn(
+//                             "p-4 rounded-xl border transition-all flex flex-col items-center gap-3",
+//                             theme === "light"
+//                               ? "bg-brand-teal/20 border-brand-teal text-brand-teal"
+//                               : "bg-white/5 border-theme-border opacity-40 hover:opacity-100 hover:bg-white/10",
+//                           )}
+//                         >
+//                           <Sun className="w-6 h-6" />
+//                           <span className="text-xs font-bold uppercase tracking-widest">
+//                             Light Mode
+//                           </span>
+//                         </button>
+//                       </div>
+//                     </section>
+
+//                     <section className="space-y-4">
+//                       <h4 className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+//                         Unit System
+//                       </h4>
+//                       <div className="flex p-1 bg-white/5 rounded-lg">
+//                         <button
+//                           onClick={() => onSetUnitSystem("metric")}
+//                           className={cn(
+//                             "flex-1 py-1.5 text-xs rounded-md transition-all",
+//                             state.unitSystem === "metric"
+//                               ? "bg-brand-teal text-white shadow-lg"
+//                               : "opacity-60 hover:opacity-100",
+//                           )}
+//                         >
+//                           Metric (m)
+//                         </button>
+//                         <button
+//                           onClick={() => onSetUnitSystem("imperial")}
+//                           className={cn(
+//                             "flex-1 py-1.5 text-xs rounded-md transition-all",
+//                             state.unitSystem === "imperial"
+//                               ? "bg-brand-teal text-white shadow-lg"
+//                               : "opacity-60 hover:opacity-100",
+//                           )}
+//                         >
+//                           Imperial (ft)
+//                         </button>
+//                       </div>
+//                     </section>
+//                   </>
+//                 )}
+//               </div>
+
+//               <div className="p-6 border-t border-theme-border flex justify-end">
+//                 <button
+//                   onClick={() => setModalMode("none")}
+//                   className="px-6 py-2 bg-brand-teal text-white text-xs font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 transition-all shadow-lg shadow-brand-teal/20"
+//                 >
+//                   Done
+//                 </button>
+//               </div>
+//             </motion.div>
+//           </motion.div>
+//         )}
+//       </AnimatePresence>
+//     </aside>
+//   );
+// };
+
 import React, { useState } from "react";
 import { authFetch } from "../utils/api";
 import {
@@ -64,6 +1042,47 @@ const resolveImageUrl = (imageUrl?: string | null) => {
 const getEquipmentThumbnail = (item: EquipmentDef) => {
   const imageUrl = resolveImageUrl(item.imageUrl);
   return imageUrl ? imageUrl : generateDefaultEquipmentImage(item);
+};
+
+// Turns a raw category value ("slides", "water_features") into a
+// display-friendly label ("Slides", "Water Features"). Falls back to
+// "Uncategorized" for equipment saved before the category field existed.
+const formatCategoryLabel = (category?: string | null) => {
+  const trimmed = category?.trim();
+  if (!trimmed) return "Uncategorized";
+  return trimmed
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
+// Groups equipment by category dynamically, so a brand new category value
+// on any equipment item (default or custom) automatically produces a new
+// section — no hardcoded category list to maintain.
+interface EquipmentCategoryGroup {
+  key: string;
+  label: string;
+  items: EquipmentDef[];
+}
+
+const groupEquipmentByCategory = (
+  library: EquipmentDef[],
+): EquipmentCategoryGroup[] => {
+  const groups = new Map<string, EquipmentCategoryGroup>();
+
+  for (const item of library) {
+    const label = formatCategoryLabel(item.category);
+    const key = label.toLowerCase();
+    if (!groups.has(key)) {
+      groups.set(key, { key, label, items: [] });
+    }
+    groups.get(key)!.items.push(item);
+  }
+
+  return Array.from(groups.values()).sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
 };
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -206,6 +1225,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ...DEFAULT_LIBRARY.filter((item) => !disabledDefaults.has(item.id)),
     ...state.customLibrary.filter((item) => item.isActive !== false),
   ];
+
+  // Category sections are derived from equipment data (item.category),
+  // never hardcoded. Adding equipment with a new category value is enough
+  // for a new section to appear here automatically.
+  const categorizedLibrary = React.useMemo(
+    () => groupEquipmentByCategory(fullLibrary),
+    [fullLibrary],
+  );
+
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const toggleCategory = (key: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const selectedDef = selectedObject
     ? fullLibrary.find((d) => d.id === selectedObject.type)
@@ -510,33 +1553,84 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Draw a site boundary first
               </p>
             )}
-            {fullLibrary.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => onSelectEquipment(item)}
-                className={cn(
-                  "w-full flex items-center gap-3 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-left transition-all group",
-                  state.pendingPlacement?.id === item.id &&
-                    "ring-1 ring-brand-teal bg-brand-teal/10",
-                )}
-              >
-                <img
-                  src={getEquipmentThumbnail(item)}
-                  alt={item.name}
-                  className="w-8 h-8 rounded-lg object-cover shrink-0"
-                />
+            {categorizedLibrary.map((group) => {
+              const isExpanded = expandedCategories.has(group.key);
+              return (
+                <div
+                  key={group.key}
+                  className="rounded-lg border border-white/5 overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(group.key)}
+                    aria-expanded={isExpanded}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-2 bg-white/5 hover:bg-white/10 transition-colors text-left"
+                  >
+                    <span className="text-xs font-bold truncate">
+                      {group.label}
+                    </span>
+                    <span className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] opacity-40 font-mono">
+                        {group.items.length}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5 opacity-60" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                      )}
+                    </span>
+                  </button>
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{item.name}</p>
-                  <p className="text-[10px] opacity-40 font-mono">
-                    {formatDimensions(item.width, item.depth, item.height)}
-                  </p>
-                  <p className="text-[10px] text-amber-400/70 font-mono">
-                    ⚠ zone {item.width + 3}×{item.depth + 3}m
-                  </p>
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-2 p-2">
+                          {group.items.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => onSelectEquipment(item)}
+                              className={cn(
+                                "w-full flex items-center gap-3 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-left transition-all group",
+                                state.pendingPlacement?.id === item.id &&
+                                  "ring-1 ring-brand-teal bg-brand-teal/10",
+                              )}
+                            >
+                              <img
+                                src={getEquipmentThumbnail(item)}
+                                alt={item.name}
+                                className="w-8 h-8 rounded-lg object-cover shrink-0"
+                              />
+
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium truncate">
+                                  {item.name}
+                                </p>
+                                <p className="text-[10px] opacity-40 font-mono">
+                                  {formatDimensions(
+                                    item.width,
+                                    item.depth,
+                                    item.height,
+                                  )}
+                                </p>
+                                <p className="text-[10px] text-amber-400/70 font-mono">
+                                  ⚠ zone {item.width + 3}×{item.depth + 3}m
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </section>
 
