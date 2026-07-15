@@ -1532,6 +1532,8 @@ interface MapPanelProps {
   onSetBoundaryLock?: (locked: boolean) => void;
   drawTrigger: number;
   targetLocation?: { lng: number; lat: number; zoom?: number };
+  /** Called once the Mapbox map instance is ready — lets the parent access camera controls */
+  onMapReady?: (map: mapboxgl.Map) => void;
 }
 
 export const MapPanel: React.FC<MapPanelProps> = ({
@@ -1545,6 +1547,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   onSetBoundaryLock,
   drawTrigger,
   targetLocation,
+  onMapReady,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -2127,6 +2130,8 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       mapRef.current = map;
       drawRef.current = draw;
       setupLayers(map);
+      // Expose the map instance to the parent so it can control the camera
+      onMapReady?.(map);
     });
 
     map.on("draw.create", (e: any) => {
