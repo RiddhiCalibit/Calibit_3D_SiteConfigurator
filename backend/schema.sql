@@ -116,6 +116,13 @@
 --   ON users (phone, tenant_id)
 --   WHERE phone IS NOT NULL AND phone != '';
 
+-- -- Compliance Engine: exactly one "latest" report per project. Stored as
+-- -- TEXT (JSON-stringified), matching how projects.data is already stored —
+-- -- every Compliance Engine run overwrites this same column, it is never
+-- -- inserted as a new row, so there is only ever one report per project.
+-- ALTER TABLE projects ADD COLUMN IF NOT EXISTS compliance_report TEXT;
+-- ALTER TABLE projects ADD COLUMN IF NOT EXISTS compliance_report_generated_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS tenants (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -234,9 +241,44 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_phone_tenant_unique
   ON users (phone, tenant_id)
   WHERE phone IS NOT NULL AND phone != '';
 
--- Compliance Engine: exactly one "latest" report per project. Stored as
--- TEXT (JSON-stringified), matching how projects.data is already stored —
--- every Compliance Engine run overwrites this same column, it is never
--- inserted as a new row, so there is only ever one report per project.
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS compliance_report TEXT;
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS compliance_report_generated_at TIMESTAMPTZ;
+-- ─── Compliance Report versioning ──────────────────────────────────────────
+-- Superseded design: an earlier iteration stored the "latest" report as two
+-- columns directly on projects (compliance_report, compliance_report_generated_at).
+-- That only supported one report per project with no history, so it has been
+-- replaced by the compliance_reports table below. Dropping is safe: these
+-- columns were added in the same development cycle as this change and never
+-- shipped to end users.
+ALTER TABLE projects DROP COLUMN IF EXISTS compliance_report;
+ALTER TABLE projects DROP COLUMN IF EXISTS compliance_report_generated_at;
+
+-- Every Compliance Engine execution inserts a new row here rather than
+-- overwriting anything — this is the permanent version history for a
+-- project's compliance reports. Exactly one row per project is ever
+-- flagged is_latest = TRUE; the partial unique index below enforces that
+-- invariant at the database level (not just in application code).
+CREATE TABLE IF NOT EXISTS compliance_reports (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  generated_at TIMESTAMPTZ DEFAULT NOW(),
+  overall_score REAL,
+  status TEXT,
+  summary TEXT,
+  violations TEXT,        -- JSON-stringified checks[] (category/status/message/details)
+  recommendations TEXT,   -- JSON-stringified string[]
+  report_data TEXT NOT NULL, -- full JSON blob of the report, for forward compatibility
+  is_latest BOOLEAN DEFAULT FALSE,
+  created_by TEXT REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS compliance_reports_project_id_idx
+  ON compliance_reports (project_id);
+
+-- Guarantees "exactly one latest report per project" even under concurrent
+-- writes — a second concurrent INSERT trying to also set is_latest = TRUE
+-- for the same project_id would violate this index and fail, rather than
+-- silently leaving two "latest" rows.
+CREATE UNIQUE INDEX IF NOT EXISTS compliance_reports_one_latest_per_project
+  ON compliance_reports (project_id)
+  WHERE is_latest = TRUE;

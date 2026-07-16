@@ -1994,6 +1994,15 @@
 
 //     if (typeof project.data === "string")
 //       project.data = JSON.parse(project.data);
+//     if (typeof project.compliance_report === "string") {
+//       try {
+//         project.compliance_report = project.compliance_report
+//           ? JSON.parse(project.compliance_report)
+//           : null;
+//       } catch {
+//         project.compliance_report = null;
+//       }
+//     }
 //     res.json(project);
 //   });
 
@@ -2386,7 +2395,10 @@
 //     geminiLimiter,
 //     async (req, res) => {
 //       try {
-//         const siteData = req.body;
+//         // projectId identifies which project this report belongs to; it is
+//         // not part of the site geometry sent to the AI, so it's pulled out
+//         // before building the prompt.
+//         const { projectId, ...siteData } = req.body;
 
 //         const prompt = `
 //         Analyze the following 3D site configuration for compliance with safety and operational standards.
@@ -2458,7 +2470,24 @@
 //           throw new Error("Failed to get response text from AI");
 //         }
 //         const report = JSON.parse(text);
-//         res.json(report);
+//         const generatedAt = new Date().toISOString();
+//         const reportWithTimestamp = { ...report, generatedAt };
+
+//         // Persist as the project's single "latest" compliance report.
+//         // This is a plain UPDATE against the existing project row — never
+//         // an INSERT of a new row — so a second run for the same project
+//         // overwrites the first instead of creating a duplicate.
+//         if (projectId) {
+//           await pool.query(
+//             `UPDATE projects
+//                SET compliance_report = $1,
+//                    compliance_report_generated_at = $2
+//              WHERE id = $3`,
+//             [JSON.stringify(reportWithTimestamp), generatedAt, projectId],
+//           );
+//         }
+
+//         res.json(reportWithTimestamp);
 //       } catch (err: any) {
 //         console.error("Compliance check failed:", err);
 //         res
@@ -4494,15 +4523,6 @@ async function startServer() {
 
     if (typeof project.data === "string")
       project.data = JSON.parse(project.data);
-    if (typeof project.compliance_report === "string") {
-      try {
-        project.compliance_report = project.compliance_report
-          ? JSON.parse(project.compliance_report)
-          : null;
-      } catch {
-        project.compliance_report = null;
-      }
-    }
     res.json(project);
   });
 
@@ -4971,29 +4991,221 @@ async function startServer() {
         }
         const report = JSON.parse(text);
         const generatedAt = new Date().toISOString();
-        const reportWithTimestamp = { ...report, generatedAt };
 
-        // Persist as the project's single "latest" compliance report.
-        // This is a plain UPDATE against the existing project row — never
-        // an INSERT of a new row — so a second run for the same project
-        // overwrites the first instead of creating a duplicate.
+        // Derive the same simple status label used by the frontend export,
+        // stored redundantly as a queryable column (per the requested
+        // schema) — report_data below keeps the full original payload too.
+        const statusLabel =
+          report.overallScore >= 80
+            ? "Compliant"
+            : report.overallScore >= 50
+              ? "Needs Attention"
+              : "Non-Compliant";
+
+        let savedReport: any = {
+          ...report,
+          generatedAt,
+          isLatest: true,
+          version: 1,
+        };
+
+        // Insert as a brand-new version row — never an UPDATE/overwrite of
+        // an existing report row. Wrapped in a transaction so "unset the
+        // old latest" + "compute the next version number" + "insert the
+        // new latest" happen atomically; the partial unique index on
+        // (project_id) WHERE is_latest = TRUE is a second, DB-level
+        // safety net against ever having two "latest" rows.
         if (projectId) {
-          await pool.query(
-            `UPDATE projects
-               SET compliance_report = $1,
-                   compliance_report_generated_at = $2
-             WHERE id = $3`,
-            [JSON.stringify(reportWithTimestamp), generatedAt, projectId],
-          );
+          const client = await pool.connect();
+          try {
+            await client.query("BEGIN");
+
+            await client.query(
+              `UPDATE compliance_reports SET is_latest = FALSE
+               WHERE project_id = $1 AND is_latest = TRUE`,
+              [projectId],
+            );
+
+            const { rows: versionRows } = await client.query(
+              `SELECT COALESCE(MAX(version), 0) + 1 AS next_version
+                 FROM compliance_reports WHERE project_id = $1`,
+              [projectId],
+            );
+            const nextVersion = versionRows[0].next_version;
+
+            const reportId = uuidv4();
+            const violations = JSON.stringify(report.checks ?? []);
+            const recommendations = JSON.stringify(
+              report.recommendations ?? [],
+            );
+            const reportData = JSON.stringify({
+              ...report,
+              generatedAt,
+              version: nextVersion,
+            });
+
+            await client.query(
+              `INSERT INTO compliance_reports
+                 (id, project_id, version, generated_at, overall_score,
+                  status, summary, violations, recommendations, report_data,
+                  is_latest, created_by)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11)`,
+              [
+                reportId,
+                projectId,
+                nextVersion,
+                generatedAt,
+                report.overallScore,
+                statusLabel,
+                report.summary,
+                violations,
+                recommendations,
+                reportData,
+                req.user?.userId ?? null,
+              ],
+            );
+
+            await client.query("COMMIT");
+
+            savedReport = {
+              ...report,
+              id: reportId,
+              generatedAt,
+              version: nextVersion,
+              isLatest: true,
+            };
+          } catch (txErr) {
+            await client.query("ROLLBACK");
+            throw txErr;
+          } finally {
+            client.release();
+          }
         }
 
-        res.json(reportWithTimestamp);
+        res.json(savedReport);
       } catch (err: any) {
         console.error("Compliance check failed:", err);
         res
           .status(500)
           .json({ error: safeError(err, "Compliance check failed") });
       }
+    },
+  );
+
+  // GET full compliance report history for a project, newest version first.
+  // Used both for the "Latest Report" / "Previous Reports" history UI and
+  // as the retrieval path for exports — never regenerates anything.
+  app.get(
+    "/api/projects/:id/compliance-reports",
+    authenticate,
+    async (req, res) => {
+      const { rows: projectRows } = await pool.query(
+        "SELECT * FROM projects WHERE id = $1",
+        [req.params.id],
+      );
+      const project = projectRows[0];
+      if (!project) return res.status(404).json({ error: "Project not found" });
+      if (
+        req.user!.role === "sales_rep" &&
+        project.user_id !== req.user!.userId
+      ) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (
+        req.user!.role === "tenant_admin" &&
+        project.tenant_id !== req.user!.tenantId
+      ) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { rows } = await pool.query(
+        `SELECT id, version, generated_at, overall_score, status, summary,
+                violations, recommendations, is_latest, created_by
+           FROM compliance_reports
+          WHERE project_id = $1
+          ORDER BY version DESC`,
+        [req.params.id],
+      );
+
+      const reports = rows.map((r) => ({
+        id: r.id,
+        version: r.version,
+        generatedAt: r.generated_at,
+        overallScore: r.overall_score,
+        status: r.status,
+        summary: r.summary,
+        checks:
+          typeof r.violations === "string"
+            ? JSON.parse(r.violations)
+            : r.violations,
+        recommendations:
+          typeof r.recommendations === "string"
+            ? JSON.parse(r.recommendations)
+            : r.recommendations,
+        isLatest: !!r.is_latest,
+      }));
+
+      res.json(reports);
+    },
+  );
+
+  // GET only the latest compliance report for a project — the dedicated,
+  // lightweight read used by PDF/Excel export so it never has to fetch or
+  // regenerate anything beyond exactly what it needs.
+  app.get(
+    "/api/projects/:id/compliance-reports/latest",
+    authenticate,
+    async (req, res) => {
+      const { rows: projectRows } = await pool.query(
+        "SELECT * FROM projects WHERE id = $1",
+        [req.params.id],
+      );
+      const project = projectRows[0];
+      if (!project) return res.status(404).json({ error: "Project not found" });
+      if (
+        req.user!.role === "sales_rep" &&
+        project.user_id !== req.user!.userId
+      ) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (
+        req.user!.role === "tenant_admin" &&
+        project.tenant_id !== req.user!.tenantId
+      ) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { rows } = await pool.query(
+        `SELECT id, version, generated_at, overall_score, status, summary,
+                violations, recommendations, is_latest
+           FROM compliance_reports
+          WHERE project_id = $1 AND is_latest = TRUE
+          LIMIT 1`,
+        [req.params.id],
+      );
+
+      if (rows.length === 0) {
+        return res.json(null);
+      }
+
+      const r = rows[0];
+      res.json({
+        id: r.id,
+        version: r.version,
+        generatedAt: r.generated_at,
+        overallScore: r.overall_score,
+        status: r.status,
+        summary: r.summary,
+        checks:
+          typeof r.violations === "string"
+            ? JSON.parse(r.violations)
+            : r.violations,
+        recommendations:
+          typeof r.recommendations === "string"
+            ? JSON.parse(r.recommendations)
+            : r.recommendations,
+        isLatest: true,
+      });
     },
   );
 
