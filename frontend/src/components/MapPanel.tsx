@@ -2704,7 +2704,9 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     }
   }, [state.measurePoints, state.unitSystem, theme, state.mapStyle]);
 
-  // Sync style
+  // Sync style — runs ONLY when the map style (streets/satellite/plain) changes.
+  // theme is intentionally NOT in the dependency array: toggling dark↔light must
+  // not call setStyle(), which wipes every custom source & layer (boundary, equipment, etc.)
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -2720,7 +2722,11 @@ export const MapPanel: React.FC<MapPanelProps> = ({
             id: "plain-background",
             type: "background",
             paint: {
-              "background-color": theme === "dark" ? "#ffffff" : "#000000",
+              // Use current theme value captured via ref so this closure doesn't
+              // need `theme` as a dep (and therefore doesn't re-run on theme change).
+              "background-color": callbacks.current.state.mapStyle === "plain"
+                ? (document.documentElement.classList.contains("light") ? "#000000" : "#ffffff")
+                : "#ffffff",
             },
           },
         ],
@@ -2735,7 +2741,9 @@ export const MapPanel: React.FC<MapPanelProps> = ({
         ? "mapbox://styles/mapbox/satellite-v9"
         : "mapbox://styles/mapbox/streets-v12";
 
-    // After setStyle, all sources/layers are wiped — re-add segment labels on load
+    // After setStyle, all sources/layers are wiped — re-add segment labels on style.load.
+    // The global style.load handler (set during map init) calls setupLayers() which
+    // re-adds boundary, equipment, and all other custom layers automatically.
     mapRef.current.once("style.load", () => {
       const map = mapRef.current;
       if (!map) return;
@@ -2773,7 +2781,34 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     });
 
     mapRef.current.setStyle(style);
-  }, [state.mapStyle, theme]);
+  }, [state.mapStyle]); // ← theme deliberately omitted — see comment above
+
+  // Update plain-mode background color when theme changes WITHOUT reloading style.
+  // This uses setPaintProperty (non-destructive) so all layers remain intact.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || state.mapStyle !== "plain") return;
+
+    const applyBackground = () => {
+      try {
+        if (map.getLayer("plain-background")) {
+          map.setPaintProperty(
+            "plain-background",
+            "background-color",
+            theme === "light" ? "#000000" : "#ffffff",
+          );
+        }
+      } catch (_) {
+        // Layer not ready yet — safe to ignore
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      applyBackground();
+    } else {
+      map.once("style.load", applyBackground);
+    }
+  }, [theme, state.mapStyle]);
 
   // Adjust visibility colors for plain mode
   useEffect(() => {

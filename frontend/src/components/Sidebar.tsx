@@ -1523,114 +1523,118 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </section>
 
         {/* Equipment Library */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
-              Equipment Library Active: {fullLibrary.length}
-            </label>
-            {/* <label className="cursor-pointer group">
-              <input
-                type="file"
-                accept=".glb"
-                className="hidden"
-                onChange={handleModelUpload}
-              />
-              <div className="flex items-center gap-1 text-[10px] text-brand-teal hover:text-brand-teal/80 transition-colors">
-                <Upload className="w-3 h-3" />
-                <span>Add GLB</span>
-              </div>
-            </label> */}
-          </div>
-          <div
-            className={cn(
-              "space-y-2 max-h-[300px] overflow-y-auto pr-2",
-              state.siteBoundary.length === 0 &&
-                "opacity-30 pointer-events-none",
-            )}
-          >
-            {state.siteBoundary.length === 0 && (
-              <p className="text-[10px] opacity-40 italic mb-2">
-                Draw a site boundary first
-              </p>
-            )}
-            {categorizedLibrary.map((group) => {
-              const isExpanded = expandedCategories.has(group.key);
-              return (
-                <div
-                  key={group.key}
-                  className="rounded-lg border border-white/5 overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleCategory(group.key)}
-                    aria-expanded={isExpanded}
-                    className="w-full flex items-center justify-between gap-2 px-2 py-2 bg-white/5 hover:bg-white/10 transition-colors text-left"
-                  >
-                    <span className="text-xs font-bold truncate">
-                      {group.label}
-                    </span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] opacity-40 font-mono">
-                        {group.items.length}
-                      </span>
-                      {isExpanded ? (
-                        <ChevronUp className="w-3.5 h-3.5 opacity-60" />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-                      )}
-                    </span>
-                  </button>
+        <section className="space-y-0">
+          {/* ── Outer border panel ── */}
+          <div className="border border-theme-border rounded-lg overflow-hidden">
 
-                  <AnimatePresence initial={false}>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
+            {/* Panel header row */}
+            <div className="px-3 py-2 border-b border-theme-border bg-theme-card">
+              <span className="text-[10px] uppercase tracking-widest font-bold font-mono opacity-50">
+                Equipment Library Active :{" "}
+                <span className="opacity-100 font-bold">{fullLibrary.length}</span>
+              </span>
+            </div>
+
+            {/* ── Inner border list ── */}
+            <div
+              className={cn(
+                "max-h-[300px] overflow-y-auto",
+                state.siteBoundary.length === 0 &&
+                  "opacity-30 pointer-events-none",
+              )}
+            >
+              {state.siteBoundary.length === 0 && (
+                <p className="px-3 py-2 text-[10px] opacity-40 italic">
+                  Draw a site boundary first
+                </p>
+              )}
+
+              {/* Inner bordered container */}
+              <div className="m-2 border border-theme-border rounded-md overflow-hidden">
+                {categorizedLibrary.map((group, idx) => {
+                  const isExpanded = expandedCategories.has(group.key);
+                  const isLast = idx === categorizedLibrary.length - 1;
+                  return (
+                    <div key={group.key}>
+                      {/* Category header row */}
+                      <button
+                        type="button"
+                        onClick={() => toggleCategory(group.key)}
+                        aria-expanded={isExpanded}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-theme-card hover:opacity-80 transition-opacity text-left"
                       >
-                        <div className="space-y-2 p-2">
-                          {group.items.map((item) => (
-                            <button
-                              key={item.id}
-                              onClick={() => onSelectEquipment(item)}
-                              className={cn(
-                                "w-full flex items-center gap-3 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-left transition-all group",
-                                state.pendingPlacement?.id === item.id &&
-                                  "ring-1 ring-brand-teal bg-brand-teal/10",
-                              )}
-                            >
-                              <img
-                                src={getEquipmentThumbnail(item)}
-                                alt={item.name}
-                                className="w-8 h-8 rounded-lg object-cover shrink-0"
-                              />
+                        <span className="text-xs font-semibold truncate">
+                          {group.label}
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] opacity-40 font-mono">
+                            {group.items.length}
+                          </span>
+                          {isExpanded ? (
+                            <ChevronUp className="w-3 h-3 opacity-50" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3 opacity-50" />
+                          )}
+                        </span>
+                      </button>
 
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium truncate">
-                                  {item.name}
-                                </p>
-                                <p className="text-[10px] opacity-40 font-mono">
-                                  {formatDimensions(
-                                    item.width,
-                                    item.depth,
-                                    item.height,
+                      {/* Expanded items */}
+                      <AnimatePresence initial={false}>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden border-t border-theme-border"
+                          >
+                            <div className="space-y-1 p-2">
+                              {group.items.map((item) => (
+                                <button
+                                  key={item.id}
+                                  onClick={() => onSelectEquipment(item)}
+                                  className={cn(
+                                    "w-full flex items-center gap-3 p-2 bg-theme-card hover:opacity-80 rounded-md text-left transition-all",
+                                    state.pendingPlacement?.id === item.id &&
+                                      "ring-1 ring-brand-teal bg-brand-teal/10",
                                   )}
-                                </p>
-                                <p className="text-[10px] text-amber-400/70 font-mono">
-                                  ⚠ zone {item.width + 3}×{item.depth + 3}m
-                                </p>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
+                                >
+                                  <img
+                                    src={getEquipmentThumbnail(item)}
+                                    alt={item.name}
+                                    className="w-8 h-8 rounded-md object-cover shrink-0"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">
+                                      {item.name}
+                                    </p>
+                                    <p className="text-[10px] opacity-40 font-mono">
+                                      {formatDimensions(
+                                        item.width,
+                                        item.depth,
+                                        item.height,
+                                      )}
+                                    </p>
+                                    <p className="text-[10px] text-amber-500 opacity-70 font-mono">
+                                      ⚠ zone {item.width + 3}×{item.depth + 3}m
+                                    </p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Divider between rows (skip after last) */}
+                      {!isLast && (
+                        <div className="border-b border-theme-border" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1770,7 +1774,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Footer Actions */}
 
       {currentProjectName && (
-        <div className="w-full px-3 py-2 mb-2 rounded-lg bg-white/5 border border-white/10 text-xs text-white/80">
+        <div className="w-full px-3 py-2 mb-2 rounded-lg bg-theme-card border border-theme-border text-xs">
           <span className="uppercase tracking-[0.2em] text-[10px] text-brand-teal/70">
             Open project:
           </span>
@@ -1779,115 +1783,125 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       )}
-      <div className="flex gap-2 mb-2">
-        <button
-          onClick={onSave}
-          className="relative min-w-[110px] h-10 flex items-center justify-center gap-1.5 px-4 bg-brand-teal hover:bg-white/10 hover:border-brand-teal/30 hover:text-brand-teal rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors border border-white/10"
-        >
-          <SaveIcon className="w-4 h-4" />
-          <span>{currentProjectId ? "Update" : "Save"}</span>
-          {/* <div style={{ color: "red", fontSize: "10px" }}>
-            PID: {currentProjectId || "null"}
-          </div> */}
-        </button>
 
-        <button
-          onClick={onOpenProjects}
-          className="relative min-w-[110px] h-10 flex items-center justify-center gap-1.5 px-4 bg-brand-teal hover:bg-white/10 hover:border-brand-teal/30 hover:text-brand-teal rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors border border-white/10"
-        >
-          <FolderOpen className="w-4 h-4" />
+      {/* ── Bottom action strip ── */}
+      <div className="space-y-2">
 
-          <span>My Projects</span>
-
-          {projects.length > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-teal rounded-full text-[9px] font-bold flex items-center justify-center text-white">
-              {projects.length > 9 ? "9+" : projects.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="relative">
+        {/* Row 1: Save + My Projects */}
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => setExportMenuOpen((open) => !open)}
-            className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors w-full"
+            onClick={onSave}
+            className="relative h-9 flex items-center justify-center gap-1.5 bg-brand-teal hover:bg-brand-teal/90 text-white rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors shadow-sm shadow-brand-teal/30"
           >
-            <Download className="w-3 h-3" />
-            Export
-            <ChevronDown className="w-3 h-3" />
+            <SaveIcon className="w-3.5 h-3.5" />
+            <span>{currentProjectId ? "Update" : "Save"}</span>
           </button>
 
-          {exportMenuOpen && (
-            <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/10 bg-brand-navy/95 p-2 shadow-xl shadow-black/20">
-              {/* PDF */}
-              <button
-                onClick={() => {
-                  onExport("pdf");
-                  setExportMenuOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
-              >
-                <span>Export as PDF</span>
-                <span className="text-[10px] opacity-50">.pdf</span>
-              </button>
-
-              {/* DWG */}
-              <button
-                onClick={() => {
-                  onExport("dwg");
-                  setExportMenuOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
-              >
-                <span>Export as DWG</span>
-                <span className="text-[10px] opacity-50">.dwg</span>
-              </button>
-
-              {/* Excel */}
-              <button
-                onClick={() => {
-                  onExport("excel");
-                  setExportMenuOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-white/5"
-              >
-                <span>Export as Excel</span>
-
-                <span className="text-[10px] opacity-50">.xls</span>
-              </button>
-            </div>
-          )}
+          <button
+            onClick={onOpenProjects}
+            className="relative h-9 flex items-center justify-center gap-1.5 bg-brand-teal hover:bg-brand-teal/90 text-white rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors shadow-sm shadow-brand-teal/30"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>My Projects</span>
+            {projects.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-teal rounded-full text-[9px] font-bold flex items-center justify-center text-white">
+                {projects.length > 9 ? "9+" : projects.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        <button
-          onClick={onImport}
-          className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors"
-        >
-          <Upload className="w-3 h-3" />
-          Import
-        </button>
+        {/* Divider */}
+        <div className="border-t border-theme-border" />
+
+        {/* Row 2: Export + Import */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setExportMenuOpen((open) => !open)}
+              className="w-full h-9 flex items-center justify-center gap-1.5 bg-theme-card border border-theme-border hover:border-brand-teal/30 rounded-lg text-xs transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export</span>
+              <ChevronDown className="w-3 h-3 opacity-50" />
+            </button>
+
+            {exportMenuOpen && (
+              <div className="absolute z-30 bottom-full left-0 right-0 mb-1 rounded-xl border border-theme-border bg-theme-bg p-2 shadow-xl shadow-black/20">
+                {/* PDF */}
+                <button
+                  onClick={() => {
+                    onExport("pdf");
+                    setExportMenuOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-theme-card"
+                >
+                  <span>Export as PDF</span>
+                  <span className="text-[10px] opacity-50">.pdf</span>
+                </button>
+
+                {/* DWG */}
+                <button
+                  onClick={() => {
+                    onExport("dwg");
+                    setExportMenuOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-theme-card"
+                >
+                  <span>Export as DWG</span>
+                  <span className="text-[10px] opacity-50">.dwg</span>
+                </button>
+
+                {/* Excel */}
+                <button
+                  onClick={() => {
+                    onExport("excel");
+                    setExportMenuOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs hover:bg-theme-card"
+                >
+                  <span>Export as Excel</span>
+                  <span className="text-[10px] opacity-50">.xls</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={onImport}
+            className="h-9 flex items-center justify-center gap-1.5 bg-theme-card border border-theme-border hover:border-brand-teal/30 rounded-lg text-xs transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Import</span>
+          </button>
+        </div>
+
+        {/* Row 3: Settings + Logout */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setModalMode("settings")}
+            className="h-9 flex items-center justify-center gap-1.5 bg-theme-card border border-theme-border hover:border-brand-teal/30 rounded-lg text-xs transition-colors"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Settings</span>
+          </button>
+
+          <button
+            onClick={onLogout}
+            className="h-9 flex items-center justify-center gap-1.5 bg-theme-card border border-theme-border hover:border-red-500/40 hover:text-red-400 opacity-70 hover:opacity-100 rounded-lg text-xs transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Logout</span>
+          </button>
+        </div>
+
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => setModalMode("settings")}
-          className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs transition-colors"
-        >
-          <Settings className="w-3 h-3" />
-          Settings
-        </button>
-        <button
-          onClick={onLogout}
-          className="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-red-500/20 opacity-60 hover:opacity-100 hover:text-red-400 rounded-lg text-xs transition-colors border border-transparent hover:border-red-500/20"
-        >
-          <LogOut className="w-3 h-3" />
-          Logout
-        </button>
-      </div>
-      <div className="mt-4 flex justify-between text-[9px] opacity-30 font-mono uppercase tracking-tighter">
+
+      <div className="mt-3 flex justify-between text-[9px] opacity-30 font-mono uppercase tracking-tighter">
         {/* <span>Del · Esc · R · M · G</span> */}
         <span>Version v1.3.0 </span>
       </div>
+
 
       {/* Settings/Profile Modal */}
       <AnimatePresence>
