@@ -1212,6 +1212,124 @@
 // //   );
 // // }
 
+// // // Custom-styled searchable combobox for the equipment category field.
+// // // Native <select>/<datalist> can't be themed for dark mode, which is why
+// // // the browser-native version looked washed out. This renders our own
+// // // dropdown so every option is legible and hover state is obvious, while
+// // // still letting the user type a brand new category.
+// // function CategoryCombobox({
+// //   value,
+// //   onChange,
+// //   options,
+// // }: {
+// //   value: string;
+// //   onChange: (value: string) => void;
+// //   options: string[];
+// // }) {
+// //   const [isOpen, setIsOpen] = useState(false);
+// //   const containerRef = React.useRef<HTMLDivElement>(null);
+
+// //   useEffect(() => {
+// //     const handleClickOutside = (e: MouseEvent) => {
+// //       if (
+// //         containerRef.current &&
+// //         !containerRef.current.contains(e.target as Node)
+// //       ) {
+// //         setIsOpen(false);
+// //       }
+// //     };
+// //     document.addEventListener("mousedown", handleClickOutside);
+// //     return () => document.removeEventListener("mousedown", handleClickOutside);
+// //   }, []);
+
+// //   const trimmedValue = value.trim();
+// //   const exactMatch = options.some(
+// //     (opt) => opt.toLowerCase() === trimmedValue.toLowerCase(),
+// //   );
+// //   // Show the full list when the field is empty or already holds a complete,
+// //   // existing category (so the user can browse alternatives). Only filter
+// //   // down while they're actively typing something that isn't a match yet.
+// //   const showAllOptions = trimmedValue === "" || exactMatch;
+// //   const visibleOptions = showAllOptions
+// //     ? options
+// //     : options.filter((opt) =>
+// //         opt.toLowerCase().includes(trimmedValue.toLowerCase()),
+// //       );
+
+// //   return (
+// //     <div className="relative" ref={containerRef}>
+// //       <div className="relative">
+// //         <input
+// //           required
+// //           type="text"
+// //           autoComplete="off"
+// //           value={value}
+// //           onChange={(e) => {
+// //             onChange(e.target.value);
+// //             setIsOpen(true);
+// //           }}
+// //           onFocus={() => setIsOpen(true)}
+// //           placeholder="Select existing or type a new category"
+// //           className="w-full bg-white/5 border border-theme-border rounded-lg pl-4 pr-9 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+// //         />
+// //         <button
+// //           type="button"
+// //           tabIndex={-1}
+// //           onClick={() => setIsOpen((o) => !o)}
+// //           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 opacity-40 hover:opacity-100 transition-opacity"
+// //         >
+// //           <ChevronDown
+// //             className={clsx(
+// //               "w-4 h-4 transition-transform",
+// //               isOpen && "rotate-180",
+// //             )}
+// //           />
+// //         </button>
+// //       </div>
+
+// //       {isOpen && (visibleOptions.length > 0 || trimmedValue !== "") && (
+// //         <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto bg-theme-bg border border-theme-border rounded-lg shadow-2xl py-1">
+// //           {visibleOptions.map((option) => (
+// //             <button
+// //               key={option}
+// //               type="button"
+// //               onMouseDown={(e) => e.preventDefault()}
+// //               onClick={() => {
+// //                 onChange(option);
+// //                 setIsOpen(false);
+// //               }}
+// //               className={clsx(
+// //                 "w-full text-left px-4 py-2 text-sm transition-colors hover:bg-brand-teal/20 hover:text-brand-teal",
+// //                 option.toLowerCase() === trimmedValue.toLowerCase()
+// //                   ? "bg-brand-teal/10 text-brand-teal"
+// //                   : "text-theme-text",
+// //               )}
+// //             >
+// //               {option}
+// //             </button>
+// //           ))}
+// //           {!exactMatch && trimmedValue !== "" && (
+// //             <button
+// //               type="button"
+// //               onMouseDown={(e) => e.preventDefault()}
+// //               onClick={() => {
+// //                 onChange(trimmedValue);
+// //                 setIsOpen(false);
+// //               }}
+// //               className={clsx(
+// //                 "w-full text-left px-4 py-2 text-sm font-medium text-brand-teal hover:bg-brand-teal/20 transition-colors",
+// //                 visibleOptions.length > 0 && "border-t border-theme-border",
+// //               )}
+// //             >
+// //               + Create new category "{trimmedValue}"
+// //             </button>
+// //           )}
+// //         </div>
+// //       )}
+// //     </div>
+// //   );
+// // }
+
 // // function EquipmentTab({
 // //   equipment,
 // //   searchQuery,
@@ -1250,6 +1368,28 @@
 // //       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
 // //       item.category.toLowerCase().includes(searchQuery.toLowerCase()),
 // //   );
+
+// //   // Categories offered in the add/edit combobox are derived from existing
+// //   // equipment (default + tenant custom) rather than hardcoded, so a
+// //   // category introduced anywhere shows up here automatically. Typing a
+// //   // value not in this list simply creates a new category.
+// //   const existingCategoryOptions = React.useMemo(() => {
+// //     const seen = new Map<string, string>(); // lowercase key -> display label
+// //     for (const item of [...DEFAULT_LIBRARY, ...equipment]) {
+// //       const trimmed = item.category?.trim();
+// //       if (!trimmed) continue;
+// //       const key = trimmed.toLowerCase();
+// //       if (!seen.has(key)) {
+// //         const label = trimmed
+// //           .split(/[\s_-]+/)
+// //           .filter(Boolean)
+// //           .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+// //           .join(" ");
+// //         seen.set(key, label);
+// //       }
+// //     }
+// //     return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+// //   }, [equipment]);
 
 // //   return (
 // //     <div className="space-y-6">
@@ -1521,28 +1661,30 @@
 // //                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
 // //                       Category
 // //                     </label>
-// //                     <select
+// //                     <CategoryCombobox
 // //                       value={
-// //                         isAdding ? newEquipment.category : editingItem?.category
+// //                         (isAdding
+// //                           ? newEquipment.category
+// //                           : editingItem?.category) || ""
 // //                       }
-// //                       onChange={(e) =>
+// //                       onChange={(val) =>
 // //                         isAdding
 // //                           ? setNewEquipment({
 // //                               ...newEquipment,
-// //                               category: e.target.value,
+// //                               category: val,
 // //                             })
 // //                           : setEditingItem({
 // //                               ...editingItem!,
-// //                               category: e.target.value,
+// //                               category: val,
 // //                             })
 // //                       }
-// //                       className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
-// //                     >
-// //                       <option value="slides">Slides</option>
-// //                       <option value="pools">Pools</option>
-// //                       <option value="facilities">Facilities</option>
-// //                       <option value="amenities">Amenities</option>
-// //                     </select>
+// //                       options={existingCategoryOptions}
+// //                     />
+// //                     <p className="text-[9px] opacity-30">
+// //                       Click the field to browse existing categories, or type a
+// //                       new one — it appears automatically in the Equipment
+// //                       Library.
+// //                     </p>
 // //                   </div>
 // //                 </div>
 // //               </div>
@@ -3580,6 +3722,10 @@
 
 //   const handleAddEquipment = async (e: React.FormEvent) => {
 //     e.preventDefault();
+//     if (newEquipment.modelUrl === "uploading...") {
+//       alert("Please wait for the 3D model upload to finish before saving.");
+//       return;
+//     }
 //     const id = uuidv4();
 //     const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
 //       method: "POST",
@@ -3615,6 +3761,10 @@
 //   const handleUpdateEquipment = async (e: React.FormEvent) => {
 //     e.preventDefault();
 //     if (!editingEquipment) return;
+//     if (editingEquipment.modelUrl === "uploading...") {
+//       alert("Please wait for the 3D model upload to finish before saving.");
+//       return;
+//     }
 
 //     const res = await authFetch(
 //       `/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`,
@@ -4448,6 +4598,124 @@
 //   );
 // }
 
+// // Custom-styled searchable combobox for the equipment category field.
+// // Native <select>/<datalist> can't be themed for dark mode, which is why
+// // the browser-native version looked washed out. This renders our own
+// // dropdown so every option is legible and hover state is obvious, while
+// // still letting the user type a brand new category.
+// function CategoryCombobox({
+//   value,
+//   onChange,
+//   options,
+// }: {
+//   value: string;
+//   onChange: (value: string) => void;
+//   options: string[];
+// }) {
+//   const [isOpen, setIsOpen] = useState(false);
+//   const containerRef = React.useRef<HTMLDivElement>(null);
+
+//   useEffect(() => {
+//     const handleClickOutside = (e: MouseEvent) => {
+//       if (
+//         containerRef.current &&
+//         !containerRef.current.contains(e.target as Node)
+//       ) {
+//         setIsOpen(false);
+//       }
+//     };
+//     document.addEventListener("mousedown", handleClickOutside);
+//     return () => document.removeEventListener("mousedown", handleClickOutside);
+//   }, []);
+
+//   const trimmedValue = value.trim();
+//   const exactMatch = options.some(
+//     (opt) => opt.toLowerCase() === trimmedValue.toLowerCase(),
+//   );
+//   // Show the full list when the field is empty or already holds a complete,
+//   // existing category (so the user can browse alternatives). Only filter
+//   // down while they're actively typing something that isn't a match yet.
+//   const showAllOptions = trimmedValue === "" || exactMatch;
+//   const visibleOptions = showAllOptions
+//     ? options
+//     : options.filter((opt) =>
+//         opt.toLowerCase().includes(trimmedValue.toLowerCase()),
+//       );
+
+//   return (
+//     <div className="relative" ref={containerRef}>
+//       <div className="relative">
+//         <input
+//           required
+//           type="text"
+//           autoComplete="off"
+//           value={value}
+//           onChange={(e) => {
+//             onChange(e.target.value);
+//             setIsOpen(true);
+//           }}
+//           onFocus={() => setIsOpen(true)}
+//           placeholder="Select existing or type a new category"
+//           className="w-full bg-white/5 border border-theme-border rounded-lg pl-4 pr-9 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+//         />
+//         <button
+//           type="button"
+//           tabIndex={-1}
+//           onClick={() => setIsOpen((o) => !o)}
+//           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 opacity-40 hover:opacity-100 transition-opacity"
+//         >
+//           <ChevronDown
+//             className={clsx(
+//               "w-4 h-4 transition-transform",
+//               isOpen && "rotate-180",
+//             )}
+//           />
+//         </button>
+//       </div>
+
+//       {isOpen && (visibleOptions.length > 0 || trimmedValue !== "") && (
+//         <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto bg-theme-bg border border-theme-border rounded-lg shadow-2xl py-1">
+//           {visibleOptions.map((option) => (
+//             <button
+//               key={option}
+//               type="button"
+//               onMouseDown={(e) => e.preventDefault()}
+//               onClick={() => {
+//                 onChange(option);
+//                 setIsOpen(false);
+//               }}
+//               className={clsx(
+//                 "w-full text-left px-4 py-2 text-sm transition-colors hover:bg-brand-teal/20 hover:text-brand-teal",
+//                 option.toLowerCase() === trimmedValue.toLowerCase()
+//                   ? "bg-brand-teal/10 text-brand-teal"
+//                   : "text-theme-text",
+//               )}
+//             >
+//               {option}
+//             </button>
+//           ))}
+//           {!exactMatch && trimmedValue !== "" && (
+//             <button
+//               type="button"
+//               onMouseDown={(e) => e.preventDefault()}
+//               onClick={() => {
+//                 onChange(trimmedValue);
+//                 setIsOpen(false);
+//               }}
+//               className={clsx(
+//                 "w-full text-left px-4 py-2 text-sm font-medium text-brand-teal hover:bg-brand-teal/20 transition-colors",
+//                 visibleOptions.length > 0 && "border-t border-theme-border",
+//               )}
+//             >
+//               + Create new category "{trimmedValue}"
+//             </button>
+//           )}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
+
 // function EquipmentTab({
 //   equipment,
 //   searchQuery,
@@ -4779,37 +5047,29 @@
 //                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
 //                       Category
 //                     </label>
-//                     <input
-//                       required
-//                       type="text"
-//                       list="equipment-category-options"
+//                     <CategoryCombobox
 //                       value={
 //                         (isAdding
 //                           ? newEquipment.category
 //                           : editingItem?.category) || ""
 //                       }
-//                       onChange={(e) =>
+//                       onChange={(val) =>
 //                         isAdding
 //                           ? setNewEquipment({
 //                               ...newEquipment,
-//                               category: e.target.value,
+//                               category: val,
 //                             })
 //                           : setEditingItem({
 //                               ...editingItem!,
-//                               category: e.target.value,
+//                               category: val,
 //                             })
 //                       }
-//                       placeholder="Select existing or type a new category"
-//                       className="w-full bg-white/5 border border-theme-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
+//                       options={existingCategoryOptions}
 //                     />
-//                     <datalist id="equipment-category-options">
-//                       {existingCategoryOptions.map((category) => (
-//                         <option key={category} value={category} />
-//                       ))}
-//                     </datalist>
 //                     <p className="text-[9px] opacity-30">
-//                       Pick an existing category or type a new one — new
-//                       categories appear automatically in the Equipment Library.
+//                       Click the field to browse existing categories, or type a
+//                       new one — it appears automatically in the Equipment
+//                       Library.
 //                     </p>
 //                   </div>
 //                 </div>
@@ -6848,6 +7108,10 @@ export function AdminDashboard({
 
   const handleAddEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (newEquipment.modelUrl === "uploading...") {
+      alert("Please wait for the 3D model upload to finish before saving.");
+      return;
+    }
     const id = uuidv4();
     const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
       method: "POST",
@@ -6883,6 +7147,10 @@ export function AdminDashboard({
   const handleUpdateEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingEquipment) return;
+    if (editingEquipment.modelUrl === "uploading...") {
+      alert("Please wait for the 3D model upload to finish before saving.");
+      return;
+    }
 
     const res = await authFetch(
       `/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`,
@@ -8402,7 +8670,15 @@ function EquipmentTab({
                           setEditingItem({ ...editingItem!, modelUrl: url });
                         }
                       } else {
-                        alert("Failed to upload GLB file.");
+                        let message = "Failed to upload GLB file.";
+                        try {
+                          const errData = await res.json();
+                          if (errData?.error) message = errData.error;
+                        } catch {
+                          // response wasn't JSON — keep the generic message
+                        }
+                        console.error("GLB upload failed:", message);
+                        alert(`Failed to upload GLB file: ${message}`);
                         if (isAdding) {
                           setNewEquipment({ ...newEquipment, modelUrl: "" });
                         } else {

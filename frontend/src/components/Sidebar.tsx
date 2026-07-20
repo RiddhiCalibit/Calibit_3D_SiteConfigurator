@@ -1526,12 +1526,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <section className="space-y-0">
           {/* ── Outer border panel ── */}
           <div className="border border-theme-border rounded-lg overflow-hidden">
-
             {/* Panel header row */}
             <div className="px-3 py-2 border-b border-theme-border bg-theme-card">
               <span className="text-[10px] uppercase tracking-widest font-bold font-mono opacity-50">
                 Equipment Library Active :{" "}
-                <span className="opacity-100 font-bold">{fullLibrary.length}</span>
+                <span className="opacity-100 font-bold">
+                  {fullLibrary.length}
+                </span>
               </span>
             </div>
 
@@ -1786,7 +1787,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* ── Bottom action strip ── */}
       <div className="space-y-2">
-
         {/* Row 1: Save + My Projects */}
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -1894,14 +1894,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Logout</span>
           </button>
         </div>
-
       </div>
 
       <div className="mt-3 flex justify-between text-[9px] opacity-30 font-mono uppercase tracking-tighter">
         {/* <span>Del · Esc · R · M · G</span> */}
-        <span>Version v1.3.0 </span>
+        <span>Version v1.4.0 </span>
       </div>
-
 
       {/* Settings/Profile Modal */}
       <AnimatePresence>
