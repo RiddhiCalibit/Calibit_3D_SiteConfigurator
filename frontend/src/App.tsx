@@ -2754,6 +2754,47 @@ export default function App() {
     );
   }
 
+  const handleDrawRectangle = (width: number, height: number) => {
+    // Get center of map
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const center = map.getCenter();
+    const origin: [number, number] = [center.lng, center.lat];
+
+    // Compute corners (in meters relative to center)
+    const w2 = width / 2;
+    const h2 = height / 2;
+    
+    // Convert to LngLat coordinates
+    const tl = metresToLngLat(-w2, -h2, origin);
+    const tr = metresToLngLat(w2, -h2, origin);
+    const br = metresToLngLat(w2, h2, origin);
+    const bl = metresToLngLat(-w2, h2, origin);
+    
+    // Set new boundary
+    setBoundary([tl, tr, br, bl]);
+
+    // Auto-zoom to fit the new rectangle boundary in plain mode
+    if (state.mapStyle === "plain") {
+      const minLng = Math.min(tl[0], tr[0], br[0], bl[0]);
+      const maxLng = Math.max(tl[0], tr[0], br[0], bl[0]);
+      const minLat = Math.min(tl[1], tr[1], br[1], bl[1]);
+      const maxLat = Math.max(tl[1], tr[1], br[1], bl[1]);
+
+      map.fitBounds(
+        [
+          [minLng, minLat],
+          [maxLng, maxLat],
+        ],
+        {
+          padding: 50,
+          duration: 800,
+          maxZoom: 20,
+        },
+      );
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen bg-brand-navy select-none">
       <Sidebar
@@ -2762,6 +2803,7 @@ export default function App() {
         onToggleTerrain={toggleTerrain}
         onToggleBuildings={toggleBuildings}
         onDrawBoundary={() => setDrawTrigger((t) => t + 1)}
+        onDrawRectangle={handleDrawRectangle}
         onDeleteBoundary={() => setBoundary([])}
         onToggleMeasure={() => {
           setIsMeasuring(!isMeasuring);

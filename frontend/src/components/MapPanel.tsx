@@ -5408,7 +5408,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       if (feature.geometry.type === "Polygon") {
         const coords = feature.geometry.coordinates[0] as [number, number][];
         callbacks.current.onBoundaryChange(coords);
-        
+
         // Update segment labels immediately on draw complete
         const segSrc = map.getSource(
           "boundary-segment-labels",
@@ -5418,11 +5418,11 @@ export const MapPanel: React.FC<MapPanelProps> = ({
         // Auto-zoom to fit the boundary in plain mode
         if (callbacks.current.state.mapStyle === "plain" && coords.length > 0) {
           const bounds = new mapboxgl.LngLatBounds();
-          coords.forEach(coord => bounds.extend(coord));
+          coords.forEach((coord) => bounds.extend(coord));
           map.fitBounds(bounds, {
             padding: 50,
             duration: 800,
-            maxZoom: 20
+            maxZoom: 20,
           });
         }
       }
@@ -6474,8 +6474,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     );
     // Show segment labels whenever boundary is visible OR actively drawing
     if (map.getLayer("boundary-segment-labels-layer")) {
-      const isDrawing =
-        drawRef.current?.getMode() === "draw_polygon";
+      const isDrawing = drawRef.current?.getMode() === "draw_polygon";
       map.setLayoutProperty(
         "boundary-segment-labels-layer",
         "visibility",
