@@ -5406,14 +5406,25 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     map.on("draw.create", (e: any) => {
       const feature = e.features[0];
       if (feature.geometry.type === "Polygon") {
-        callbacks.current.onBoundaryChange(
-          feature.geometry.coordinates[0] as [number, number][],
-        );
+        const coords = feature.geometry.coordinates[0] as [number, number][];
+        callbacks.current.onBoundaryChange(coords);
+        
         // Update segment labels immediately on draw complete
         const segSrc = map.getSource(
           "boundary-segment-labels",
         ) as mapboxgl.GeoJSONSource;
         if (segSrc) segSrc.setData(buildSegmentLabels(callbacks.current.state));
+
+        // Auto-zoom to fit the boundary in plain mode
+        if (callbacks.current.state.mapStyle === "plain" && coords.length > 0) {
+          const bounds = new mapboxgl.LngLatBounds();
+          coords.forEach(coord => bounds.extend(coord));
+          map.fitBounds(bounds, {
+            padding: 50,
+            duration: 800,
+            maxZoom: 20
+          });
+        }
       }
     });
 
@@ -5440,31 +5451,76 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       if (segSrc) segSrc.setData({ type: "FeatureCollection", features: [] });
     });
 
-    // draw.render fires on EVERY change — vertex add, drag, hover
-    // This gives LIVE distance labels while the user is still drawing
+    // draw.render fires on EVERY change — vertex add, drag, hover.
+    // This gives LIVE distance labels while the user is still drawing.
+    // During draw_polygon mode, MapboxDraw stores the in-progress shape as
+    // a LineString (not yet closed as a Polygon), so we check both types.
     map.on("draw.render", () => {
       const draw = drawRef.current;
       if (!draw) return;
-      const all = draw.getAll();
-      const polygon = all.features.find(
-        (f: any) => f.geometry.type === "Polygon",
-      );
-      if (!polygon) return;
 
-      const coords: [number, number][] = (polygon.geometry as any)
-        .coordinates[0];
-      // Need at least 2 real points (excluding closing duplicate)
-      if (coords.length < 3) return;
-
-      // Build a temporary state snapshot using live draw coords (not yet in state)
-      const liveState = {
-        ...callbacks.current.state,
-        siteBoundary: coords.slice(0, -1), // remove closing duplicate
-      };
       const segSrc = map.getSource(
         "boundary-segment-labels",
       ) as mapboxgl.GeoJSONSource;
-      if (segSrc) segSrc.setData(buildSegmentLabels(liveState));
+      if (!segSrc) return;
+
+      const all = draw.getAll();
+
+      // ── Case 1: Polygon already completed (e.g. after drag/edit) ──────
+      const polygon = all.features.find(
+        (f: any) => f.geometry.type === "Polygon",
+      );
+      if (polygon) {
+        const coords: [number, number][] = (polygon.geometry as any)
+          .coordinates[0];
+        if (coords.length >= 3) {
+          const liveState = {
+            ...callbacks.current.state,
+            siteBoundary: coords.slice(0, -1),
+          };
+          segSrc.setData(buildSegmentLabels(liveState));
+
+          // Ensure labels layer is visible
+          if (map.getLayer("boundary-segment-labels-layer")) {
+            map.setLayoutProperty(
+              "boundary-segment-labels-layer",
+              "visibility",
+              "visible",
+            );
+          }
+        }
+        return;
+      }
+
+      // ── Case 2: Still drawing — in-progress LineString ───────────────
+      // MapboxDraw represents the active polygon-in-progress as a LineString.
+      // We read its coordinates to show live segment labels before the
+      // polygon is closed (this is the state after Clear + re-draw).
+      const lineString = all.features.find(
+        (f: any) => f.geometry.type === "LineString",
+      );
+      if (lineString) {
+        const coords: [number, number][] = (lineString.geometry as any)
+          .coordinates;
+        // Need at least 2 placed points to show a measurement
+        if (coords.length >= 2) {
+          const liveState = {
+            ...callbacks.current.state,
+            siteBoundary: coords,
+          };
+          segSrc.setData(buildSegmentLabels(liveState));
+
+          // Make sure labels layer is visible during drawing
+          if (map.getLayer("boundary-segment-labels-layer")) {
+            map.setLayoutProperty(
+              "boundary-segment-labels-layer",
+              "visibility",
+              "visible",
+            );
+          }
+        }
+        return;
+      }
     });
 
     map.on("mousemove", (e) => {
@@ -6416,12 +6472,14 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       "visibility",
       isLocked ? "visible" : "none",
     );
-    // Show segment labels whenever boundary is visible
+    // Show segment labels whenever boundary is visible OR actively drawing
     if (map.getLayer("boundary-segment-labels-layer")) {
+      const isDrawing =
+        drawRef.current?.getMode() === "draw_polygon";
       map.setLayoutProperty(
         "boundary-segment-labels-layer",
         "visibility",
-        state.siteBoundary.length >= 2 ? "visible" : "none",
+        state.siteBoundary.length >= 2 || isDrawing ? "visible" : "none",
       );
     }
   }, [
