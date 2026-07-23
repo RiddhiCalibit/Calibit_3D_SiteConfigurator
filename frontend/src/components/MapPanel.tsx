@@ -4826,6 +4826,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [hoverCoords, setHoverCoords] = useState<[number, number] | null>(null);
   const draggingIdRef = useRef<string | null>(null);
+  const hoveredIdRef = useRef<string | null>(null);
   const { theme } = useTheme();
 
   // Use refs for callbacks to avoid stale closures in Mapbox event listeners
@@ -5192,6 +5193,8 @@ export const MapPanel: React.FC<MapPanelProps> = ({
           "fill-extrusion-color": [
             "case",
             ["boolean", ["feature-state", "selected"], false],
+            "#00f0ff",
+            ["boolean", ["feature-state", "hover"], false],
             "#ffffff",
             ["get", "color"],
           ],
@@ -5214,6 +5217,22 @@ export const MapPanel: React.FC<MapPanelProps> = ({
           "model-rotation": [0, 0, ["get", "rotation"]],
           "model-scale": [1, 1, 1],
           "model-type": "common-3d",
+          "model-color": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false],
+            "#00f0ff",
+            ["boolean", ["feature-state", "hover"], false],
+            "#ffffff",
+            "#ffffff"
+          ],
+          "model-color-mix-intensity": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false],
+            0.6,
+            ["boolean", ["feature-state", "hover"], false],
+            0.3,
+            0
+          ],
           "model-animations": [
             "case",
             ["has", "animations"],
@@ -5534,6 +5553,27 @@ export const MapPanel: React.FC<MapPanelProps> = ({
       });
       map.getCanvas().style.cursor = features.length > 0 ? "pointer" : "";
 
+      let hoveredId: string | null = null;
+      if (features.length > 0) {
+        hoveredId = (features[0].id as string) || (features[0].properties?.id as string);
+      }
+      
+      if (hoveredId !== hoveredIdRef.current) {
+        if (hoveredIdRef.current) {
+          map.setFeatureState(
+            { source: "equipment", id: hoveredIdRef.current },
+            { hover: false }
+          );
+        }
+        if (hoveredId) {
+          map.setFeatureState(
+            { source: "equipment", id: hoveredId },
+            { hover: true }
+          );
+        }
+        hoveredIdRef.current = hoveredId;
+      }
+
       if (draggingIdRef.current && callbacks.current.state.originLngLat) {
         const { x, z } = lngLatToMetres(
           [e.lngLat.lng, e.lngLat.lat],
@@ -5545,6 +5585,16 @@ export const MapPanel: React.FC<MapPanelProps> = ({
           x: snappedX,
           z: snappedZ,
         });
+      }
+    });
+
+    map.on("mouseout", () => {
+      if (hoveredIdRef.current) {
+        map.setFeatureState(
+          { source: "equipment", id: hoveredIdRef.current },
+          { hover: false }
+        );
+        hoveredIdRef.current = null;
       }
     });
 

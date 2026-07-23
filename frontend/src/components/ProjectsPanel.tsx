@@ -318,7 +318,8 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({
                   </div>
                   <p className="text-sm opacity-40">No saved projects yet</p>
                   <p className="text-xs opacity-20 mt-1">
-                    Save your first project using the button below
+                    Save your project first to see it here. You can also create
+                    a new project to start fresh and then save it.
                   </p>
                 </div>
               ) : (

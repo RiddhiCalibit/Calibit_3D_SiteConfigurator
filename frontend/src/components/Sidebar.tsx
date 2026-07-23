@@ -35,6 +35,7 @@ import {
   Sun,
   X,
   FolderOpen,
+  VectorSquare,
 } from "lucide-react";
 
 const generateDefaultEquipmentImage = (item: EquipmentDef) => {
@@ -489,8 +490,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 state.isBoundaryLocked && "opacity-30 cursor-not-allowed",
               )}
             >
-              <Square className="w-4 h-4" />
-              Custom
+              <VectorSquare className="w-4 h-4" />
+              Custom Shape
             </button>
             <button
               onClick={() => setModalMode("rectangle")}
