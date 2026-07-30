@@ -536,18 +536,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Measure Tool */}
         <section className="space-y-2">
-          <button
-            onClick={onToggleMeasure}
-            className={cn(
-              "w-full flex items-center justify-center gap-2 p-2 rounded-lg text-xs transition-all border",
-              state.measurePoints.length > 0
-                ? "bg-brand-teal border-brand-teal text-white"
-                : "bg-white/5 border-transparent hover:bg-white/10",
-            )}
-          >
-            <Ruler className="w-4 h-4" />
-            Measure Tool
-          </button>
+          <div className="relative group">
+            <button
+              onClick={onToggleMeasure}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 p-2 rounded-lg text-xs transition-all border",
+                state.measurePoints.length > 0
+                  ? "bg-brand-teal border-brand-teal text-white"
+                  : "bg-white/5 border-transparent hover:bg-white/10",
+              )}
+            >
+              <Ruler className="w-4 h-4" />
+              Measure Tool
+            </button>
+            <div className="absolute left-0 top-full mt-2 w-full z-50 hidden group-hover:block bg-amber-500 border border-amber-400 rounded p-2 text-[11px] font-semibold text-amber-950 text-center leading-tight shadow-lg shadow-amber-500/20">
+              Click on Measure Tool and then click on the two points for which
+              you want to measure the distance between.
+            </div>
+          </div>
 
           <button
             onClick={onOpenCompliance}
@@ -1142,7 +1148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   e.preventDefault();
                   const fd = new FormData(e.currentTarget);
                   const w = Number(fd.get("width"));
-                  const h = Number(fd.get("height"));
+                  const h = Number(fd.get("length"));
                   if (w > 0 && h > 0 && onDrawRectangle) {
                     onDrawRectangle(w, h);
                     setModalMode("none");
@@ -1163,9 +1169,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-white/60">Height (m)</label>
+                    <label className="text-xs text-white/60">Length (m)</label>
                     <input
-                      name="height"
+                      name="length"
                       type="number"
                       step="0.1"
                       min="1"
