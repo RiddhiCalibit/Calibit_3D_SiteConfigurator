@@ -5193,9 +5193,9 @@ export const MapPanel: React.FC<MapPanelProps> = ({
           "fill-extrusion-color": [
             "case",
             ["boolean", ["feature-state", "selected"], false],
-            "#00f0ff",
+            "#ff0055", // Bright Pinkish-Red for selection
             ["boolean", ["feature-state", "hover"], false],
-            "#ffffff",
+            "#ffaa00", // Bright Orange for hover
             ["get", "color"],
           ],
           "fill-extrusion-height": ["get", "height"],
@@ -5220,17 +5220,17 @@ export const MapPanel: React.FC<MapPanelProps> = ({
           "model-color": [
             "case",
             ["boolean", ["feature-state", "selected"], false],
-            "#00f0ff",
+            "#ff0055",
             ["boolean", ["feature-state", "hover"], false],
-            "#ffffff",
+            "#ffaa00",
             "#ffffff"
           ],
           "model-color-mix-intensity": [
             "case",
             ["boolean", ["feature-state", "selected"], false],
-            0.6,
+            0.85,
             ["boolean", ["feature-state", "hover"], false],
-            0.3,
+            0.5,
             0
           ],
           "model-animations": [
