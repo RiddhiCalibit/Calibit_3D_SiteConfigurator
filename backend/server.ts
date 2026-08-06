@@ -4354,7 +4354,7 @@ async function startServer() {
     );
   }
 
-  // Cloudinary storage for GLB uploads
+  // Cloudinary storage for GLB uploads (Max 10MB)
   const cloudinaryStorage = new CloudinaryStorage({
     cloudinary,
     params: {
@@ -4364,32 +4364,136 @@ async function startServer() {
     } as any,
   });
 
-  const upload = multer({
+  const uploadCloud = multer({
     storage: cloudinaryStorage,
-    limits: { fileSize: 25 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for Cloudinary
   });
 
-  // Still serve bundled/local models (duck.glb, tower.glb, etc.)
-  app.use("/models", express.static(path.join(__dirname, "public/models")));
+  // Local disk storage for GLB uploads (for files > 10MB or when admin selects Local Storage)
+  const uploadsDir = path.join(__dirname, "uploads");
+  const modelsUploadsDir = path.join(uploadsDir, "models");
+  if (!fs.existsSync(modelsUploadsDir)) {
+    fs.mkdirSync(modelsUploadsDir, { recursive: true });
+  }
 
-  app.post("/api/upload/model", authenticate, (req: any, res: any) => {
-    upload.single("file")(req, res, (err: any) => {
-      if (err) {
-        console.error("GLB upload failed:", err);
-        return res.status(500).json({
-          error: err.message || "Upload failed",
-          code: err.http_code || err.code || undefined,
+  const localStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, modelsUploadsDir);
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname).toLowerCase() || ".glb";
+      const cleanName = path
+        .basename(file.originalname, ext)
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+      cb(null, `${cleanName}-${uniqueSuffix}${ext}`);
+    },
+  });
+
+  const uploadLocal = multer({
+    storage: localStorage,
+    limits: { fileSize: 150 * 1024 * 1024 }, // 150MB limit for local storage
+    fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (ext === ".glb" || ext === ".gltf") {
+        cb(null, true);
+      } else {
+        cb(new Error("Only .glb and .gltf files are allowed"));
+      }
+    },
+  });
+
+  // Serve bundled/local static models with CORS headers
+  app.use(
+    "/models",
+    cors({ origin: true, credentials: true }),
+    express.static(path.join(__dirname, "public/models")),
+  );
+
+  // Serve uploaded models & files with CORS headers
+  app.use(
+    "/uploads",
+    cors({ origin: true, credentials: true }),
+    express.static(path.join(__dirname, "uploads")),
+  );
+
+  // 1. Cloud upload endpoint (Cloudinary - Max 10MB)
+  app.post(
+    "/api/upload/model",
+    authenticate,
+    uploadLimiter,
+    (req: any, res: any) => {
+      uploadCloud.single("file")(req, res, (err: any) => {
+        if (err) {
+          console.error("Cloud GLB upload failed:", err);
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({
+              error:
+                "File size exceeds 10MB limit for Cloud Storage. Please use Local Storage or compress the model.",
+              storage: "cloud",
+            });
+          }
+          return res.status(500).json({
+            error: err.message || "Cloud upload failed",
+            code: err.http_code || err.code || undefined,
+            storage: "cloud",
+          });
+        }
+        if (!req.file) {
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+        // req.file.path is the full Cloudinary HTTPS URL
+        res.json({
+          url: (req.file as any).path,
+          storage: "cloud",
+          filename: req.file.originalname,
+          size: req.file.size,
         });
-      }
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-      // req.file.path is the full Cloudinary HTTPS URL
-      res.json({ url: (req.file as any).path });
-    });
-  });
+      });
+    },
+  );
 
-  app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+  // 2. Local upload endpoint (Server Disk Storage - Max 150MB)
+  app.post(
+    "/api/upload/model/local",
+    authenticate,
+    (req: any, res: any) => {
+      uploadLocal.single("file")(req, res, (err: any) => {
+        if (err) {
+          console.error("Local GLB upload failed:", err);
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({
+              error: "File size exceeds 150MB limit for Local Storage.",
+              storage: "local",
+            });
+          }
+          return res.status(500).json({
+            error: err.message || "Local upload failed",
+            storage: "local",
+          });
+        }
+        if (!req.file) {
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        // Build the accessible URL
+        const host = req.get("host");
+        const protocol =
+          req.protocol === "https" || req.get("x-forwarded-proto") === "https"
+            ? "https"
+            : "http";
+        const fileUrl = `${protocol}://${host}/uploads/models/${req.file.filename}`;
+
+        res.json({
+          url: fileUrl,
+          relativePath: `/uploads/models/${req.file.filename}`,
+          storage: "local",
+          filename: req.file.originalname,
+          size: req.file.size,
+        });
+      });
+    },
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // DISABLED DEFAULTS ROUTES

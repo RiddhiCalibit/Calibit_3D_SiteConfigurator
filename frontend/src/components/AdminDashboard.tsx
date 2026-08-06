@@ -6800,6 +6800,13 @@ import {
   Archive,
   Share2,
   ShieldAlert,
+  Cloud,
+  HardDrive,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { clsx } from "clsx";
@@ -7114,38 +7121,47 @@ export function AdminDashboard({
       alert("Please wait for the 3D model upload to finish before saving.");
       return;
     }
-    const id = uuidv4();
-    const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id,
-        name: newEquipment.name,
-        category: newEquipment.category,
-        main_category: newEquipment.mainCategory || "Playarea",
-        mainCategory: newEquipment.mainCategory || "Playarea",
-        width: newEquipment.width,
-        depth: newEquipment.depth,
-        height: newEquipment.height,
-        color: newEquipment.color,
-        model_url: newEquipment.modelUrl || null,
-        image_url: newEquipment.imageUrl || null,
-      }),
-    });
-
-    if (res.ok) {
-      setIsAddingEquipment(false);
-      setNewEquipment({
-        name: "",
-        category: "slides",
-        mainCategory: "Playarea",
-        width: 5,
-        depth: 5,
-        height: 5,
-        color: "#14b8a6",
-        imageUrl: "",
+    try {
+      const id = uuidv4();
+      const res = await authFetch(`/api/tenant/${tenant.id}/equipment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          name: newEquipment.name,
+          category: newEquipment.category,
+          main_category: newEquipment.mainCategory || "Playarea",
+          mainCategory: newEquipment.mainCategory || "Playarea",
+          width: newEquipment.width,
+          depth: newEquipment.depth,
+          height: newEquipment.height,
+          color: newEquipment.color,
+          model_url: newEquipment.modelUrl || null,
+          image_url: newEquipment.imageUrl || null,
+        }),
       });
-      fetchEquipment();
+
+      if (res.ok) {
+        setIsAddingEquipment(false);
+        setNewEquipment({
+          name: "",
+          category: "slides",
+          mainCategory: "Playarea",
+          width: 5,
+          depth: 5,
+          height: 5,
+          color: "#14b8a6",
+          imageUrl: "",
+        });
+        await fetchEquipment();
+        await fetchEquipmentStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to create equipment: ${data.error || "Please check required fields and try again."}`);
+      }
+    } catch (err: any) {
+      console.error("Error creating equipment:", err);
+      alert(`Failed to create equipment: ${err.message || "Network error"}`);
     }
   };
 
@@ -7157,30 +7173,39 @@ export function AdminDashboard({
       return;
     }
 
-    const res = await authFetch(
-      `/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingEquipment.id,
-          name: editingEquipment.name,
-          category: editingEquipment.category,
-          main_category: editingEquipment.mainCategory || null,
-          mainCategory: editingEquipment.mainCategory || null,
-          width: editingEquipment.width,
-          depth: editingEquipment.depth,
-          height: editingEquipment.height,
-          color: editingEquipment.color,
-          model_url: editingEquipment.modelUrl || null,
-          image_url: editingEquipment.imageUrl || null,
-        }),
-      },
-    );
+    try {
+      const res = await authFetch(
+        `/api/tenant/${tenant.id}/equipment/${editingEquipment.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingEquipment.id,
+            name: editingEquipment.name,
+            category: editingEquipment.category,
+            main_category: editingEquipment.mainCategory || null,
+            mainCategory: editingEquipment.mainCategory || null,
+            width: editingEquipment.width,
+            depth: editingEquipment.depth,
+            height: editingEquipment.height,
+            color: editingEquipment.color,
+            model_url: editingEquipment.modelUrl || null,
+            image_url: editingEquipment.imageUrl || null,
+          }),
+        },
+      );
 
-    if (res.ok) {
-      setEditingEquipment(null);
-      fetchEquipment();
+      if (res.ok) {
+        setEditingEquipment(null);
+        await fetchEquipment();
+        await fetchEquipmentStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Failed to update equipment: ${data.error || "Please check required fields and try again."}`);
+      }
+    } catch (err: any) {
+      console.error("Error updating equipment:", err);
+      alert(`Failed to update equipment: ${err.message || "Network error"}`);
     }
   };
 
@@ -8248,6 +8273,153 @@ function EquipmentTab({
       };
     }, [equipment]);
 
+  // ─── Dual Storage GLB Upload State ──────────────────────────────────────────
+  const [isGlbModalOpen, setIsGlbModalOpen] = useState(false);
+  const [storageMode, setStorageMode] = useState<"cloud" | "local">("cloud");
+  const [selectedGlbFile, setSelectedGlbFile] = useState<File | null>(null);
+  const [isUploadingGlb, setIsUploadingGlb] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState("");
+  const [storageToast, setStorageToast] = useState<{
+    type: "success" | "error" | "warning";
+    title: string;
+    message: string;
+    details?: string;
+  } | null>(null);
+
+  const getModelStorageInfo = (url?: string | null) => {
+    if (!url || url === "uploading...") return null;
+    if (url.includes("res.cloudinary.com")) {
+      return { type: "cloud" as const, label: "Cloud Storage (Cloudinary)" };
+    }
+    if (url.startsWith("/uploads/") || url.includes("/uploads/")) {
+      return { type: "local" as const, label: "Local Server Storage" };
+    }
+    if (url.startsWith("/models/") || url.includes("/models/")) {
+      return { type: "local" as const, label: "Bundled Local Model" };
+    }
+    return { type: "remote" as const, label: "Remote 3D Model" };
+  };
+
+  const handlePerformUpload = async (targetMode?: "cloud" | "local") => {
+    const mode = targetMode || storageMode;
+    if (!selectedGlbFile) {
+      alert("Please select a .glb file to upload.");
+      return;
+    }
+
+    const sizeMB = selectedGlbFile.size / (1024 * 1024);
+
+    // 10MB Cloud limit check
+    if (mode === "cloud" && selectedGlbFile.size > 10 * 1024 * 1024) {
+      setStorageToast({
+        type: "warning",
+        title: "Cloud Limit Exceeded (10MB)",
+        message: `Your file is ${sizeMB.toFixed(1)} MB. Cloudinary only supports files up to 10 MB. Please switch to Local Storage or compress the model.`,
+      });
+      return;
+    }
+
+    if (mode === "local" && selectedGlbFile.size > 150 * 1024 * 1024) {
+      alert(
+        `File exceeds maximum Local Storage limit (150 MB). Current size: ${sizeMB.toFixed(1)} MB.`
+      );
+      return;
+    }
+
+    setIsUploadingGlb(true);
+    setUploadProgressText(
+      mode === "cloud"
+        ? "Uploading to Cloudinary CDN..."
+        : "Saving to Local Server Storage..."
+    );
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedGlbFile);
+
+      const token =
+        localStorage.getItem("auth_token") ||
+        sessionStorage.getItem("auth_token");
+
+      const endpoint =
+        mode === "cloud"
+          ? `${import.meta.env.VITE_API_URL}/api/upload/model`
+          : `${import.meta.env.VITE_API_URL}/api/upload/model/local`;
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.url) {
+        const cleanName = selectedGlbFile.name
+          .replace(/\.glb$/i, "")
+          .replace(/[_-]+/g, " ")
+          .split(" ")
+          .filter(Boolean)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
+
+        if (isAdding) {
+          setNewEquipment({
+            ...newEquipment,
+            modelUrl: data.url,
+            name: newEquipment.name?.trim() ? newEquipment.name : cleanName,
+          });
+        } else {
+          setEditingItem({
+            ...editingItem!,
+            modelUrl: data.url,
+            name: editingItem?.name?.trim() ? editingItem.name : cleanName,
+          });
+        }
+
+        setIsGlbModalOpen(false);
+        const fileName = selectedGlbFile.name;
+        setSelectedGlbFile(null);
+
+        setStorageToast({
+          type: "success",
+          title: "3D Model Saved Successfully!",
+          message:
+            data.storage === "local"
+              ? "Model saved to Local Server Storage (/uploads/models). Visible to all sales reps & users."
+              : "Model saved to Cloud Storage (Cloudinary CDN).",
+          details: `${fileName} • ${sizeMB.toFixed(2)} MB`,
+        });
+
+        setTimeout(() => {
+          setStorageToast(null);
+        }, 8000);
+      } else {
+        const errMsg =
+          data?.error ||
+          `Failed to upload to ${mode === "cloud" ? "Cloud" : "Local Storage"}.`;
+
+        if (mode === "cloud" && (errMsg.includes("10MB") || sizeMB > 10)) {
+          setStorageToast({
+            type: "warning",
+            title: "File Exceeds 10MB Cloud Limit",
+            message:
+              "Cloud storage failed because the file exceeds 10MB. Would you like to save it to Local Storage instead?",
+          });
+          setStorageMode("local");
+        } else {
+          alert(`Upload Error: ${errMsg}`);
+        }
+      }
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      alert(`Upload failed: ${err.message || "Network error"}`);
+    } finally {
+      setIsUploadingGlb(false);
+      setUploadProgressText("");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Search Bar */}
@@ -8704,119 +8876,113 @@ function EquipmentTab({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                    3D Model (.glb)
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+                      3D Model (.glb)
+                    </label>
+                    <span className="text-[10px] opacity-40">
+                      Cloud (≤10MB) or Local Server Disk
+                    </span>
+                  </div>
 
                   {/* Show current file status */}
                   {(
                     isAdding ? newEquipment.modelUrl : editingItem?.modelUrl
                   ) ? (
-                    <div className="flex items-center justify-between bg-white/5 border border-theme-border rounded-lg px-4 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Box className="w-4 h-4 text-brand-teal shrink-0" />
-                        <span className="text-xs text-brand-teal truncate">
-                          GLB model loaded
-                        </span>
+                    <div className="p-3 bg-white/5 border border-theme-border rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Box className="w-4 h-4 text-brand-teal shrink-0" />
+                          <span className="text-xs text-brand-teal font-medium truncate">
+                            3D Model Attached
+                          </span>
+                          {(() => {
+                            const url = isAdding
+                              ? newEquipment.modelUrl
+                              : editingItem?.modelUrl;
+                            const info = getModelStorageInfo(url);
+                            if (!info) return null;
+                            return (
+                              <span
+                                className={clsx(
+                                  "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0",
+                                  info.type === "cloud"
+                                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                                    : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
+                                )}
+                              >
+                                {info.type === "cloud" ? (
+                                  <Cloud className="w-3 h-3" />
+                                ) : (
+                                  <HardDrive className="w-3 h-3" />
+                                )}
+                                {info.type === "cloud"
+                                  ? "Cloud (CDN)"
+                                  : "Local Storage"}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedGlbFile(null);
+                              setIsGlbModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 text-[10px] font-semibold bg-white/10 hover:bg-white/20 rounded text-white/80 transition-colors flex items-center gap-1"
+                          >
+                            <RefreshCw className="w-3 h-3" /> Change
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              isAdding
+                                ? setNewEquipment({
+                                    ...newEquipment,
+                                    modelUrl: "",
+                                  })
+                                : setEditingItem({
+                                    ...editingItem!,
+                                    modelUrl: "",
+                                  })
+                            }
+                            className="p-1 hover:bg-red-500/20 text-red-400 rounded transition-colors"
+                            title="Remove 3D Model"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          isAdding
-                            ? setNewEquipment({ ...newEquipment, modelUrl: "" })
-                            : setEditingItem({ ...editingItem!, modelUrl: "" })
-                        }
-                        className="p-1 hover:bg-red-500/20 text-red-400 rounded transition-colors shrink-0"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      <p className="text-[10px] opacity-40 truncate font-mono">
+                        {isAdding
+                          ? newEquipment.modelUrl
+                          : editingItem?.modelUrl}
+                      </p>
                     </div>
                   ) : (
-                    <div
-                      className="flex items-center justify-center gap-2 w-full border border-dashed border-theme-border rounded-lg px-4 py-3 cursor-pointer hover:border-brand-teal/50 transition-colors"
-                      onClick={() =>
-                        document.getElementById("glb-upload")?.click()
-                      }
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedGlbFile(null);
+                        setIsGlbModalOpen(true);
+                      }}
+                      className="flex items-center justify-center gap-2.5 w-full border border-dashed border-theme-border rounded-xl px-4 py-3.5 cursor-pointer hover:border-brand-teal/60 hover:bg-white/[0.03] transition-all group text-left"
                     >
-                      <Upload className="w-4 h-4 opacity-30" />
-                      <span className="text-xs opacity-40">
-                        Upload .glb file
+                      <Upload className="w-4 h-4 text-brand-teal group-hover:scale-110 transition-transform shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-white/90">
+                          Upload .glb 3D Model
+                        </p>
+                        <p className="text-[10px] opacity-50">
+                          Choose Cloud Storage (≤10MB) or Local Storage (&gt;10MB)
+                        </p>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-brand-teal/10 text-brand-teal border border-brand-teal/20 font-bold uppercase tracking-wider">
+                        Select
                       </span>
-                    </div>
+                    </button>
                   )}
-
-                  <input
-                    id="glb-upload"
-                    type="file"
-                    accept=".glb"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-
-                      const MAX_GLB_SIZE = 25 * 1024 * 1024; // 25MB
-                      if (file.size > MAX_GLB_SIZE) {
-                        alert("GLB file must be under 25MB.");
-                        e.target.value = "";
-                        return;
-                      }
-
-                      const formData = new FormData();
-                      formData.append("file", file);
-
-                      const token =
-                        localStorage.getItem("auth_token") ||
-                        sessionStorage.getItem("auth_token");
-
-                      // Show uploading state
-                      if (isAdding) {
-                        setNewEquipment({
-                          ...newEquipment,
-                          modelUrl: "uploading...",
-                        });
-                      } else {
-                        setEditingItem({
-                          ...editingItem!,
-                          modelUrl: "uploading...",
-                        });
-                      }
-                      const res = await fetch(
-                        `${import.meta.env.VITE_API_URL}/api/upload/model`,
-                        {
-                          method: "POST",
-                          headers: { Authorization: `Bearer ${token}` },
-                          body: formData,
-                        },
-                      );
-
-                      if (res.ok) {
-                        const { url } = await res.json();
-                        if (isAdding) {
-                          setNewEquipment({ ...newEquipment, modelUrl: url });
-                        } else {
-                          setEditingItem({ ...editingItem!, modelUrl: url });
-                        }
-                      } else {
-                        let message = "Failed to upload GLB file.";
-                        try {
-                          const errData = await res.json();
-                          if (errData?.error) message = errData.error;
-                        } catch {
-                          // response wasn't JSON — keep the generic message
-                        }
-                        console.error("GLB upload failed:", message);
-                        alert(`Failed to upload GLB file: ${message}`);
-                        if (isAdding) {
-                          setNewEquipment({ ...newEquipment, modelUrl: "" });
-                        } else {
-                          setEditingItem({ ...editingItem!, modelUrl: "" });
-                        }
-                      }
-                    }}
-                  />
-                  <p className="text-[10px] opacity-30">
-                    Max 25MB · Used for 3D rendering
-                  </p>
                 </div>
               </div>
 
@@ -8931,9 +9097,31 @@ function EquipmentTab({
             {/* Info */}
             <div className="p-4">
               <h4 className="text-sm font-bold truncate">{item.name}</h4>
-              <p className="text-[10px] opacity-40 font-mono mt-1">
-                {item.width}x{item.depth}x{item.height}m
-              </p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[10px] opacity-40 font-mono">
+                  {item.width}x{item.depth}x{item.height}m
+                </p>
+                {(() => {
+                  const url = item.modelUrl || (item as any).model_url;
+                  const info = getModelStorageInfo(url);
+                  if (!info) return null;
+                  return (
+                    <div className="flex items-center gap-1 text-[8px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-medium">
+                      {info.type === "cloud" ? (
+                        <>
+                          <Cloud className="w-2.5 h-2.5 text-sky-400" />
+                          <span className="text-sky-400">Cloud (CDN)</span>
+                        </>
+                      ) : (
+                        <>
+                          <HardDrive className="w-2.5 h-2.5 text-emerald-400" />
+                          <span className="text-emerald-400">Local Disk</span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         ))}
@@ -9000,9 +9188,16 @@ function EquipmentTab({
                   />
                   <div className="min-w-0">
                     <p className="text-xs font-bold truncate">{item.name}</p>
-                    <p className="text-[9px] opacity-40 uppercase">
-                      {derivedMajor} • {item.category}
-                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="text-[9px] opacity-40 uppercase">
+                        {derivedMajor} • {item.category}
+                      </p>
+                      {item.modelUrl && (
+                        <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-mono">
+                          3D
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 ml-2">
@@ -9035,6 +9230,360 @@ function EquipmentTab({
           })}
         </div>
       </div>
+
+      {/* ─── GLB Dual Storage Upload Modal ────────────────────────────────────── */}
+      {isGlbModalOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-theme-bg border border-theme-border rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            {/* Modal Header */}
+            <div className="p-5 border-b border-theme-border flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-brand-teal/20 text-brand-teal">
+                  <Box className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Upload 3D Model (.GLB)
+                  </h3>
+                  <p className="text-[10px] opacity-50">
+                    Select storage location & upload your 3D asset
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isUploadingGlb}
+                onClick={() => {
+                  setIsGlbModalOpen(false);
+                  setSelectedGlbFile(null);
+                }}
+                className="p-1.5 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-5 overflow-y-auto">
+              {/* Step 1: Storage Destination Choice */}
+              <div className="space-y-2.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+                  1. Choose Storage Location
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Cloud Storage Card */}
+                  <div
+                    onClick={() => !isUploadingGlb && setStorageMode("cloud")}
+                    className={clsx(
+                      "p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative overflow-hidden",
+                      storageMode === "cloud"
+                        ? "border-sky-500 bg-sky-500/10 shadow-lg shadow-sky-500/10"
+                        : "border-theme-border bg-white/5 hover:border-sky-500/40",
+                    )}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400">
+                          <Cloud className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-sky-400">
+                            Cloud Storage
+                          </h4>
+                          <p className="text-[9px] opacity-60">
+                            Cloudinary CDN
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                        Max 10 MB
+                      </span>
+                    </div>
+                    <p className="text-[10px] opacity-70 mt-2.5 leading-snug">
+                      Fast global CDN delivery.{" "}
+                      <strong className="text-sky-300">Max 10 MB limit</strong>{" "}
+                      per file.
+                    </p>
+                  </div>
+
+                  {/* Local Storage Card */}
+                  <div
+                    onClick={() => !isUploadingGlb && setStorageMode("local")}
+                    className={clsx(
+                      "p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between relative overflow-hidden",
+                      storageMode === "local"
+                        ? "border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
+                        : "border-theme-border bg-white/5 hover:border-emerald-500/40",
+                    )}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                          <HardDrive className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-emerald-400">
+                            Local Storage
+                          </h4>
+                          <p className="text-[9px] opacity-60">
+                            Server Disk Route
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Up to 150 MB
+                      </span>
+                    </div>
+                    <p className="text-[10px] opacity-70 mt-2.5 leading-snug">
+                      Saved on server disk.{" "}
+                      <strong className="text-emerald-300">
+                        For large models (&gt;10 MB)
+                      </strong>
+                      . Visible to sales reps.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: File Picker */}
+              <div className="space-y-2.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+                  2. Select 3D Model File (.glb / .gltf)
+                </label>
+
+                <input
+                  id="modal-glb-file-picker"
+                  type="file"
+                  accept=".glb,.gltf"
+                  className="hidden"
+                  disabled={isUploadingGlb}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setSelectedGlbFile(file);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+
+                {!selectedGlbFile ? (
+                  <div
+                    onClick={() =>
+                      !isUploadingGlb &&
+                      document.getElementById("modal-glb-file-picker")?.click()
+                    }
+                    className="border-2 border-dashed border-theme-border hover:border-brand-teal/60 rounded-xl p-6 text-center cursor-pointer transition-all bg-white/[0.02] hover:bg-white/[0.05]"
+                  >
+                    <Upload className="w-7 h-7 opacity-40 mx-auto mb-2 text-brand-teal" />
+                    <p className="text-xs font-medium text-white/90">
+                      Click to choose a .glb 3D model
+                    </p>
+                    <p className="text-[10px] opacity-40 mt-1">
+                      {storageMode === "cloud"
+                        ? "Selected destination: Cloud (Max 10MB)"
+                        : "Selected destination: Local Server Storage (Up to 150MB)"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-theme-border space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-brand-teal/20 text-brand-teal">
+                          <Box className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate text-white">
+                            {selectedGlbFile.name}
+                          </p>
+                          <p className="text-[10px] opacity-50 font-mono">
+                            {(selectedGlbFile.size / (1024 * 1024)).toFixed(2)}{" "}
+                            MB
+                          </p>
+                        </div>
+                      </div>
+                      {!isUploadingGlb && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGlbFile(null)}
+                          className="p-1.5 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                          title="Change file"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 10MB Warning alert if Cloud is chosen and file > 10MB */}
+                    {storageMode === "cloud" &&
+                      selectedGlbFile.size > 10 * 1024 * 1024 && (
+                        <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 space-y-2">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                            <div className="text-[11px] leading-relaxed">
+                              <strong>
+                                File size is{" "}
+                                {(
+                                  selectedGlbFile.size /
+                                  (1024 * 1024)
+                                ).toFixed(1)}{" "}
+                                MB
+                              </strong>{" "}
+                              — exceeds Cloudinary's 10 MB limit. Cloud storage
+                              will reject this file.
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setStorageMode("local")}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 shadow"
+                            >
+                              <HardDrive className="w-3.5 h-3.5" /> Switch to
+                              Local Storage
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                document
+                                  .getElementById("modal-glb-file-picker")
+                                  ?.click()
+                              }
+                              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-xs rounded-lg text-white/80 transition-colors"
+                            >
+                              Choose Smaller File
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Local Storage Confirmation notice */}
+                    {storageMode === "local" && (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>
+                          File will be stored in server disk storage
+                          (/uploads/models) and rendered smoothly for sales reps.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-theme-border bg-white/[0.02] flex items-center justify-between">
+              <button
+                type="button"
+                disabled={isUploadingGlb}
+                onClick={() => {
+                  setIsGlbModalOpen(false);
+                  setSelectedGlbFile(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold opacity-60 hover:opacity-100 transition-opacity"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !selectedGlbFile ||
+                  isUploadingGlb ||
+                  (storageMode === "cloud" &&
+                    selectedGlbFile.size > 10 * 1024 * 1024)
+                }
+                onClick={() => handlePerformUpload()}
+                className={clsx(
+                  "px-5 py-2 text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2",
+                  !selectedGlbFile ||
+                    (storageMode === "cloud" &&
+                      selectedGlbFile.size > 10 * 1024 * 1024)
+                    ? "bg-white/10 text-white/40 cursor-not-allowed"
+                    : storageMode === "cloud"
+                      ? "bg-sky-500 text-white hover:bg-sky-400 shadow-sky-500/20"
+                      : "bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20",
+                )}
+              >
+                {isUploadingGlb ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>{uploadProgressText || "Uploading..."}</span>
+                  </>
+                ) : (
+                  <>
+                    {storageMode === "cloud" ? (
+                      <Cloud className="w-3.5 h-3.5" />
+                    ) : (
+                      <HardDrive className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      Upload to{" "}
+                      {storageMode === "cloud" ? "Cloud" : "Local Storage"}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* ─── Floating Toast Notification ──────────────────────────────────────── */}
+      {storageToast && (
+        <motion.div
+          initial={{ opacity: 0, y: -20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          className={clsx(
+            "fixed top-6 right-6 z-[70] p-4 rounded-2xl shadow-2xl border max-w-sm flex items-start gap-3 backdrop-blur-xl",
+            storageToast.type === "success" &&
+              "bg-emerald-950/90 border-emerald-500/40 text-emerald-100",
+            storageToast.type === "warning" &&
+              "bg-amber-950/90 border-amber-500/40 text-amber-100",
+            storageToast.type === "error" &&
+              "bg-red-950/90 border-red-500/40 text-red-100",
+          )}
+        >
+          {storageToast.type === "success" && (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          )}
+          {storageToast.type === "warning" && (
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          )}
+          {storageToast.type === "error" && (
+            <X className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-bold leading-tight">
+              {storageToast.title}
+            </h4>
+            <p className="text-[11px] opacity-80 mt-1 leading-snug">
+              {storageToast.message}
+            </p>
+            {storageToast.details && (
+              <p className="text-[9px] opacity-60 font-mono mt-1.5">
+                {storageToast.details}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setStorageToast(null)}
+            className="p-1 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </motion.div>
+      )}
     </div>
   );
 }

@@ -4797,13 +4797,41 @@ interface MapPanelProps {
   onMapReady?: (map: mapboxgl.Map) => void;
 }
 
+// Resolve relative or localhost model URLs to the active API/backend origin
+export const resolveModelUrl = (url: unknown): string | null => {
+  if (typeof url !== "string" || !url.trim() || url === "uploading...") return null;
+  const trimmed = url.trim();
+
+  // If saved with localhost:3000 during local dev, replace the origin with VITE_API_URL if present
+  if (trimmed.includes("localhost:3000/uploads/")) {
+    const path = trimmed.substring(trimmed.indexOf("/uploads/"));
+    const apiBase = import.meta.env.VITE_API_URL || "";
+    return `${apiBase}${path}`;
+  }
+
+  // If relative path (/uploads/... or /models/...)
+  if (trimmed.startsWith("/uploads/") || trimmed.startsWith("/models/")) {
+    const apiBase = import.meta.env.VITE_API_URL || "";
+    return `${apiBase}${trimmed}`;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+};
+
 // Guards against placeholder/invalid model URLs (e.g. "uploading..." left
 // over from an in-progress or interrupted GLB upload) ever being handed to
 // Mapbox's addModel — Mapbox will try to fetch whatever string it's given,
 // and a non-URL placeholder resolves to the dev server's SPA fallback page,
 // producing a confusing "Unexpected token '<'" parse error.
 const isValidModelUrl = (url: unknown): url is string =>
-  typeof url === "string" && /^https?:\/\//i.test(url);
+  typeof url === "string" &&
+  url.trim() !== "" &&
+  url !== "uploading..." &&
+  resolveModelUrl(url) !== null;
 
 export const MapPanel: React.FC<MapPanelProps> = ({
   state,
@@ -4864,9 +4892,10 @@ export const MapPanel: React.FC<MapPanelProps> = ({
           stateSnapshot.originLngLat!,
         );
 
-        if (isValidModelUrl(def.modelUrl)) {
-          if (!map.hasModel(def.modelUrl)) {
-            map.addModel(def.modelUrl, def.modelUrl);
+        const resolvedUrl = resolveModelUrl(def.modelUrl);
+        if (resolvedUrl) {
+          if (!map.hasModel(resolvedUrl)) {
+            map.addModel(resolvedUrl, resolvedUrl);
           }
 
           return {
@@ -4880,7 +4909,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
               id: obj.id,
               color: obj.color || def.color,
               height: def.height,
-              "model-uri": def.modelUrl,
+              "model-uri": resolvedUrl,
               rotation: (obj.rotationY * 180) / Math.PI,
               animations: def.animationsEnabled
                 ? [{ name: "*", state: "play" }]
@@ -5670,11 +5699,11 @@ export const MapPanel: React.FC<MapPanelProps> = ({
 
         const lngLat = metresToLngLat(obj.x, obj.z, state.originLngLat!);
 
-        // If model is available, use point geometry for model layer
-        if (isValidModelUrl(def.modelUrl)) {
+        const resolvedUrl = resolveModelUrl(def.modelUrl);
+        if (resolvedUrl) {
           // Register model if not already registered
-          if (!map.hasModel(def.modelUrl)) {
-            map.addModel(def.modelUrl, def.modelUrl);
+          if (!map.hasModel(resolvedUrl)) {
+            map.addModel(resolvedUrl, resolvedUrl);
           }
 
           return {
@@ -5688,7 +5717,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
               id: obj.id,
               color: obj.color || def.color,
               height: def.height,
-              "model-uri": def.modelUrl,
+              "model-uri": resolvedUrl,
               rotation: (obj.rotationY * 180) / Math.PI, // Mapbox model rotation is in degrees
               animations: def.animationsEnabled
                 ? [{ name: "*", state: "play" }]
@@ -5917,9 +5946,10 @@ export const MapPanel: React.FC<MapPanelProps> = ({
     const snappedZ = Math.round(z * 2) / 2;
     const lngLat = metresToLngLat(snappedX, snappedZ, state.originLngLat!);
 
-    if (isValidModelUrl(def.modelUrl)) {
-      if (!map.hasModel(def.modelUrl)) {
-        map.addModel(def.modelUrl, def.modelUrl);
+    const resolvedUrl = resolveModelUrl(def.modelUrl);
+    if (resolvedUrl) {
+      if (!map.hasModel(resolvedUrl)) {
+        map.addModel(resolvedUrl, resolvedUrl);
       }
 
       source.setData({
@@ -5934,7 +5964,7 @@ export const MapPanel: React.FC<MapPanelProps> = ({
             properties: {
               color: def.color,
               height: def.height,
-              "model-uri": def.modelUrl,
+              "model-uri": resolvedUrl,
               animations: def.animationsEnabled
                 ? [{ name: "*", state: "play" }]
                 : [],
