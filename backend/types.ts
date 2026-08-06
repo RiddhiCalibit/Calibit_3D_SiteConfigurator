@@ -38,6 +38,7 @@ export interface EquipmentDef {
   height: number;
   color: string;
   category: string;
+  mainCategory?: string;
   modelUrl?: string;
   animationsEnabled?: boolean;
   imageUrl?: string;
@@ -77,6 +78,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#FF5733",
     category: "slides",
+    mainCategory: "Playarea",
     //modelUrl: "/models/small_slide.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090100/calibit-models/defaults/small_slide.glb",
@@ -90,6 +92,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 6,
     color: "#C70039",
     category: "slides",
+    mainCategory: "Playarea",
     //modelUrl: "/models/slide_large.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090104/calibit-models/defaults/slide_large.glb",
@@ -103,6 +106,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 10,
     color: "#34495E",
     category: "facilities",
+    mainCategory: "Playarea",
     //modelUrl: "/models/tower.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090110/calibit-models/defaults/tower.glb",
@@ -117,6 +121,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 2,
     color: "#F1C40F",
     category: "amenities",
+    mainCategory: "Playarea",
     //modelUrl: "/models/duck.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090113/calibit-models/defaults/duck.glb",
@@ -132,6 +137,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 2,
     color: "#3498DB",
     category: "pools",
+    mainCategory: "Playarea",
     //modelUrl: "/models/wave_pool.glb",
     modelUrl:
       //"https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090118/calibit-models/defaults/wave_pool.glb",
@@ -146,6 +152,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 1.5,
     color: "#2980B9",
     category: "pools",
+    mainCategory: "Playarea",
     //modelUrl: "/models/lazy_river.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090121/calibit-models/defaults/lazy_river.glb",
@@ -159,6 +166,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 0.5,
     color: "#1ABC9C",
     category: "pools",
+    mainCategory: "Playarea",
     modelUrl:
       // "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090100/calibit-models/defaults/splash_pad.glb",
       "https://res.cloudinary.com/dlft8pqu7/image/upload/v1782210489/splashpad_ls7m5k.glb",
@@ -172,6 +180,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 4,
     color: "#7F8C8D",
     category: "facilities",
+    mainCategory: "Playarea",
     //modelUrl: "/models/pump_station.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090137/calibit-models/defaults/pump_station.glb",
@@ -185,6 +194,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#F1C40F",
     category: "facilities",
+    mainCategory: "Playarea",
     //modelUrl: "/models/ticket_booth.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090138/calibit-models/defaults/ticket_booth.glb",
@@ -198,6 +208,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#9B59B6",
     category: "facilities",
+    mainCategory: "Playarea",
     //modelUrl: "/models/locker_block.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090152/calibit-models/defaults/locker_block.glb",
@@ -211,6 +222,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 3,
     color: "#E67E22",
     category: "facilities",
+    mainCategory: "Playarea",
     //modelUrl: "/models/food_kiosk.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090155/calibit-models/defaults/food_kiosk.glb",
@@ -224,6 +236,7 @@ export const DEFAULT_LIBRARY: EquipmentDef[] = [
     height: 1,
     color: "#2ECC71",
     category: "amenities",
+    mainCategory: "Playarea",
     //modelUrl: "/models/seating area.glb",
     modelUrl:
       "https://res.cloudinary.com/dlft8pqu7/raw/upload/v1781090160/calibit-models/defaults/seating_area.glb",

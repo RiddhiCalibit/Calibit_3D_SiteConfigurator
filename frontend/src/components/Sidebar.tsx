@@ -72,7 +72,7 @@ const getEquipmentThumbnail = (item: EquipmentDef) => {
 // "Uncategorized" for equipment saved before the category field existed.
 const formatCategoryLabel = (category?: string | null) => {
   const trimmed = category?.trim();
-  if (!trimmed) return "Uncategorized";
+  if (!trimmed) return "General";
   return trimmed
     .split(/[\s_-]+/)
     .filter(Boolean)
@@ -80,32 +80,111 @@ const formatCategoryLabel = (category?: string | null) => {
     .join(" ");
 };
 
-// Groups equipment by category dynamically, so a brand new category value
-// on any equipment item (default or custom) automatically produces a new
-// section — no hardcoded category list to maintain.
-interface EquipmentCategoryGroup {
+export const getMainCategory = (item: EquipmentDef): string => {
+  if (item.mainCategory && item.mainCategory.trim()) {
+    return formatCategoryLabel(item.mainCategory);
+  }
+  const rawSub = (item.category || "").toLowerCase().trim();
+  if (
+    [
+      "slides",
+      "pools",
+      "facilities",
+      "amenities",
+      "playarea",
+      "play area",
+    ].includes(rawSub)
+  ) {
+    return "Playarea";
+  }
+  if (
+    [
+      "factory equipment",
+      "warehouse",
+      "refinery",
+      "factory",
+      "industrial",
+    ].includes(rawSub)
+  ) {
+    return "Factory";
+  }
+  return "General";
+};
+
+export interface EquipmentSubCategoryGroup {
   key: string;
   label: string;
   items: EquipmentDef[];
 }
 
-const groupEquipmentByCategory = (
+export interface EquipmentMajorCategoryGroup {
+  key: string;
+  label: string;
+  subcategories: EquipmentSubCategoryGroup[];
+  totalItems: number;
+}
+
+const groupEquipmentByHierarchy = (
   library: EquipmentDef[],
-): EquipmentCategoryGroup[] => {
-  const groups = new Map<string, EquipmentCategoryGroup>();
+): EquipmentMajorCategoryGroup[] => {
+  const majorMap = new Map<
+    string,
+    {
+      label: string;
+      subMap: Map<string, { label: string; items: EquipmentDef[] }>;
+    }
+  >();
 
   for (const item of library) {
-    const label = formatCategoryLabel(item.category);
-    const key = label.toLowerCase();
-    if (!groups.has(key)) {
-      groups.set(key, { key, label, items: [] });
+    const majorLabel = getMainCategory(item);
+    const majorKey = majorLabel.toLowerCase();
+
+    const subLabel = formatCategoryLabel(item.category);
+    const subKey = subLabel.toLowerCase();
+
+    if (!majorMap.has(majorKey)) {
+      majorMap.set(majorKey, { label: majorLabel, subMap: new Map() });
     }
-    groups.get(key)!.items.push(item);
+
+    const majorEntry = majorMap.get(majorKey)!;
+    if (!majorEntry.subMap.has(subKey)) {
+      majorEntry.subMap.set(subKey, { label: subLabel, items: [] });
+    }
+
+    majorEntry.subMap.get(subKey)!.items.push(item);
   }
 
-  return Array.from(groups.values()).sort((a, b) =>
-    a.label.localeCompare(b.label),
-  );
+  const result: EquipmentMajorCategoryGroup[] = [];
+  for (const [majorKey, { label: majorLabel, subMap }] of majorMap.entries()) {
+    const subcategories: EquipmentSubCategoryGroup[] = [];
+    let totalItems = 0;
+    for (const [subKey, { label: subLabel, items }] of subMap.entries()) {
+      subcategories.push({
+        key: `${majorKey}__${subKey}`,
+        label: subLabel,
+        items,
+      });
+      totalItems += items.length;
+    }
+    subcategories.sort((a, b) => a.label.localeCompare(b.label));
+
+    result.push({
+      key: majorKey,
+      label: majorLabel,
+      subcategories,
+      totalItems,
+    });
+  }
+
+  return result.sort((a, b) => {
+    const aLower = a.label.toLowerCase();
+    const bLower = b.label.toLowerCase();
+    if (aLower === "playarea") return -1;
+    if (bLower === "playarea") return 1;
+    if (aLower === "factory") return -1;
+    if (bLower === "factory") return 1;
+    return a.label.localeCompare(b.label);
+  });
 };
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -255,16 +334,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // never hardcoded. Adding equipment with a new category value is enough
   // for a new section to appear here automatically.
   const categorizedLibrary = React.useMemo(
-    () => groupEquipmentByCategory(fullLibrary),
+    () => groupEquipmentByHierarchy(fullLibrary),
     [fullLibrary],
   );
 
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(),
-  );
+  const [expandedMajorCategories, setExpandedMajorCategories] = useState<
+    Set<string>
+  >(() => new Set<string>());
+  const [expandedSubCategories, setExpandedSubCategories] = useState<
+    Set<string>
+  >(() => new Set<string>());
 
-  const toggleCategory = (key: string) => {
-    setExpandedCategories((prev) => {
+  const toggleMajorCategory = (key: string) => {
+    setExpandedMajorCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleSubCategory = (key: string) => {
+    setExpandedSubCategories((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
@@ -593,86 +687,143 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
 
               {/* Inner bordered container */}
-              <div className="m-2 border border-theme-border rounded-md overflow-hidden">
-                {categorizedLibrary.map((group, idx) => {
-                  const isExpanded = expandedCategories.has(group.key);
-                  const isLast = idx === categorizedLibrary.length - 1;
+              <div className="m-2 border border-theme-border rounded-md overflow-hidden space-y-1 bg-black/10 p-1">
+                {categorizedLibrary.map((majorGroup) => {
+                  const isMajorExpanded = expandedMajorCategories.has(
+                    majorGroup.key,
+                  );
                   return (
-                    <div key={group.key}>
-                      {/* Category header row */}
+                    <div
+                      key={majorGroup.key}
+                      className="border border-theme-border/60 rounded-md overflow-hidden bg-theme-card/70"
+                    >
+                      {/* Major Category header row */}
                       <button
                         type="button"
-                        onClick={() => toggleCategory(group.key)}
-                        aria-expanded={isExpanded}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-theme-card hover:opacity-80 transition-opacity text-left"
+                        onClick={() => toggleMajorCategory(majorGroup.key)}
+                        aria-expanded={isMajorExpanded}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-theme-card hover:bg-white/5 transition-colors text-left"
                       >
-                        <span className="text-xs font-semibold truncate">
-                          {group.label}
-                        </span>
-                        <span className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] opacity-40 font-mono">
-                            {group.items.length}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-brand-teal shrink-0" />
+                          <span className="text-xs font-bold tracking-wide uppercase truncate text-theme-text">
+                            {majorGroup.label}
                           </span>
-                          {isExpanded ? (
-                            <ChevronUp className="w-3 h-3 opacity-50" />
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 opacity-60 font-mono">
+                            {majorGroup.totalItems}
+                          </span>
+                          {isMajorExpanded ? (
+                            <ChevronUp className="w-3.5 h-3.5 opacity-60 text-brand-teal" />
                           ) : (
-                            <ChevronDown className="w-3 h-3 opacity-50" />
+                            <ChevronDown className="w-3.5 h-3.5 opacity-60" />
                           )}
-                        </span>
+                        </div>
                       </button>
 
-                      {/* Expanded items */}
+                      {/* Major Category Expanded -> Subcategories */}
                       <AnimatePresence initial={false}>
-                        {isExpanded && (
+                        {isMajorExpanded && (
                           <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: "auto", opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.2 }}
-                            className="overflow-hidden border-t border-theme-border"
+                            className="overflow-hidden border-t border-theme-border/40 divide-y divide-theme-border/30 bg-black/20"
                           >
-                            <div className="space-y-1 p-2">
-                              {group.items.map((item) => (
-                                <button
-                                  key={item.id}
-                                  onClick={() => onSelectEquipment(item)}
-                                  className={cn(
-                                    "w-full flex items-center gap-3 p-2 bg-theme-card hover:opacity-80 rounded-md text-left transition-all",
-                                    state.pendingPlacement?.id === item.id &&
-                                      "ring-1 ring-brand-teal bg-brand-teal/10",
-                                  )}
-                                >
-                                  <img
-                                    src={getEquipmentThumbnail(item)}
-                                    alt={item.name}
-                                    className="w-8 h-8 rounded-md object-cover shrink-0"
-                                  />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-medium truncate">
-                                      {item.name}
-                                    </p>
-                                    <p className="text-[10px] opacity-40 font-mono">
-                                      {formatDimensions(
-                                        item.width,
-                                        item.depth,
-                                        item.height,
+                            {majorGroup.subcategories.map((subGroup) => {
+                              const isSubExpanded = expandedSubCategories.has(
+                                subGroup.key,
+                              );
+                              return (
+                                <div key={subGroup.key} className="p-1">
+                                  {/* Subcategory Header */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toggleSubCategory(subGroup.key)
+                                    }
+                                    aria-expanded={isSubExpanded}
+                                    className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded hover:bg-white/5 text-left transition-colors"
+                                  >
+                                    <span className="text-[11px] font-medium text-theme-text/90 truncate pl-1">
+                                      📁 {subGroup.label}
+                                    </span>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className="text-[10px] opacity-40 font-mono">
+                                        {subGroup.items.length}
+                                      </span>
+                                      {isSubExpanded ? (
+                                        <ChevronUp className="w-3 h-3 opacity-40" />
+                                      ) : (
+                                        <ChevronDown className="w-3 h-3 opacity-40" />
                                       )}
-                                    </p>
-                                    <p className="text-[10px] text-amber-500 opacity-70 font-mono">
-                                      ⚠ zone {item.width + 3}×{item.depth + 3}m
-                                    </p>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
+                                    </div>
+                                  </button>
+
+                                  {/* Subcategory Equipment Items */}
+                                  <AnimatePresence initial={false}>
+                                    {isSubExpanded && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{
+                                          height: "auto",
+                                          opacity: 1,
+                                        }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="overflow-hidden"
+                                      >
+                                        <div className="space-y-1 p-1.5 pl-2">
+                                          {subGroup.items.map((item) => (
+                                            <button
+                                              key={item.id}
+                                              onClick={() =>
+                                                onSelectEquipment(item)
+                                              }
+                                              className={cn(
+                                                "w-full flex items-center gap-2.5 p-1.5 bg-theme-card hover:bg-white/10 rounded-md text-left transition-all border border-theme-border/40",
+                                                state.pendingPlacement?.id ===
+                                                  item.id &&
+                                                  "ring-1 ring-brand-teal bg-brand-teal/15 border-brand-teal/50",
+                                              )}
+                                            >
+                                              <img
+                                                src={getEquipmentThumbnail(
+                                                  item,
+                                                )}
+                                                alt={item.name}
+                                                className="w-7 h-7 rounded-md object-cover shrink-0"
+                                              />
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-medium truncate">
+                                                  {item.name}
+                                                </p>
+                                                <p className="text-[9px] opacity-40 font-mono">
+                                                  {formatDimensions(
+                                                    item.width,
+                                                    item.depth,
+                                                    item.height,
+                                                  )}
+                                                </p>
+                                                <p className="text-[9px] text-amber-500 opacity-75 font-mono">
+                                                  ⚠ zone {item.width + 3}×
+                                                  {item.depth + 3}m
+                                                </p>
+                                              </div>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              );
+                            })}
                           </motion.div>
                         )}
                       </AnimatePresence>
-
-                      {/* Divider between rows (skip after last) */}
-                      {!isLast && (
-                        <div className="border-b border-theme-border" />
-                      )}
                     </div>
                   );
                 })}

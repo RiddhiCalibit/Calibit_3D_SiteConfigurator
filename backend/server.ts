@@ -4153,6 +4153,8 @@ async function startServer() {
         id,
         name,
         category,
+        main_category,
+        mainCategory,
         width,
         depth,
         height,
@@ -4177,14 +4179,17 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid dimensions" });
       }
 
+      const finalMainCategory = main_category || mainCategory || null;
+
       await pool.query(
-        `INSERT INTO equipment (id, tenant_id, name, category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        `INSERT INTO equipment (id, tenant_id, name, category, main_category, width, depth, height, color, model_url, animations_enabled, image_url, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           id,
           req.params.id,
           name,
           category,
+          finalMainCategory,
           width,
           depth,
           height,
@@ -4203,7 +4208,7 @@ async function startServer() {
           "CREATE",
           "equipment",
           name,
-          `Category: ${category}`,
+          `Category: ${category} | Main: ${finalMainCategory || "N/A"}`,
         );
       }
       res.json({ success: true });
@@ -4219,6 +4224,8 @@ async function startServer() {
       const {
         name,
         category,
+        main_category,
+        mainCategory,
         width,
         depth,
         height,
@@ -4228,14 +4235,18 @@ async function startServer() {
         image_url,
         is_active,
       } = req.body;
+
+      const finalMainCategory = main_category || mainCategory || null;
+
       await pool.query(
         `UPDATE equipment
-       SET name = $1, category = $2, width = $3, depth = $4, height = $5,
-           color = $6, model_url = $7, animations_enabled = $8, image_url = $9, is_active = $10
-       WHERE id = $11 AND tenant_id = $12`,
+       SET name = $1, category = $2, main_category = $3, width = $4, depth = $5, height = $6,
+           color = $7, model_url = $8, animations_enabled = $9, image_url = $10, is_active = $11
+       WHERE id = $12 AND tenant_id = $13`,
         [
           name,
           category,
+          finalMainCategory,
           width,
           depth,
           height,

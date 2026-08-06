@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS equipment (
   tenant_id TEXT REFERENCES tenants(id),
   name TEXT NOT NULL,
   category TEXT,
+  main_category TEXT,
   width REAL,
   depth REAL,
   height REAL,
@@ -157,6 +158,8 @@ CREATE TABLE IF NOT EXISTS equipment (
   image_url TEXT,
   is_active BOOLEAN DEFAULT TRUE
 );
+
+ALTER TABLE equipment ADD COLUMN IF NOT EXISTS main_category TEXT;
 
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,

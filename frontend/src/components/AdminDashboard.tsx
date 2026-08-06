@@ -6913,6 +6913,7 @@ export function AdminDashboard({
   const [newEquipment, setNewEquipment] = useState<Partial<EquipmentDef>>({
     name: "",
     category: "slides",
+    mainCategory: "Playarea",
     width: 5,
     depth: 5,
     height: 5,
@@ -7012,6 +7013,7 @@ export function AdminDashboard({
         id: eq.id,
         name: eq.name,
         category: eq.category,
+        mainCategory: eq.main_category || eq.mainCategory || undefined,
         width: eq.width,
         depth: eq.depth,
         height: eq.height,
@@ -7120,6 +7122,8 @@ export function AdminDashboard({
         id,
         name: newEquipment.name,
         category: newEquipment.category,
+        main_category: newEquipment.mainCategory || "Playarea",
+        mainCategory: newEquipment.mainCategory || "Playarea",
         width: newEquipment.width,
         depth: newEquipment.depth,
         height: newEquipment.height,
@@ -7134,6 +7138,7 @@ export function AdminDashboard({
       setNewEquipment({
         name: "",
         category: "slides",
+        mainCategory: "Playarea",
         width: 5,
         depth: 5,
         height: 5,
@@ -7161,6 +7166,8 @@ export function AdminDashboard({
           id: editingEquipment.id,
           name: editingEquipment.name,
           category: editingEquipment.category,
+          main_category: editingEquipment.mainCategory || null,
+          mainCategory: editingEquipment.mainCategory || null,
           width: editingEquipment.width,
           depth: editingEquipment.depth,
           height: editingEquipment.height,
@@ -7993,10 +8000,14 @@ function CategoryCombobox({
   value,
   onChange,
   options,
+  placeholder = "Select existing or type a new category",
+  createLabel = "Create new",
 }: {
   value: string;
   onChange: (value: string) => void;
   options: string[];
+  placeholder?: string;
+  createLabel?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -8041,7 +8052,7 @@ function CategoryCombobox({
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          placeholder="Select existing or type a new category"
+          placeholder={placeholder}
           className="w-full bg-white/5 border border-theme-border rounded-lg pl-4 pr-9 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-teal"
         />
         <button
@@ -8093,7 +8104,7 @@ function CategoryCombobox({
                 visibleOptions.length > 0 && "border-t border-theme-border",
               )}
             >
-              + Create new category "{trimmedValue}"
+              + {createLabel} "{trimmedValue}"
             </button>
           )}
         </div>
@@ -8138,30 +8149,104 @@ function EquipmentTab({
   const filteredEquipment = equipment.filter(
     (item) =>
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase()),
+      item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.mainCategory &&
+        item.mainCategory.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   // Categories offered in the add/edit combobox are derived from existing
-  // equipment (default + tenant custom) rather than hardcoded, so a
-  // category introduced anywhere shows up here automatically. Typing a
-  // value not in this list simply creates a new category.
-  const existingCategoryOptions = React.useMemo(() => {
-    const seen = new Map<string, string>(); // lowercase key -> display label
-    for (const item of [...DEFAULT_LIBRARY, ...equipment]) {
-      const trimmed = item.category?.trim();
-      if (!trimmed) continue;
-      const key = trimmed.toLowerCase();
-      if (!seen.has(key)) {
-        const label = trimmed
+  // equipment (default + tenant custom) arranged in Major & Subcategory hierarchy.
+  const { majorCategoryOptions, subcategoriesByMajor, allSubcategoryOptions } =
+    React.useMemo(() => {
+      const majorSet = new Set<string>(["Playarea", "Factory"]);
+      const subByMaj = new Map<string, Set<string>>();
+      const allSubs = new Set<string>();
+
+      const formatLabel = (val?: string | null) => {
+        const trimmed = val?.trim();
+        if (!trimmed) return "";
+        return trimmed
           .split(/[\s_-]+/)
           .filter(Boolean)
           .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
           .join(" ");
-        seen.set(key, label);
+      };
+
+      // Seed defaults
+      subByMaj.set(
+        "Playarea",
+        new Set(["Amenities", "Facilities", "Pools", "Slides"]),
+      );
+      subByMaj.set(
+        "Factory",
+        new Set(["Factory Equipment", "Warehouse", "Refinery"]),
+      );
+
+      for (const item of [...DEFAULT_LIBRARY, ...equipment]) {
+        const subLabel = formatLabel(item.category);
+        if (subLabel) allSubs.add(subLabel);
+
+        let majorLabel = item.mainCategory
+          ? formatLabel(item.mainCategory)
+          : "";
+        if (!majorLabel) {
+          const rawSub = (item.category || "").toLowerCase().trim();
+          if (
+            [
+              "slides",
+              "pools",
+              "facilities",
+              "amenities",
+              "playarea",
+              "play area",
+            ].includes(rawSub)
+          ) {
+            majorLabel = "Playarea";
+          } else if (
+            [
+              "factory equipment",
+              "warehouse",
+              "refinery",
+              "factory",
+              "industrial",
+            ].includes(rawSub)
+          ) {
+            majorLabel = "Factory";
+          } else {
+            majorLabel = "Playarea";
+          }
+        }
+
+        majorSet.add(majorLabel);
+        if (!subByMaj.has(majorLabel)) {
+          subByMaj.set(majorLabel, new Set());
+        }
+        if (subLabel) {
+          subByMaj.get(majorLabel)!.add(subLabel);
+        }
       }
-    }
-    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
-  }, [equipment]);
+
+      const subMap: Record<string, string[]> = {};
+      for (const [maj, subs] of subByMaj.entries()) {
+        subMap[maj.toLowerCase()] = Array.from(subs).sort((a, b) =>
+          a.localeCompare(b),
+        );
+      }
+
+      return {
+        majorCategoryOptions: Array.from(majorSet).sort((a, b) => {
+          if (a === "Playarea") return -1;
+          if (b === "Playarea") return 1;
+          if (a === "Factory") return -1;
+          if (b === "Factory") return 1;
+          return a.localeCompare(b);
+        }),
+        subcategoriesByMajor: subMap,
+        allSubcategoryOptions: Array.from(allSubs).sort((a, b) =>
+          a.localeCompare(b),
+        ),
+      };
+    }, [equipment]);
 
   return (
     <div className="space-y-6">
@@ -8429,9 +8514,38 @@ function EquipmentTab({
                       placeholder="e.g. Spiral Slide"
                     />
                   </div>
+                  {/* Major Category */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                      Category
+                      Major Category
+                    </label>
+                    <CategoryCombobox
+                      value={
+                        (isAdding
+                          ? newEquipment.mainCategory
+                          : editingItem?.mainCategory) || ""
+                      }
+                      onChange={(val) =>
+                        isAdding
+                          ? setNewEquipment({
+                              ...newEquipment,
+                              mainCategory: val,
+                            })
+                          : setEditingItem({
+                              ...editingItem!,
+                              mainCategory: val,
+                            })
+                      }
+                      options={majorCategoryOptions}
+                      placeholder="Select or type Major Category (e.g. Playarea, Factory)"
+                      createLabel="Create new major category"
+                    />
+                  </div>
+
+                  {/* Subcategory */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+                      Subcategory
                     </label>
                     <CategoryCombobox
                       value={
@@ -8450,12 +8564,25 @@ function EquipmentTab({
                               category: val,
                             })
                       }
-                      options={existingCategoryOptions}
+                      options={
+                        (isAdding
+                          ? newEquipment.mainCategory
+                          : editingItem?.mainCategory)
+                          ? subcategoriesByMajor[
+                              (
+                                (isAdding
+                                  ? newEquipment.mainCategory
+                                  : editingItem?.mainCategory) || ""
+                              ).toLowerCase()
+                            ] || allSubcategoryOptions
+                          : allSubcategoryOptions
+                      }
+                      placeholder="Select or type Subcategory (e.g. Slides, Pools, Warehouse)"
+                      createLabel="Create new subcategory"
                     />
                     <p className="text-[9px] opacity-30">
-                      Click the field to browse existing categories, or type a
-                      new one — it appears automatically in the Equipment
-                      Library.
+                      Select or type a subcategory. It will be nested under the
+                      selected Major Category in the Equipment Library.
                     </p>
                   </div>
                 </div>
@@ -8758,8 +8885,10 @@ function EquipmentTab({
               />
 
               {/* Category */}
-              <div className="absolute top-3 right-3 px-2 py-1 bg-brand-teal/20 text-brand-teal text-[8px] font-bold uppercase rounded">
-                {item.category}
+              <div className="absolute top-3 right-3 px-2 py-1 bg-brand-teal/20 text-brand-teal text-[8px] font-bold uppercase rounded flex items-center gap-1 backdrop-blur-sm">
+                <span>{item.mainCategory || "Playarea"}</span>
+                <span className="opacity-50">•</span>
+                <span>{item.category}</span>
               </div>
 
               {/* Actions Overlay */}
@@ -8833,9 +8962,26 @@ function EquipmentTab({
           {DEFAULT_LIBRARY.filter(
             (item) =>
               item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              item.category.toLowerCase().includes(searchQuery.toLowerCase()),
+              item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              (item.mainCategory &&
+                item.mainCategory
+                  .toLowerCase()
+                  .includes(searchQuery.toLowerCase())),
           ).map((item) => {
             const isDisabled = disabledDefaults.has(item.id);
+            const rawSub = (item.category || "").toLowerCase().trim();
+            const derivedMajor =
+              item.mainCategory ||
+              ([
+                "slides",
+                "pools",
+                "facilities",
+                "amenities",
+                "playarea",
+                "play area",
+              ].includes(rawSub)
+                ? "Playarea"
+                : "Factory");
             return (
               <div
                 key={item.id}
@@ -8855,7 +9001,7 @@ function EquipmentTab({
                   <div className="min-w-0">
                     <p className="text-xs font-bold truncate">{item.name}</p>
                     <p className="text-[9px] opacity-40 uppercase">
-                      {item.category}
+                      {derivedMajor} • {item.category}
                     </p>
                   </div>
                 </div>
